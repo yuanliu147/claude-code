@@ -7,14 +7,13 @@ import {
 } from '../keybindings/loadUserBindings.js'
 
 /**
- * Displays keybinding validation warnings in the UI.
- * Similar to McpParsingWarnings, this provides persistent visibility
- * of configuration issues.
+ * 在 UI 中显示键绑定验证警告。
+ * 类似于 McpParsingWarnings，这提供了配置问题的持久可见性。
  *
- * Only shown when keybinding customization is enabled (ant users + feature gate).
+ * 仅在启用了键绑定自定义时显示（ant 用户 + 功能开关）。
  */
 export function KeybindingWarnings(): React.ReactNode {
-  // Only show warnings when keybinding customization is enabled
+  // 仅在启用了键绑定自定义时显示警告
   if (!isKeybindingCustomizationEnabled()) {
     return null
   }

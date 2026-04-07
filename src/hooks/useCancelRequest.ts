@@ -1,8 +1,8 @@
 /**
- * CancelRequestHandler component for handling cancel/escape keybinding.
+ * CancelRequestHandler 组件，用于处理取消/退出键绑定。
  *
- * Must be rendered inside KeybindingSetup to have access to the keybinding context.
- * This component renders nothing - it just registers the cancel keybinding handler.
+ * 必须在 KeybindingSetup 内部渲染才能访问键绑定上下文。
+ * 此组件不渲染任何内容 - 只是注册取消键绑定处理器。
  */
 import { useCallback, useRef } from 'react'
 import { logEvent } from 'src/services/analytics/index.js'

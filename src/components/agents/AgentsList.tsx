@@ -35,7 +35,7 @@ export function AgentsList({
     React.useState<ResolvedAgent | null>(null)
   const [isCreateNewSelected, setIsCreateNewSelected] = React.useState(true)
 
-  // Sort agents alphabetically by name within each source group
+  // 在每个来源分组内按名称字母顺序排序 agent
   const sortedAgents = React.useMemo(
     () => [...agents].sort(compareAgentsByName),
     [agents],
@@ -119,7 +119,7 @@ export function AgentsList({
     return nonBuiltIn
   }, [sortedAgents, source])
 
-  // Set initial selection
+  // 设置初始选中项
   React.useEffect(() => {
     if (
       !selectedAgent &&
@@ -148,14 +148,14 @@ export function AgentsList({
     if (e.key !== 'up' && e.key !== 'down') return
     e.preventDefault()
 
-    // Handle navigation with "Create New Agent" option
+    // 处理带"新建 Agent"选项的导航
     const hasCreateOption = !!onCreateNew
     const totalItems =
       selectableAgentsInOrder.length + (hasCreateOption ? 1 : 0)
 
     if (totalItems === 0) return
 
-    // Calculate current position in list (0 = create new, 1+ = agents)
+    // 计算列表中的当前位置（0 = 新建，1+ = agent）
     let currentPosition = 0
     if (!isCreateNewSelected && selectedAgent) {
       const agentIndex = selectableAgentsInOrder.findIndex(
@@ -168,7 +168,7 @@ export function AgentsList({
       }
     }
 
-    // Calculate new position with wrap-around
+    // 计算带循环的新位置
     const newPosition =
       e.key === 'up'
         ? currentPosition === 0
@@ -178,7 +178,7 @@ export function AgentsList({
           ? 0
           : currentPosition + 1
 
-    // Update selection based on new position
+    // 根据新位置更新选中项
     if (hasCreateOption && newPosition === 0) {
       setIsCreateNewSelected(true)
       setSelectedAgent(null)

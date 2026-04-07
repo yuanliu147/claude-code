@@ -42,7 +42,7 @@ function LimitBar({
     return null
   }
 
-  // Calculate usage percentage
+  // 计算使用百分比
   const usedText = `${Math.floor(utilization)}% used`
 
   let subtext: string | undefined
@@ -267,7 +267,7 @@ function ExtraUsageSection({
   const subscriptionType = getSubscriptionType()
   const isProOrMax = subscriptionType === 'pro' || subscriptionType === 'max'
   if (!isProOrMax) {
-    // Only show to Pro and Max, consistent with claude.ai non-admin usage settings
+    // 仅向 Pro 和 Max 显示，与 claude.ai 非管理员使用设置一致
     return false
   }
 

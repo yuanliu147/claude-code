@@ -22,8 +22,8 @@ type BuiltinStatusLineProps = {
 };
 
 /**
- * Format a countdown from now until the given epoch time (in seconds).
- * Returns a compact human-readable string like "3h12m", "5d20h", "45m", or "now".
+ * 格式化从现在到指定时间戳（以秒为单位）的倒计时。
+ * 返回紧凑的人类可读字符串，如 "3h12m"、"5d20h"、"45m" 或 "now"。
  */
 export function formatCountdown(epochSeconds: number): string {
   const diff = epochSeconds - Date.now() / 1000;
@@ -50,102 +50,116 @@ function BuiltinStatusLineInner({
   totalCostUsd,
   rateLimits,
 }: BuiltinStatusLineProps) {
-  const { columns } = useTerminalSize();
+	const { columns } = useTerminalSize();
 
-  // Force re-render every 60s so countdowns stay current
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const hasResetTime = rateLimits.five_hour?.resets_at || rateLimits.seven_day?.resets_at;
-    if (!hasResetTime) return;
-    const id = setInterval(() => setTick(t => t + 1), 60_000);
-    return () => clearInterval(id);
-  }, [rateLimits.five_hour?.resets_at, rateLimits.seven_day?.resets_at]);
+	// 每 60 秒强制重新渲染以保持倒计时最新
+	const [tick, setTick] = useState(0);
+	useEffect(() => {
+		const hasResetTime =
+			rateLimits.five_hour?.resets_at || rateLimits.seven_day?.resets_at;
+		if (!hasResetTime) return;
+		const id = setInterval(() => setTick((t) => t + 1), 60_000);
+		return () => clearInterval(id);
+	}, [rateLimits.five_hour?.resets_at, rateLimits.seven_day?.resets_at]);
 
-  // Suppress unused-variable lint for tick (it exists only to trigger re-renders)
-  void tick;
+	// 抑制 tick 的未使用变量 lint（它仅用于触发重新渲染）
+	void tick;
 
-  // Model display: use first two words (e.g. "Opus 4.6") instead of just first word
-  const modelParts = modelName.split(' ');
-  const shortModel = modelParts.length >= 2 ? `${modelParts[0]} ${modelParts[1]}` : modelName;
+	// 模型显示：使用前两个词（例如 "Opus 4.6"）而不是仅第一个词
+	const modelParts = modelName.split(" ");
+	const shortModel =
+		modelParts.length >= 2
+			? `${modelParts[0]} ${modelParts[1]}`
+			: modelName;
 
-  const wide = columns >= 100;
-  const narrow = columns < 60;
+	const wide = columns >= 100;
+	const narrow = columns < 60;
 
-  const hasFiveHour = rateLimits.five_hour != null;
-  const hasSevenDay = rateLimits.seven_day != null;
+	const hasFiveHour = rateLimits.five_hour != null;
+	const hasSevenDay = rateLimits.seven_day != null;
 
-  const fiveHourPct = hasFiveHour ? Math.round(rateLimits.five_hour!.utilization * 100) : 0;
-  const sevenDayPct = hasSevenDay ? Math.round(rateLimits.seven_day!.utilization * 100) : 0;
+	const fiveHourPct = hasFiveHour
+		? Math.round(rateLimits.five_hour!.utilization * 100)
+		: 0;
+	const sevenDayPct = hasSevenDay
+		? Math.round(rateLimits.seven_day!.utilization * 100)
+		: 0;
 
-  // Token display: "50k/1M"
-  const tokenDisplay = `${formatTokens(usedTokens)}/${formatTokens(contextWindowSize)}`;
+	// Token 显示："50k/1M"
+	const tokenDisplay = `${formatTokens(usedTokens)}/${formatTokens(contextWindowSize)}`;
 
-  return (
-    <Box wrap="truncate">
-      {/* Model name */}
-      <Text>{shortModel}</Text>
+	return (
+		<Box wrap="truncate">
+			{/* Model name */}
+			<Text>{shortModel}</Text>
 
-      {/* Context usage with token counts */}
-      <Separator />
-      <Text dimColor>Context </Text>
-      <Text>{contextUsedPct}%</Text>
-      {!narrow && <Text dimColor> ({tokenDisplay})</Text>}
+			{/* Context usage with token counts */}
+			<Separator />
+			<Text dimColor>Context </Text>
+			<Text>{contextUsedPct}%</Text>
+			{!narrow && <Text dimColor> ({tokenDisplay})</Text>}
 
-      {/* 5-hour session rate limit */}
-      {hasFiveHour && (
-        <>
-          <Separator />
-          <Text dimColor>Session </Text>
-          {wide && (
-            <>
-              <ProgressBar
-                ratio={rateLimits.five_hour!.utilization}
-                width={10}
-                fillColor="rate_limit_fill"
-                emptyColor="rate_limit_empty"
-              />
-              <Text> </Text>
-            </>
-          )}
-          <Text>{fiveHourPct}%</Text>
-          {!narrow && rateLimits.five_hour!.resets_at > 0 && (
-            <Text dimColor> {formatCountdown(rateLimits.five_hour!.resets_at)}</Text>
-          )}
-        </>
-      )}
+			{/* 5-hour session rate limit */}
+			{hasFiveHour && (
+				<>
+					<Separator />
+					<Text dimColor>Session </Text>
+					{wide && (
+						<>
+							<ProgressBar
+								ratio={rateLimits.five_hour!.utilization}
+								width={10}
+								fillColor="rate_limit_fill"
+								emptyColor="rate_limit_empty"
+							/>
+							<Text> </Text>
+						</>
+					)}
+					<Text>{fiveHourPct}%</Text>
+					{!narrow && rateLimits.five_hour!.resets_at > 0 && (
+						<Text dimColor>
+							{" "}
+							{formatCountdown(rateLimits.five_hour!.resets_at)}
+						</Text>
+					)}
+				</>
+			)}
 
-      {/* 7-day weekly rate limit */}
-      {hasSevenDay && (
-        <>
-          <Separator />
-          <Text dimColor>Weekly </Text>
-          {wide && (
-            <>
-              <ProgressBar
-                ratio={rateLimits.seven_day!.utilization}
-                width={10}
-                fillColor="rate_limit_fill"
-                emptyColor="rate_limit_empty"
-              />
-              <Text> </Text>
-            </>
-          )}
-          <Text>{sevenDayPct}%</Text>
-          {!narrow && rateLimits.seven_day!.resets_at > 0 && (
-            <Text dimColor> {formatCountdown(rateLimits.seven_day!.resets_at)}</Text>
-          )}
-        </>
-      )}
+			{/* 7-day weekly rate limit */}
+			{hasSevenDay && (
+				<>
+					<Separator />
+					<Text dimColor>Weekly </Text>
+					{wide && (
+						<>
+							<ProgressBar
+								ratio={rateLimits.seven_day!.utilization}
+								width={10}
+								fillColor="rate_limit_fill"
+								emptyColor="rate_limit_empty"
+							/>
+							<Text> </Text>
+						</>
+					)}
+					<Text>{sevenDayPct}%</Text>
+					{!narrow && rateLimits.seven_day!.resets_at > 0 && (
+						<Text dimColor>
+							{" "}
+							{formatCountdown(rateLimits.seven_day!.resets_at)}
+						</Text>
+					)}
+				</>
+			)}
 
-      {/* Cost */}
-      {totalCostUsd > 0 && (
-        <>
-          <Separator />
-          <Text>{formatCost(totalCostUsd)}</Text>
-        </>
-      )}
-    </Box>
-  );
+			{/* Cost */}
+			{totalCostUsd > 0 && (
+				<>
+					<Separator />
+					<Text>{formatCost(totalCostUsd)}</Text>
+				</>
+			)}
+		</Box>
+	);
 }
 
 export const BuiltinStatusLine = React.memo(BuiltinStatusLineInner);

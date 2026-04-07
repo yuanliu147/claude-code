@@ -31,9 +31,9 @@ type TranscriptEntry = TranscriptMessage & {
 }
 
 /**
- * Derive a single-line title base from the first user message.
- * Collapses whitespace — multiline first messages (pasted stacks, code)
- * otherwise flow into the saved title and break the resume hint.
+ * 从第一条用户消息生成单行标题基础。
+ * 折叠空白字符 — 多行的第一条消息（粘贴的堆栈、代码）
+ * 否则会流入保存的标题并破坏恢复提示。
  */
 export function deriveFirstPrompt(
   firstUserMessage: Extract<SerializedMessage, { type: 'user' }> | undefined,
@@ -54,9 +54,9 @@ export function deriveFirstPrompt(
 }
 
 /**
- * Creates a fork of the current conversation by copying from the transcript file.
- * Preserves all original metadata (timestamps, gitBranch, etc.) while updating
- * sessionId and adding forkedFrom traceability.
+ * 通过从 transcript 文件复制来创建当前对话的分支。
+ * 保留所有原始元数据（时间戳、gitBranch 等），同时更新
+ * sessionId 并添加 forkedFrom 可追溯性。
  */
 async function createFork(customTitle?: string): Promise<{
   sessionId: UUID
@@ -86,10 +86,10 @@ async function createFork(customTitle?: string): Promise<{
     throw new Error('No conversation to branch')
   }
 
-  // Parse all transcript entries (messages + metadata entries like content-replacement)
+  // 解析所有 transcript 条目（消息和元数据条目，如 content-replacement）
   const entries = parseJSONL<Entry>(transcriptContent)
 
-  // Filter to only main conversation messages (exclude sidechains and non-message entries)
+  // 只过滤主对话消息（排除 sidechain 和非消息条目）
   const mainConversationEntries = entries.filter(
     (entry): entry is TranscriptMessage =>
       isTranscriptMessage(entry) && !entry.isSidechain,
@@ -114,13 +114,13 @@ async function createFork(customTitle?: string): Promise<{
     throw new Error('No messages to branch')
   }
 
-  // Build forked entries with new sessionId and preserved metadata
+  // 使用新的 sessionId 和保留的元数据构建分支条目
   let parentUuid: UUID | null = null
   const lines: string[] = []
   const serializedMessages: SerializedMessage[] = []
 
   for (const entry of mainConversationEntries) {
-    // Create forked transcript entry preserving all original metadata
+    // 创建分支 transcript 条目，保留所有原始元数据
     const forkedEntry: TranscriptEntry = {
       ...entry,
       sessionId: forkSessionId,
@@ -145,9 +145,9 @@ async function createFork(customTitle?: string): Promise<{
     }
   }
 
-  // Append content-replacement entry (if any) with the fork's sessionId.
-  // Written as a SINGLE entry (same shape as insertContentReplacement) so
-  // loadTranscriptFile's content-replacement branch picks it up.
+  // 追加内容替换条目（如果有）并使用分支的 sessionId。
+  // 写为单个条目（与 insertContentReplacement 相同的形状）以便
+  // loadTranscriptFile 的 content-replacement 分支能够拾取它。
   if (contentReplacementRecords.length > 0) {
     const forkedReplacementEntry: ContentReplacementEntry = {
       type: 'content-replacement',
@@ -173,8 +173,8 @@ async function createFork(customTitle?: string): Promise<{
 }
 
 /**
- * Generates a unique fork name by checking for collisions with existing session names.
- * If "baseName (Branch)" already exists, tries "baseName (Branch 2)", "baseName (Branch 3)", etc.
+ * 通过检查与现有会话名称的冲突来生成唯一的分支名称。
+ * 如果 "baseName (Branch)" 已存在，则尝试 "baseName (Branch 2)"、"baseName (Branch 3)" 等。
  */
 async function getUniqueForkName(baseName: string): Promise<string> {
   const candidateName = `${baseName} (Branch)`
@@ -189,12 +189,12 @@ async function getUniqueForkName(baseName: string): Promise<string> {
     return candidateName
   }
 
-  // Name collision - find a unique numbered suffix
-  // Search for all sessions that start with the base pattern
+  // 名称冲突 - 找一个唯一的数字后缀
+  // 搜索所有以基础模式开头的会话
   const existingForks = await searchSessionsByCustomTitle(`${baseName} (Branch`)
 
-  // Extract existing fork numbers to find the next available
-  const usedNumbers = new Set<number>([1]) // Consider " (Branch)" as number 1
+  // 提取现有的分支编号以找到下一个可用的
+  const usedNumbers = new Set<number>([1]) // 将 " (Branch)" 视为编号 1
   const forkNumberPattern = new RegExp(
     `^${escapeRegExp(baseName)} \\(Branch(?: (\\d+))?\\)$`,
   )
@@ -237,16 +237,16 @@ export async function call(
       contentReplacementRecords,
     } = await createFork(customTitle)
 
-    // Build LogOption for resume
+    // 为恢复构建 LogOption
     const now = new Date()
     const firstPrompt = deriveFirstPrompt(
       serializedMessages.find(m => m.type === 'user') as Extract<SerializedMessage, { type: 'user' }> | undefined,
     )
 
-    // Save custom title - use provided title or firstPrompt as default
-    // This ensures /status and /resume show the same session name
-    // Always add " (Branch)" suffix to make it clear this is a branched session
-    // Handle collisions by adding a number suffix (e.g., " (Branch 2)", " (Branch 3)")
+    // 保存自定义标题 - 使用提供的标题或 firstPrompt 作为默认值
+    // 这确保 /status 和 /resume 显示相同的会话名称
+    // 始终添加 " (Branch)" 后缀以明确这是分支会话
+    // 通过添加数字后缀处理冲突（如 " (Branch 2)"、" (Branch 3)"）
     const baseName = title ?? firstPrompt
     const effectiveTitle = await getUniqueForkName(baseName)
     await saveCustomTitle(sessionId, effectiveTitle, forkPath)
@@ -280,7 +280,7 @@ export async function call(
       await context.resume(sessionId, forkLog, 'fork')
       onDone(successMessage, { display: 'system' })
     } else {
-      // Fallback if resume not available
+      // 如果 resume 不可用时的回退
       onDone(
         `Branched conversation${titleInfo}. Resume with: /resume ${sessionId}`,
       )

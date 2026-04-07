@@ -74,10 +74,10 @@ export function showDialog<T = void>(
 }
 
 /**
- * Render an error message through Ink, then unmount and exit.
- * Use this for fatal errors after the Ink root has been created —
- * console.error is swallowed by Ink's patchConsole, so we render
- * through the React tree instead.
+ * 通过 Ink 渲染错误消息，然后卸载并退出。
+ * 在 Ink root 创建后用于致命错误——
+ * console.error 被 Ink 的 patchConsole 吞没，
+ * 所以我们改为通过 React 树渲染。
  */
 export async function exitWithError(
   root: Root,
@@ -115,8 +115,8 @@ export async function exitWithMessage(
 }
 
 /**
- * Show a setup dialog wrapped in AppStateProvider + KeybindingSetup.
- * Reduces boilerplate in showSetupScreens() where every dialog needs these wrappers.
+ * 显示包装在 AppStateProvider + KeybindingSetup 中的设置对话框。
+ * 减少 showSetupScreens() 中每个对话框需要这些包装器的样板代码。
  */
 export function showSetupDialog<T = void>(
   root: Root,
@@ -155,7 +155,7 @@ export async function showSetupScreens(
   if (
     "production" === 'test' ||
     isEnvTruthy(false) ||
-    process.env.IS_DEMO // Skip onboarding in demo mode
+    process.env.IS_DEMO // 在演示模式中跳过入职
   ) {
     return false
   }
@@ -182,16 +182,16 @@ export async function showSetupScreens(
     )
   }
 
-  // Always show the trust dialog in interactive sessions, regardless of permission mode.
-  // The trust dialog is the workspace trust boundary — it warns about untrusted repos
-  // and checks CLAUDE.md external includes. bypassPermissions mode
-  // only affects tool execution permissions, not workspace trust.
-  // Note: non-interactive sessions (CI/CD with -p) never reach showSetupScreens at all.
-  // Skip permission checks in claubbit
+  // 在交互式会话中始终显示信任对话框，无论权限模式如何。
+  // 信任对话框是工作区信任边界——它警告不受信任的仓库
+  // 并检查 CLAUDE.md 外部包含。bypassPermissions 模式
+  // 仅影响工具执行权限，不影响工作区信任。
+  // 注意：非交互式会话（带有 -p 的 CI/CD）根本不会到达 showSetupScreens。
+  // 在 claubbit 中跳过权限检查
   if (!isEnvTruthy(process.env.CLAUBBIT)) {
-    // Fast-path: skip TrustDialog import+render when CWD is already trusted.
-    // If it returns true, the TrustDialog would auto-resolve regardless of
-    // security features, so we can skip the dynamic import and render cycle.
+    // 快速路径：当 CWD 已受信任时跳过 TrustDialog import+render。
+    // 如果它返回 true，TrustDialog 会自动解析，无论
+    // 安全功能如何，所以我们可以跳过动态导入和渲染周期。
     if (!checkHasTrustDialogAccepted()) {
       const { TrustDialog } = await import(
         './components/TrustDialog/TrustDialog.js'
@@ -220,7 +220,7 @@ export async function showSetupScreens(
       await handleMcpjsonServerApprovals(root)
     }
 
-    // Check for claude.md includes that need approval
+    // 检查是否有需要批准的 claude.md 外部包含
     if (await shouldShowClaudeMdExternalIncludesWarning()) {
       const externalIncludes = getExternalClaudeMdIncludes(
         await getMemoryFiles(true),

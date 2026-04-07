@@ -11,8 +11,8 @@ type Props = {
 }
 
 /**
- * Dialog shown when settings files have validation errors.
- * User must choose to continue (skipping invalid files) or exit to fix them.
+ * 当设置文件有验证错误时显示的对话框。
+ * 用户必须选择继续（跳过无效文件）或退出修复。
  */
 export function InvalidSettingsDialog({
   settingsErrors,

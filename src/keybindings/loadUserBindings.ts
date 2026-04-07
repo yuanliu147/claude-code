@@ -456,7 +456,7 @@ export function getCachedKeybindingWarnings(): KeybindingWarning[] {
 }
 
 /**
- * Reset internal state for testing.
+ * 重置内部状态以进行测试。
  */
 export function resetKeybindingLoaderForTesting(): void {
   initialized = false

@@ -38,10 +38,10 @@ function filterReservedShortcuts(blocks: KeybindingBlock[]): KeybindingBlock[] {
  * Creates a fully valid JSON file with all default bindings that users can customize.
  */
 export function generateKeybindingsTemplate(): string {
-  // Filter out reserved shortcuts that cannot be rebound
+  // 过滤掉无法重新绑定的保留快捷键
   const bindings = filterReservedShortcuts(DEFAULT_BINDINGS)
 
-  // Format as object wrapper with bindings array
+  // 格式化为带 bindings 数组的对象包装
   const config = {
     $schema: 'https://www.schemastore.org/claude-code-keybindings.json',
     $docs: 'https://code.claude.com/docs/en/keybindings',

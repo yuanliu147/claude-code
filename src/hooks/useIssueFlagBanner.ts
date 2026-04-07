@@ -25,22 +25,22 @@ const EXTERNAL_COMMAND_PATTERNS = [
 ]
 
 const FRICTION_PATTERNS = [
-  // "No," or "No!" at start — comma/exclamation implies correction tone
-  // (avoids "No problem", "No thanks", "No I think we should...")
-  /^no[,!]\s/i,
-  // Direct corrections about Claude's output
-  /\bthat'?s (wrong|incorrect|not (what|right|correct))\b/i,
-  /\bnot what I (asked|wanted|meant|said)\b/i,
-  // Referencing prior instructions Claude missed
-  /\bI (said|asked|wanted|told you|already said)\b/i,
-  // Questioning Claude's actions
-  /\bwhy did you\b/i,
-  /\byou should(n'?t| not)? have\b/i,
-  /\byou were supposed to\b/i,
-  // Explicit retry/revert of Claude's work
-  /\btry again\b/i,
-  /\b(undo|revert) (that|this|it|what you)\b/i,
-]
+	// 开头为 "No," 或 "No!" — 逗号/感叹号表示纠正语气
+	// （避免 "No problem"、"No thanks"、"No I think we should..."）
+	/^no[,!]\s/i,
+	// 关于 Claude 输出的直接纠正
+	/\bthat'?s (wrong|incorrect|not (what|right|correct))\b/i,
+	/\bnot what I (asked|wanted|meant|said)\b/i,
+	// 提及 Claude 忽略的先前指令
+	/\bI (said|asked|wanted|told you|already said)\b/i,
+	// 质疑 Claude 的行为
+	/\bwhy did you\b/i,
+	/\byou should(n'?t| not)? have\b/i,
+	/\byou were supposed to\b/i,
+	// 明确重试/撤销 Claude 的工作
+	/\btry again\b/i,
+	/\b(undo|revert) (that|this|it|what you)\b/i,
+];
 
 export function isSessionContainerCompatible(messages: Message[]): boolean {
   for (const msg of messages) {

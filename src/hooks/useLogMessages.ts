@@ -10,11 +10,11 @@ import {
 } from '../utils/sessionStorage.js'
 
 /**
- * Hook that logs messages to the transcript
- * conversation ID that only changes when a new conversation is started.
+ * 将消息记录到对话记录的 Hook
+ * 对话 ID 仅在开始新对话时更改。
  *
- * @param messages The current conversation messages
- * @param ignore When true, messages will not be recorded to the transcript
+ * @param messages 当前的对话消息
+ * @param ignore 当为 true 时，消息将不会被记录到对话记录
  */
 export function useLogMessages(messages: Message[], ignore: boolean = false) {
   const teamContext = useAppState(s => s.teamContext)

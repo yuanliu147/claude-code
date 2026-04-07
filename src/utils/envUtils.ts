@@ -2,8 +2,8 @@ import memoize from 'lodash-es/memoize.js'
 import { homedir } from 'os'
 import { join } from 'path'
 
-// Memoized: 150+ callers, many on hot paths. Keyed off CLAUDE_CONFIG_DIR so
-// tests that change the env var get a fresh value without explicit cache.clear.
+// 记忆化：150+ 调用方，许多在热点路径上。根据 CLAUDE_CONFIG_DIR 键控，
+// 因此更改 env var 的测试可以获得新值而不需要显式 cache.clear。
 export const getClaudeConfigHomeDir = memoize(
   (): string => {
     return (
@@ -47,15 +47,15 @@ export function isEnvDefinedFalsy(
 }
 
 /**
- * --bare / CLAUDE_CODE_SIMPLE — skip hooks, LSP, plugin sync, skill dir-walk,
- * attribution, background prefetches, and ALL keychain/credential reads.
- * Auth is strictly ANTHROPIC_API_KEY env or apiKeyHelper from --settings.
- * Explicit CLI flags (--plugin-dir, --add-dir, --mcp-config) still honored.
- * ~30 gates across the codebase.
+ * --bare / CLAUDE_CODE_SIMPLE — 跳过 hooks、LSP、插件同步、skill 目录遍历、
+ * attribution、后台预取和所有 keychain/凭证读取。
+ * 认证严格限于 ANTHROPIC_API_KEY env 或来自 --settings 的 apiKeyHelper。
+ * 显式 CLI 标志（--plugin-dir、--add-dir、--mcp-config）仍然有效。
+ * 整个代码库约 30 个门控。
  *
- * Checks argv directly (in addition to the env var) because several gates
- * run before main.tsx's action handler sets CLAUDE_CODE_SIMPLE=1 from --bare
- * — notably startKeychainPrefetch() at main.tsx top-level.
+ * 除了 env var 外还直接检查 argv，因为几个门控
+ * 在 main.tsx 的 action handler 设置 CLAUDE_CODE_SIMPLE=1（来自 --bare）之前运行
+ * — 特别是 main.tsx 顶级的 startKeychainPrefetch()。
  */
 export function isBareMode(): boolean {
   return (
@@ -74,7 +74,7 @@ export function parseEnvVars(
 ): Record<string, string> {
   const parsedEnv: Record<string, string> = {}
 
-  // Parse individual env vars
+  // 解析各个环境变量
   if (rawEnvArgs) {
     for (const envStr of rawEnvArgs) {
       const [key, ...valueParts] = envStr.split('=')
@@ -98,7 +98,7 @@ export function getAWSRegion(): string {
 }
 
 /**
- * Get the default Vertex AI region
+ * 获取默认的 Vertex AI 区域
  */
 export function getDefaultVertexRegion(): string {
   return process.env.CLOUD_ML_REGION || 'us-east5'
@@ -113,7 +113,7 @@ export function shouldMaintainProjectWorkingDir(): boolean {
 }
 
 /**
- * Check if running on Homespace (ant-internal cloud environment)
+ * 检查是否在 Homespace（ant-internal 云环境）上运行
  */
 export function isRunningOnHomespace(): boolean {
   return (
@@ -134,8 +134,8 @@ export function isRunningOnHomespace(): boolean {
  * Used for telemetry to measure auto-mode usage in sensitive environments.
  */
 export function isInProtectedNamespace(): boolean {
-  // USER_TYPE is build-time --define'd; in external builds this block is
-  // DCE'd so the require() and namespace allowlist never appear in the bundle.
+  // USER_TYPE 是编译时 --define 的；在外部构建中此块是
+  // DCE'd，所以 require() 和 namespace 允许列表永远不会出现在 bundle 中。
   if (process.env.USER_TYPE === 'ant') {
     /* eslint-disable @typescript-eslint/no-require-imports */
     return (
@@ -165,8 +165,8 @@ const VERTEX_REGION_OVERRIDES: ReadonlyArray<[string, string]> = [
 ]
 
 /**
- * Get the Vertex AI region for a specific model.
- * Different models may be available in different regions.
+ * 获取特定模型的 Vertex AI 区域。
+ * 不同模型可能在不同区域可用。
  */
 export function getVertexRegionForModel(
   model: string | undefined,

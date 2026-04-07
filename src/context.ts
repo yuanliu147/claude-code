@@ -19,7 +19,7 @@ import { logError } from './utils/log.js'
 
 const MAX_STATUS_CHARS = 2000
 
-// System prompt injection for cache breaking (ant-only, ephemeral debugging state)
+// 系统提示注入，用于缓存刷新（仅 ant 模式，临时调试状态）
 let systemPromptInjection: string | null = null
 
 export function getSystemPromptInjection(): string | null {
@@ -27,16 +27,16 @@ export function getSystemPromptInjection(): string | null {
 }
 
 export function setSystemPromptInjection(value: string | null): void {
-  systemPromptInjection = value
-  // Clear context caches immediately when injection changes
-  getUserContext.cache.clear?.()
-  getSystemContext.cache.clear?.()
+	systemPromptInjection = value;
+	// 注入变化时立即清除上下文缓存
+	getUserContext.cache.clear?.();
+	getSystemContext.cache.clear?.();
 }
 
 export const getGitStatus = memoize(async (): Promise<string | null> => {
   if (process.env.NODE_ENV === 'test') {
-    // Avoid cycles in tests
-    return null
+		// 避免测试中的循环依赖
+		return null;
   }
 
   const startTime = Date.now()
@@ -57,50 +57,54 @@ export const getGitStatus = memoize(async (): Promise<string | null> => {
   }
 
   try {
-    const gitCmdsStart = Date.now()
-    const [branch, mainBranch, status, log, userName] = await Promise.all([
-      getBranch(),
-      getDefaultBranch(),
-      execFileNoThrow(gitExe(), ['--no-optional-locks', 'status', '--short'], {
-        preserveOutputOnError: false,
-      }).then(({ stdout }) => stdout.trim()),
-      execFileNoThrow(
-        gitExe(),
-        ['--no-optional-locks', 'log', '--oneline', '-n', '5'],
-        {
-          preserveOutputOnError: false,
-        },
-      ).then(({ stdout }) => stdout.trim()),
-      execFileNoThrow(gitExe(), ['config', 'user.name'], {
-        preserveOutputOnError: false,
-      }).then(({ stdout }) => stdout.trim()),
-    ])
+		const gitCmdsStart = Date.now();
+		const [branch, mainBranch, status, log, userName] = await Promise.all([
+			getBranch(),
+			getDefaultBranch(),
+			execFileNoThrow(
+				gitExe(),
+				["--no-optional-locks", "status", "--short"],
+				{
+					preserveOutputOnError: false,
+				},
+			).then(({ stdout }) => stdout.trim()),
+			execFileNoThrow(
+				gitExe(),
+				["--no-optional-locks", "log", "--oneline", "-n", "5"],
+				{
+					preserveOutputOnError: false,
+				},
+			).then(({ stdout }) => stdout.trim()),
+			execFileNoThrow(gitExe(), ["config", "user.name"], {
+				preserveOutputOnError: false,
+			}).then(({ stdout }) => stdout.trim()),
+		]);
 
-    logForDiagnosticsNoPII('info', 'git_commands_completed', {
-      duration_ms: Date.now() - gitCmdsStart,
-      status_length: status.length,
-    })
+		logForDiagnosticsNoPII("info", "git_commands_completed", {
+			duration_ms: Date.now() - gitCmdsStart,
+			status_length: status.length,
+		});
 
-    // Check if status exceeds character limit
-    const truncatedStatus =
-      status.length > MAX_STATUS_CHARS
-        ? status.substring(0, MAX_STATUS_CHARS) +
-          '\n... (truncated because it exceeds 2k characters. If you need more information, run "git status" using BashTool)'
-        : status
+		// 检查状态是否超过字符限制
+		const truncatedStatus =
+			status.length > MAX_STATUS_CHARS
+				? status.substring(0, MAX_STATUS_CHARS) +
+					'\n... (truncated because it exceeds 2k characters. If you need more information, run "git status" using BashTool)'
+				: status;
 
-    logForDiagnosticsNoPII('info', 'git_status_completed', {
-      duration_ms: Date.now() - startTime,
-      truncated: status.length > MAX_STATUS_CHARS,
-    })
+		logForDiagnosticsNoPII("info", "git_status_completed", {
+			duration_ms: Date.now() - startTime,
+			truncated: status.length > MAX_STATUS_CHARS,
+		});
 
-    return [
-      `This is the git status at the start of the conversation. Note that this status is a snapshot in time, and will not update during the conversation.`,
-      `Current branch: ${branch}`,
-      `Main branch (you will usually use this for PRs): ${mainBranch}`,
-      ...(userName ? [`Git user: ${userName}`] : []),
-      `Status:\n${truncatedStatus || '(clean)'}`,
-      `Recent commits:\n${log}`,
-    ].join('\n\n')
+		return [
+			`This is the git status at the start of the conversation. Note that this status is a snapshot in time, and will not update during the conversation.`,
+			`Current branch: ${branch}`,
+			`Main branch (you will usually use this for PRs): ${mainBranch}`,
+			...(userName ? [`Git user: ${userName}`] : []),
+			`Status:\n${truncatedStatus || "(clean)"}`,
+			`Recent commits:\n${log}`,
+		].join("\n\n");
   } catch (error) {
     logForDiagnosticsNoPII('error', 'git_status_failed', {
       duration_ms: Date.now() - startTime,
@@ -111,79 +115,79 @@ export const getGitStatus = memoize(async (): Promise<string | null> => {
 })
 
 /**
- * This context is prepended to each conversation, and cached for the duration of the conversation.
+ * 系统上下文，添加到每个对话的开头，并在整个对话期间缓存。
  */
 export const getSystemContext = memoize(
   async (): Promise<{
     [k: string]: string
   }> => {
-    const startTime = Date.now()
-    logForDiagnosticsNoPII('info', 'system_context_started')
+		const startTime = Date.now();
+		logForDiagnosticsNoPII("info", "system_context_started");
 
-    // Skip git status in CCR (unnecessary overhead on resume) or when git instructions are disabled
-    const gitStatus =
-      isEnvTruthy(process.env.CLAUDE_CODE_REMOTE) ||
-      !shouldIncludeGitInstructions()
-        ? null
-        : await getGitStatus()
+		// 在 CCR 中跳过 git status（恢复时不必要的开销）或禁用了 git 指令时
+		const gitStatus =
+			isEnvTruthy(process.env.CLAUDE_CODE_REMOTE) ||
+			!shouldIncludeGitInstructions()
+				? null
+				: await getGitStatus();
 
-    // Include system prompt injection if set (for cache breaking, ant-only)
-    const injection = feature('BREAK_CACHE_COMMAND')
-      ? getSystemPromptInjection()
-      : null
+		// 如果设置了系统提示注入则包含（用于缓存刷新，仅 ant 模式）
+		const injection = feature("BREAK_CACHE_COMMAND")
+			? getSystemPromptInjection()
+			: null;
 
-    logForDiagnosticsNoPII('info', 'system_context_completed', {
-      duration_ms: Date.now() - startTime,
-      has_git_status: gitStatus !== null,
-      has_injection: injection !== null,
-    })
+		logForDiagnosticsNoPII("info", "system_context_completed", {
+			duration_ms: Date.now() - startTime,
+			has_git_status: gitStatus !== null,
+			has_injection: injection !== null,
+		});
 
-    return {
-      ...(gitStatus && { gitStatus }),
-      ...(feature('BREAK_CACHE_COMMAND') && injection
-        ? {
-            cacheBreaker: `[CACHE_BREAKER: ${injection}]`,
-          }
-        : {}),
-    }
+		return {
+			...(gitStatus && { gitStatus }),
+			...(feature("BREAK_CACHE_COMMAND") && injection
+				? {
+						cacheBreaker: `[CACHE_BREAKER: ${injection}]`,
+					}
+				: {}),
+		};
   },
 )
 
 /**
- * This context is prepended to each conversation, and cached for the duration of the conversation.
+ * 系统上下文，添加到每个对话的开头，并在整个对话期间缓存。
  */
 export const getUserContext = memoize(
   async (): Promise<{
     [k: string]: string
   }> => {
-    const startTime = Date.now()
-    logForDiagnosticsNoPII('info', 'user_context_started')
+		const startTime = Date.now();
+		logForDiagnosticsNoPII("info", "user_context_started");
 
-    // CLAUDE_CODE_DISABLE_CLAUDE_MDS: hard off, always.
-    // --bare: skip auto-discovery (cwd walk), BUT honor explicit --add-dir.
-    // --bare means "skip what I didn't ask for", not "ignore what I asked for".
-    const shouldDisableClaudeMd =
-      isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_CLAUDE_MDS) ||
-      (isBareMode() && getAdditionalDirectoriesForClaudeMd().length === 0)
-    // Await the async I/O (readFile/readdir directory walk) so the event
-    // loop yields naturally at the first fs.readFile.
-    const claudeMd = shouldDisableClaudeMd
-      ? null
-      : getClaudeMds(filterInjectedMemoryFiles(await getMemoryFiles()))
-    // Cache for the auto-mode classifier (yoloClassifier.ts reads this
-    // instead of importing claudemd.ts directly, which would create a
-    // cycle through permissions/filesystem → permissions → yoloClassifier).
-    setCachedClaudeMdContent(claudeMd || null)
+		// CLAUDE_CODE_DISABLE_CLAUDE_MDS: 硬关闭，始终禁用。
+		// --bare: 跳过自动发现（cwd 遍历），但尊重显式的 --add-dir。
+		// --bare 表示"跳过我没有要求的内容"，而非"忽略我要求的内容"。
+		const shouldDisableClaudeMd =
+			isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_CLAUDE_MDS) ||
+			(isBareMode() &&
+				getAdditionalDirectoriesForClaudeMd().length === 0);
+		// 等待异步 I/O（readFile/readdir 目录遍历）以便事件
+		// 循环在第一个 fs.readFile 时自然让出。
+		const claudeMd = shouldDisableClaudeMd
+			? null
+			: getClaudeMds(filterInjectedMemoryFiles(await getMemoryFiles()));
+		// 供自动模式分类器缓存使用（yoloClassifier.ts 读取此值
+		// 而不是直接导入 claudemd.ts，否则会通过 permissions/filesystem → permissions → yoloClassifier 产生循环）。
+		setCachedClaudeMdContent(claudeMd || null);
 
-    logForDiagnosticsNoPII('info', 'user_context_completed', {
-      duration_ms: Date.now() - startTime,
-      claudemd_length: claudeMd?.length ?? 0,
-      claudemd_disabled: Boolean(shouldDisableClaudeMd),
-    })
+		logForDiagnosticsNoPII("info", "user_context_completed", {
+			duration_ms: Date.now() - startTime,
+			claudemd_length: claudeMd?.length ?? 0,
+			claudemd_disabled: Boolean(shouldDisableClaudeMd),
+		});
 
-    return {
-      ...(claudeMd && { claudeMd }),
-      currentDate: `Today's date is ${getLocalISODate()}.`,
-    }
+		return {
+			...(claudeMd && { claudeMd }),
+			currentDate: `Today's date is ${getLocalISODate()}.`,
+		};
   },
 )

@@ -9,12 +9,12 @@ export function useSettingsChange(
 ): void {
   const handleChange = useCallback(
     (source: SettingSource) => {
-      // Cache is already reset by the notifier (changeDetector.fanOut) —
-      // resetting here caused N-way thrashing with N subscribers: each
-      // cleared the cache, re-read from disk, then the next cleared again.
-      const newSettings = getSettings_DEPRECATED()
-      onChange(source, newSettings)
-    },
+		// 缓存已经由通知器重置（changeDetector.fanOut）——
+		// 在这里重置会导致 N 个订阅者之间的 N 向抖动：每个
+		// 清除缓存，从磁盘重新读取，然后下一个再次清除。
+		const newSettings = getSettings_DEPRECATED();
+		onChange(source, newSettings);
+	},
     [onChange],
   )
 

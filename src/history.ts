@@ -20,30 +20,27 @@ const MAX_HISTORY_ITEMS = 100
 const MAX_PASTED_CONTENT_LENGTH = 1024
 
 /**
- * Stored paste content - either inline content or a hash reference to paste store.
+ * 存储的粘贴内容 - 内联内容或粘贴存储的哈希引用。
  */
 type StoredPastedContent = {
-  id: number
-  type: 'text' | 'image'
-  content?: string // Inline content for small pastes
-  contentHash?: string // Hash reference for large pastes stored externally
-  mediaType?: string
-  filename?: string
-}
+	id: number;
+	type: "text" | "image";
+	content?: string; // 内联内容（小粘贴）
+	contentHash?: string; // 哈希引用（大粘贴存储在外部）
+	mediaType?: string;
+	filename?: string;
+};
 
 /**
- * Claude Code parses history for pasted content references to match back to
- * pasted content. The references look like:
+ * Claude Code 解析历史记录中的粘贴内容引用以匹配回粘贴内容。引用格式如下：
  *   Text: [Pasted text #1 +10 lines]
  *   Image: [Image #2]
- * The numbers are expected to be unique within a single prompt but not across
- * prompts. We choose numeric, auto-incrementing IDs as they are more
- * user-friendly than other ID options.
+ * 编号在单个提示内应该是唯一的，但在不同提示之间不需要。
+ * 我们选择数字自动递增 ID，因为它们比其他 ID 选项更友好。
  */
 
-// Note: The original text paste implementation would consider input like
-// "line1\nline2\nline3" to have +2 lines, not 3 lines. We preserve that
-// behavior here.
+// 注意：原始文本粘贴实现会将 "line1\nline2\nline3" 这样的输入
+// 视为 +2 行，而不是 3 行。我们在这里保留了这种行为。
 export function getPastedTextRefNumLines(text: string): number {
   return (text.match(/\r\n|\r|\n/g) || []).length
 }
@@ -75,28 +72,28 @@ export function parseReferences(
 }
 
 /**
- * Replace [Pasted text #N] placeholders in input with their actual content.
- * Image refs are left alone — they become content blocks, not inlined text.
+ * 将输入中的 [Pasted text #N] 占位符替换为实际内容。
+ * 图片引用保持不变——它们变成内容块，而不是内联文本。
  */
 export function expandPastedTextRefs(
   input: string,
   pastedContents: Record<number, PastedContent>,
 ): string {
-  const refs = parseReferences(input)
-  let expanded = input
-  // Splice at the original match offsets so placeholder-like strings inside
-  // pasted content are never confused for real refs. Reverse order keeps
-  // earlier offsets valid after later replacements.
-  for (let i = refs.length - 1; i >= 0; i--) {
-    const ref = refs[i]!
-    const content = pastedContents[ref.id]
-    if (content?.type !== 'text') continue
-    expanded =
-      expanded.slice(0, ref.index) +
-      content.content +
-      expanded.slice(ref.index + ref.match.length)
-  }
-  return expanded
+	const refs = parseReferences(input);
+	let expanded = input;
+	// 从原始匹配偏移量处拼接，这样粘贴内容内部的占位符类字符串
+	// 永远不会被误认为真实引用。反向顺序确保
+	// 后面的替换后前面的偏移量仍然有效。
+	for (let i = refs.length - 1; i >= 0; i--) {
+		const ref = refs[i]!;
+		const content = pastedContents[ref.id];
+		if (content?.type !== "text") continue;
+		expanded =
+			expanded.slice(0, ref.index) +
+			content.content +
+			expanded.slice(ref.index + ref.match.length);
+	}
+	return expanded;
 }
 
 function deserializeLogEntry(line: string): LogEntry {
@@ -104,42 +101,42 @@ function deserializeLogEntry(line: string): LogEntry {
 }
 
 async function* makeLogEntryReader(): AsyncGenerator<LogEntry> {
-  const currentSession = getSessionId()
+	const currentSession = getSessionId();
 
-  // Start with entries that have yet to be flushed to disk
-  for (let i = pendingEntries.length - 1; i >= 0; i--) {
-    yield pendingEntries[i]!
-  }
+	// 从尚未刷新到磁盘的条目开始
+	for (let i = pendingEntries.length - 1; i >= 0; i--) {
+		yield pendingEntries[i]!;
+	}
 
-  // Read from global history file (shared across all projects)
-  const historyPath = join(getClaudeConfigHomeDir(), 'history.jsonl')
+	// 从全局历史文件读取（跨项目共享）
+	const historyPath = join(getClaudeConfigHomeDir(), "history.jsonl");
 
-  try {
-    for await (const line of readLinesReverse(historyPath)) {
-      try {
-        const entry = deserializeLogEntry(line)
-        // removeLastFromHistory slow path: entry was flushed before removal,
-        // so filter here so both getHistory (Up-arrow) and makeHistoryReader
-        // (ctrl+r search) skip it consistently.
-        if (
-          entry.sessionId === currentSession &&
-          skippedTimestamps.has(entry.timestamp)
-        ) {
-          continue
-        }
-        yield entry
-      } catch (error) {
-        // Not a critical error - just skip malformed lines
-        logForDebugging(`Failed to parse history line: ${error}`)
-      }
-    }
-  } catch (e: unknown) {
-    const code = getErrnoCode(e)
-    if (code === 'ENOENT') {
-      return
-    }
-    throw e
-  }
+	try {
+		for await (const line of readLinesReverse(historyPath)) {
+			try {
+				const entry = deserializeLogEntry(line);
+				// removeLastFromHistory 慢路径：条目在移除前已刷新，
+				// 所以在这里过滤，以便 getHistory（向上箭头）和 makeHistoryReader
+				//（ctrl+r 搜索）都能一致地跳过它。
+				if (
+					entry.sessionId === currentSession &&
+					skippedTimestamps.has(entry.timestamp)
+				) {
+					continue;
+				}
+				yield entry;
+			} catch (error) {
+				// 不是关键错误 - 只是跳过格式错误的行
+				logForDebugging(`Failed to parse history line: ${error}`);
+			}
+		}
+	} catch (e: unknown) {
+		const code = getErrnoCode(e);
+		if (code === "ENOENT") {
+			return;
+		}
+		throw e;
+	}
 }
 
 export async function* makeHistoryReader(): AsyncGenerator<HistoryEntry> {
@@ -155,9 +152,9 @@ export type TimestampedHistoryEntry = {
 }
 
 /**
- * Current-project history for the ctrl+r picker: deduped by display text,
- * newest first, with timestamps. Paste contents are resolved lazily via
- * `resolve()` — the picker only reads display+timestamp for the list.
+ * 当前项目历史记录，用于 ctrl+r 选择器：按显示文本去重，
+ * 最新优先，带时间戳。粘贴内容通过 `resolve()` 延迟解析——
+ * 选择器只为列表读取 display+timestamp。
  */
 export async function* getTimestampedHistory(): AsyncGenerator<TimestampedHistoryEntry> {
   const currentProject = getProjectRoot()
@@ -180,12 +177,12 @@ export async function* getTimestampedHistory(): AsyncGenerator<TimestampedHistor
 }
 
 /**
- * Get history entries for the current project, with current session's entries first.
+ * 获取当前项目的历史记录，当前会话的条目优先。
  *
- * Entries from the current session are yielded before entries from other sessions,
- * so concurrent sessions don't interleave their up-arrow history. Within each group,
- * order is newest-first. Scans the same MAX_HISTORY_ITEMS window as before —
- * entries are reordered within that window, not beyond it.
+ * 当前会话的条目在其他会话的条目之前产生，
+ * 这样并发会话不会交错其向上箭头历史。在每个组内，
+ * 顺序是最新的优先。扫描与之前相同的 MAX_HISTORY_ITEMS 窗口——
+ * 条目在该窗口内重新排序，而不是超出它。
  */
 export async function* getHistory(): AsyncGenerator<HistoryEntry> {
   const currentProject = getProjectRoot()
@@ -194,19 +191,19 @@ export async function* getHistory(): AsyncGenerator<HistoryEntry> {
   let yielded = 0
 
   for await (const entry of makeLogEntryReader()) {
-    // Skip malformed entries (corrupted file, old format, or invalid JSON structure)
-    if (!entry || typeof entry.project !== 'string') continue
-    if (entry.project !== currentProject) continue
+		// 跳过格式错误的条目（文件损坏、旧格式或无效的 JSON 结构）
+		if (!entry || typeof entry.project !== "string") continue;
+		if (entry.project !== currentProject) continue;
 
-    if (entry.sessionId === currentSession) {
-      yield await logEntryToHistoryEntry(entry)
-      yielded++
-    } else {
-      otherSessionEntries.push(entry)
-    }
+		if (entry.sessionId === currentSession) {
+			yield await logEntryToHistoryEntry(entry);
+			yielded++;
+		} else {
+			otherSessionEntries.push(entry);
+		}
 
-    // Same MAX_HISTORY_ITEMS window as before — just reordered within it.
-    if (yielded + otherSessionEntries.length >= MAX_HISTORY_ITEMS) break
+		// Same MAX_HISTORY_ITEMS window as before — just reordered within it.
+		if (yielded + otherSessionEntries.length >= MAX_HISTORY_ITEMS) break;
   }
 
   for (const entry of otherSessionEntries) {
@@ -225,42 +222,42 @@ type LogEntry = {
 }
 
 /**
- * Resolve stored paste content to full PastedContent by fetching from paste store if needed.
+ * 通过在需要时从粘贴存储获取来解析存储的粘贴内容为完整 PastedContent。
  */
 async function resolveStoredPastedContent(
-  stored: StoredPastedContent,
+	stored: StoredPastedContent,
 ): Promise<PastedContent | null> {
-  // If we have inline content, use it directly
-  if (stored.content) {
-    return {
-      id: stored.id,
-      type: stored.type,
-      content: stored.content,
-      mediaType: stored.mediaType,
-      filename: stored.filename,
-    }
-  }
+	// 如果有内联内容，直接使用
+	if (stored.content) {
+		return {
+			id: stored.id,
+			type: stored.type,
+			content: stored.content,
+			mediaType: stored.mediaType,
+			filename: stored.filename,
+		};
+	}
 
-  // If we have a hash reference, fetch from paste store
-  if (stored.contentHash) {
-    const content = await retrievePastedText(stored.contentHash)
-    if (content) {
-      return {
-        id: stored.id,
-        type: stored.type,
-        content,
-        mediaType: stored.mediaType,
-        filename: stored.filename,
-      }
-    }
-  }
+	// 如果有哈希引用，从粘贴存储获取
+	if (stored.contentHash) {
+		const content = await retrievePastedText(stored.contentHash);
+		if (content) {
+			return {
+				id: stored.id,
+				type: stored.type,
+				content,
+				mediaType: stored.mediaType,
+				filename: stored.filename,
+			};
+		}
+	}
 
-  // Content not available
-  return null
+	// Content not available
+	return null;
 }
 
 /**
- * Convert LogEntry to HistoryEntry by resolving paste store references.
+ * 通过解析粘贴存储引用将 LogEntry 转换为 HistoryEntry。
  */
 async function logEntryToHistoryEntry(entry: LogEntry): Promise<HistoryEntry> {
   const pastedContents: Record<number, PastedContent> = {}
@@ -283,12 +280,12 @@ let isWriting = false
 let currentFlushPromise: Promise<void> | null = null
 let cleanupRegistered = false
 let lastAddedEntry: LogEntry | null = null
-// Timestamps of entries already flushed to disk that should be skipped when
-// reading. Used by removeLastFromHistory when the entry has raced past the
-// pending buffer. Session-scoped (module state resets on process restart).
+// 已刷新到磁盘但读取时应跳过的条目时间戳。
+// 用于 removeLastFromHistory 当条目已与待处理缓冲区竞争时。
+// 会话范围（模块状态在进程重启时重置）。
 const skippedTimestamps = new Set<number>()
 
-// Core flush logic - writes pending entries to disk
+// 核心刷新逻辑 - 将待处理条目写入磁盘
 async function immediateFlushHistory(): Promise<void> {
   if (pendingEntries.length === 0) {
     return
@@ -296,27 +293,29 @@ async function immediateFlushHistory(): Promise<void> {
 
   let release
   try {
-    const historyPath = join(getClaudeConfigHomeDir(), 'history.jsonl')
+		const historyPath = join(getClaudeConfigHomeDir(), "history.jsonl");
 
-    // Ensure the file exists before acquiring lock (append mode creates if missing)
-    await writeFile(historyPath, '', {
-      encoding: 'utf8',
-      mode: 0o600,
-      flag: 'a',
-    })
+		// 确保在获取锁之前文件存在（追加模式会在不存在时创建）
+		await writeFile(historyPath, "", {
+			encoding: "utf8",
+			mode: 0o600,
+			flag: "a",
+		});
 
-    release = await lock(historyPath, {
-      stale: 10000,
-      retries: {
-        retries: 3,
-        minTimeout: 50,
-      },
-    })
+		release = await lock(historyPath, {
+			stale: 10000,
+			retries: {
+				retries: 3,
+				minTimeout: 50,
+			},
+		});
 
-    const jsonLines = pendingEntries.map(entry => jsonStringify(entry) + '\n')
-    pendingEntries = []
+		const jsonLines = pendingEntries.map(
+			(entry) => jsonStringify(entry) + "\n",
+		);
+		pendingEntries = [];
 
-    await appendFile(historyPath, jsonLines.join(''), { mode: 0o600 })
+		await appendFile(historyPath, jsonLines.join(""), { mode: 0o600 });
   } catch (error) {
     logForDebugging(`Failed to write prompt history: ${error}`)
   } finally {
@@ -327,29 +326,29 @@ async function immediateFlushHistory(): Promise<void> {
 }
 
 async function flushPromptHistory(retries: number): Promise<void> {
-  if (isWriting || pendingEntries.length === 0) {
-    return
-  }
+	if (isWriting || pendingEntries.length === 0) {
+		return;
+	}
 
-  // Stop trying to flush history until the next user prompt
-  if (retries > 5) {
-    return
-  }
+	// 停止尝试刷新历史直到下一个用户提示
+	if (retries > 5) {
+		return;
+	}
 
-  isWriting = true
+	isWriting = true;
 
-  try {
-    await immediateFlushHistory()
-  } finally {
-    isWriting = false
+	try {
+		await immediateFlushHistory();
+	} finally {
+		isWriting = false;
 
-    if (pendingEntries.length > 0) {
-      // Avoid trying again in a hot loop
-      await sleep(500)
+		if (pendingEntries.length > 0) {
+			// 避免在热循环中再次尝试
+			await sleep(500);
 
-      void flushPromptHistory(retries + 1)
-    }
-  }
+			void flushPromptHistory(retries + 1);
+		}
+	}
 }
 
 async function addToPromptHistory(
@@ -363,35 +362,35 @@ async function addToPromptHistory(
   const storedPastedContents: Record<number, StoredPastedContent> = {}
   if (entry.pastedContents) {
     for (const [id, content] of Object.entries(entry.pastedContents)) {
-      // Filter out images (they're stored separately in image-cache)
-      if (content.type === 'image') {
-        continue
-      }
+		// 过滤图片（它们单独存储在 image-cache 中）
+		if (content.type === "image") {
+			continue;
+		}
 
-      // For small text content, store inline
-      if (content.content.length <= MAX_PASTED_CONTENT_LENGTH) {
-        storedPastedContents[Number(id)] = {
-          id: content.id,
-          type: content.type,
-          content: content.content,
-          mediaType: content.mediaType,
-          filename: content.filename,
-        }
-      } else {
-        // For large text content, compute hash synchronously and store reference
-        // The actual disk write happens async (fire-and-forget)
-        const hash = hashPastedText(content.content)
-        storedPastedContents[Number(id)] = {
-          id: content.id,
-          type: content.type,
-          contentHash: hash,
-          mediaType: content.mediaType,
-          filename: content.filename,
-        }
-        // Fire-and-forget disk write - don't block history entry creation
-        void storePastedText(hash, content.content)
-      }
-    }
+		// 对于小型文本内容，内联存储
+		if (content.content.length <= MAX_PASTED_CONTENT_LENGTH) {
+			storedPastedContents[Number(id)] = {
+				id: content.id,
+				type: content.type,
+				content: content.content,
+				mediaType: content.mediaType,
+				filename: content.filename,
+			};
+		} else {
+			// 对于大型文本内容，同步计算哈希并存储引用
+			// 实际的磁盘写入是异步的（fire-and-forget）
+			const hash = hashPastedText(content.content);
+			storedPastedContents[Number(id)] = {
+				id: content.id,
+				type: content.type,
+				contentHash: hash,
+				mediaType: content.mediaType,
+				filename: content.filename,
+			};
+			// Fire-and-forget 磁盘写入 - 不要阻塞历史条目创建
+			void storePastedText(hash, content.content);
+		}
+	}
   }
 
   const logEntry: LogEntry = {
@@ -409,28 +408,28 @@ async function addToPromptHistory(
 }
 
 export function addToHistory(command: HistoryEntry | string): void {
-  // Skip history when running in a tmux session spawned by Claude Code's Tungsten tool.
-  // This prevents verification/test sessions from polluting the user's real command history.
-  if (isEnvTruthy(process.env.CLAUDE_CODE_SKIP_PROMPT_HISTORY)) {
-    return
-  }
+	// 当在 Claude Code 的 Tungsten 工具生成的 tmux 会话中运行时，跳过历史记录。
+	// 这可以防止验证/测试会话污染用户的真实命令历史。
+	if (isEnvTruthy(process.env.CLAUDE_CODE_SKIP_PROMPT_HISTORY)) {
+		return;
+	}
 
-  // Register cleanup on first use
-  if (!cleanupRegistered) {
-    cleanupRegistered = true
-    registerCleanup(async () => {
-      // If there's an in-progress flush, wait for it
-      if (currentFlushPromise) {
-        await currentFlushPromise
-      }
-      // If there are still pending entries after the flush completed, do one final flush
-      if (pendingEntries.length > 0) {
-        await immediateFlushHistory()
-      }
-    })
-  }
+	// 首次使用时注册清理
+	if (!cleanupRegistered) {
+		cleanupRegistered = true;
+		registerCleanup(async () => {
+			// 如果有正在进行的刷新，等待它
+			if (currentFlushPromise) {
+				await currentFlushPromise;
+			}
+			// 如果刷新完成后仍有待处理条目，进行一次最终刷新
+			if (pendingEntries.length > 0) {
+				await immediateFlushHistory();
+			}
+		});
+	}
 
-  void addToPromptHistory(command)
+	void addToPromptHistory(command);
 }
 
 export function clearPendingHistoryEntries(): void {
@@ -440,15 +439,15 @@ export function clearPendingHistoryEntries(): void {
 }
 
 /**
- * Undo the most recent addToHistory call. Used by auto-restore-on-interrupt:
- * when Esc rewinds the conversation before any response arrives, the submit is
- * semantically undone — the history entry should be too, otherwise Up-arrow
- * shows the restored text twice (once from the input box, once from disk).
+ * 撤销最近一次 addToHistory 调用。用于自动恢复中断：
+ * 当 Esc 在任何响应到达之前回退对话时，提交在语义上被撤销——
+ * 历史条目也应该如此，否则向上箭头会显示恢复的文本两次
+ *（一次来自输入框，一次来自磁盘）。
  *
- * Fast path pops from the pending buffer. If the async flush already won the
- * race (TTFT is typically >> disk write latency), the entry's timestamp is
- * added to a skip-set consulted by getHistory. One-shot: clears the tracked
- * entry so a second call is a no-op.
+ * 快速路径从待处理缓冲区弹出。如果异步刷新已经赢得竞争
+ *（TTFT 通常 >> 磁盘写入延迟），条目的时间戳会被添加到
+ * getHistory 查阅的跳过集中。一次性操作：清除跟踪的条目，
+ * 以便第二次调用是空操作。
  */
 export function removeLastFromHistory(): void {
   if (!lastAddedEntry) return

@@ -70,9 +70,9 @@ type ResumeResult = {
 }
 
 /**
- * Scan the transcript for the last TodoWrite tool_use block and return its todos.
- * Used to hydrate AppState.todos on SDK --resume so the model's todo list
- * survives session restarts without file persistence.
+ * 扫描转录以找到最后一个 TodoWrite tool_use 块并返回其待办事项。
+ * 用于在 SDK --resume 时填充 AppState.todos，使模型的待办事项列表
+ * 在会话重启后无需文件持久化即可保留。
  */
 function extractTodosFromTranscript(messages: Message[]): TodoList {
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -93,21 +93,21 @@ function extractTodosFromTranscript(messages: Message[]): TodoList {
 }
 
 /**
- * Restore session state (file history, attribution, todos) from log on resume.
- * Used by both SDK (print.ts) and interactive (REPL.tsx, main.tsx) resume paths.
+ * 在恢复时从日志中还原会话状态（文件历史、归因、待办事项）。
+ * 由 SDK（print.ts）和交互式（REPL.tsx、main.tsx）恢复路径共同使用。
  */
 export function restoreSessionStateFromLog(
   result: ResumeResult,
   setAppState: (f: (prev: AppState) => AppState) => void,
 ): void {
-  // Restore file history state
+  // 还原文件历史状态
   if (result.fileHistorySnapshots && result.fileHistorySnapshots.length > 0) {
     fileHistoryRestoreStateFromLog(result.fileHistorySnapshots, newState => {
       setAppState(prev => ({ ...prev, fileHistory: newState }))
     })
   }
 
-  // Restore attribution state (ant-only feature)
+  // 还原归因状态（仅限 ant 功能）
   if (
     feature('COMMIT_ATTRIBUTION') &&
     result.attributionSnapshots &&
@@ -118,12 +118,10 @@ export function restoreSessionStateFromLog(
     })
   }
 
-  // Restore context-collapse commit log + staged snapshot. Must run before
-  // the first query() so projectView() can rebuild the collapsed view from
-  // the resumed Message[]. Called unconditionally (even with
-  // undefined/empty entries) because restoreFromEntries resets the store
-  // first — without that, an in-session /resume into a session with no
-  // commits would leave the prior session's stale commit log intact.
+  // 还原上下文折叠提交日志 + 暂存快照。必须在第一次 query() 之前运行，
+  // 以便 projectView() 可以从恢复的 Message[] 重建折叠视图。无条件调用（即使
+  // entries 为 undefined/空），因为 restoreFromEntries 会先重置存储 —
+  // 否则，在没有提交的会话中进行会话内 /resume 会留下上一个会话的陈旧提交日志。
   if (feature('CONTEXT_COLLAPSE')) {
     /* eslint-disable @typescript-eslint/no-require-imports */
     ;(
@@ -135,8 +133,8 @@ export function restoreSessionStateFromLog(
     /* eslint-enable @typescript-eslint/no-require-imports */
   }
 
-  // Restore TodoWrite state from transcript (SDK/non-interactive only).
-  // Interactive mode uses file-backed v2 tasks, so AppState.todos is unused there.
+  // 从转录中还原 TodoWrite 状态（仅限 SDK/非交互模式）。
+  // 交互模式使用文件支持的 v2 任务，因此 AppState.todos 在那里未使用。
   if (!isTodoV2Enabled() && result.messages && result.messages.length > 0) {
     const todos = extractTodosFromTranscript(result.messages)
     if (todos.length > 0) {
@@ -150,9 +148,9 @@ export function restoreSessionStateFromLog(
 }
 
 /**
- * Compute restored attribution state from log snapshots.
- * Used for computing initial state before render (e.g., main.tsx --continue).
- * Returns undefined if attribution feature is disabled or no snapshots exist.
+ * 从日志快照计算还原的归因状态。
+ * 用于在渲染前计算初始状态（例如 main.tsx --continue）。
+ * 如果归因功能被禁用或没有快照，则返回 undefined。
  */
 export function computeRestoredAttributionState(
   result: ResumeResult,
@@ -168,9 +166,9 @@ export function computeRestoredAttributionState(
 }
 
 /**
- * Compute standalone agent context (name/color) for session resume.
- * Used for computing initial state before render (per CLAUDE.md guidelines).
- * Returns undefined if no name/color is set on the session.
+ * 计算会话恢复的独立代理上下文（名称/颜色）。
+ * 用于在渲染前计算初始状态（按照 CLAUDE.md 指南）。
+ * 如果会话上没有设置名称/颜色，则返回 undefined。
  */
 export function computeStandaloneAgentContext(
   agentName: string | undefined,
@@ -188,14 +186,13 @@ export function computeStandaloneAgentContext(
 }
 
 /**
- * Restore agent setting from a resumed session.
+ * 从恢复的会话中还原代理设置。
  *
- * When resuming a conversation that used a custom agent, this re-applies the
- * agent type and model override (unless the user specified --agent on the CLI).
- * Mutates bootstrap state via setMainThreadAgentType / setMainLoopModelOverride.
+ * 在恢复使用自定义代理的对话时，重新应用代理类型和模型覆盖
+ * （除非用户在 CLI 上指定了 --agent）。
+ * 通过 setMainThreadAgentType / setMainLoopModelOverride 修改引导状态。
  *
- * Returns the restored agent definition and its agentType string, or undefined
- * if no agent was restored.
+ * 返回还原的代理定义及其 agentType 字符串，如果没有还原代理则返回 undefined。
  */
 export function restoreAgentFromSession(
   agentSetting: string | undefined,
@@ -205,12 +202,12 @@ export function restoreAgentFromSession(
   agentDefinition: AgentDefinition | undefined
   agentType: string | undefined
 } {
-  // If user already specified --agent on CLI, keep that definition
+  // 如果用户已在 CLI 上指定了 --agent，保留该定义
   if (currentAgentDefinition) {
     return { agentDefinition: currentAgentDefinition, agentType: undefined }
   }
 
-  // If session had no agent, clear any stale bootstrap state
+  // 如果会话没有代理，清除任何陈旧的引导状态
   if (!agentSetting) {
     setMainThreadAgentType(undefined)
     return { agentDefinition: undefined, agentType: undefined }
@@ -229,7 +226,7 @@ export function restoreAgentFromSession(
 
   setMainThreadAgentType(resumedAgent.agentType)
 
-  // Apply agent's model if user didn't specify one
+  // 如果用户没有指定模型，应用代理的模型
   if (
     !getMainLoopModelOverride() &&
     resumedAgent.model &&
@@ -242,11 +239,11 @@ export function restoreAgentFromSession(
 }
 
 /**
- * Refresh agent definitions after a coordinator/normal mode switch.
+ * 在协调器/普通模式切换后刷新代理定义。
  *
- * When resuming a session that was in a different mode (coordinator vs normal),
- * the built-in agents need to be re-derived to match the new mode. CLI-provided
- * agents (from --agents flag) are merged back in.
+ * 在恢复处于不同模式（协调器 vs 普通）的会话时，
+ * 需要重新派生内置代理以匹配新模式。CLI 提供的
+ * 代理（来自 --agents 标志）会被合并回来。
  */
 export async function refreshAgentDefinitionsForModeSwitch(
   modeWasSwitched: boolean,
@@ -258,8 +255,8 @@ export async function refreshAgentDefinitionsForModeSwitch(
     return currentAgentDefinitions
   }
 
-  // Re-derive agent definitions after mode switch so built-in agents
-  // reflect the new coordinator/normal mode
+  // 模式切换后重新派生代理定义，使内置代理
+  // 反映新的协调器/普通模式
   getAgentDefinitionsWithOverrides.cache.clear?.()
   const freshAgentDefs = await getAgentDefinitionsWithOverrides(currentCwd)
   const freshAllAgents = [...freshAgentDefs.allAgents, ...cliAgents]

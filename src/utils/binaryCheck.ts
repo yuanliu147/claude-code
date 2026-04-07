@@ -12,16 +12,16 @@ const binaryCache = new Map<string, boolean>()
  * @returns Promise<boolean> - true if the command exists, false otherwise
  */
 export async function isBinaryInstalled(command: string): Promise<boolean> {
-  // Edge case: empty or whitespace-only command
+  // 边界情况：空或仅空白字符的命令
   if (!command || !command.trim()) {
     logForDebugging('[binaryCheck] Empty command provided, returning false')
     return false
   }
 
-  // Trim the command to handle whitespace
+  // 修剪命令以处理空白
   const trimmedCommand = command.trim()
 
-  // Check cache first
+  // 首先检查缓存
   const cached = binaryCache.get(trimmedCommand)
   if (cached !== undefined) {
     logForDebugging(

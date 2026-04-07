@@ -9,7 +9,7 @@ import { getFsImplementation } from './fsOperations.js'
 import { sanitizePath } from './path.js'
 import { jsonStringify } from './slowOperations.js'
 
-// Mutable recording state — filePath is updated when session ID changes (e.g., --resume)
+// 可变录制状态 — 当会话 ID 更改时（例如 --resume）更新 filePath
 const recordingState: { filePath: string | null; timestamp: number } = {
   filePath: null,
   timestamp: 0,
@@ -74,10 +74,10 @@ export function getSessionRecordingPaths(): string[] {
 }
 
 /**
- * Rename the recording file to match the current session ID.
- * Called after --resume/--continue changes the session ID via switchSession().
- * The recorder was installed with the initial (random) session ID; this renames
- * the file so getSessionRecordingPaths() can find it by the resumed session ID.
+ * 重命名录制文件以匹配当前会话 ID。
+ * 在 --resume/--continue 通过 switchSession() 更改会话 ID 后调用。
+ * 录制器使用初始的（随机的）会话 ID 安装；这会重命名
+ * 文件，以便 getSessionRecordingPaths() 可以通过恢复的会话 ID 找到它。
  */
 export async function renameRecordingForSession(): Promise<void> {
   const oldPath = recordingState.filePath
@@ -209,7 +209,7 @@ export function installAsciicastRecorder(): void {
     return originalWrite(chunk, encodingOrCb, cb)
   } as typeof process.stdout.write
 
-  // Handle terminal resize events
+  // 处理终端调整大小事件
   function onResize(): void {
     const elapsed = (performance.now() - startTime) / 1000
     const { cols: newCols, rows: newRows } = getTerminalSize()

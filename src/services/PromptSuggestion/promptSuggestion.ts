@@ -35,7 +35,7 @@ export function getPromptVariant(): PromptVariant {
 }
 
 export function shouldEnablePromptSuggestion(): boolean {
-  // Env var overrides everything (for testing)
+  // 环境变量覆盖一切（用于测试）
   const envOverride = process.env.CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION
   if (isEnvDefinedFalsy(envOverride)) {
     logEvent('tengu_prompt_suggestion_init', {
@@ -54,7 +54,7 @@ export function shouldEnablePromptSuggestion(): boolean {
     return true
   }
 
-  // Keep default in sync with Config.tsx (settings toggle visibility)
+  // 与 Config.tsx 保持默认同步（设置开关可见性）
   if (!getFeatureValue_CACHED_MAY_BE_STALE('tengu_chomp_inflection', false)) {
     logEvent('tengu_prompt_suggestion_init', {
       enabled: false,
@@ -64,7 +64,7 @@ export function shouldEnablePromptSuggestion(): boolean {
     return false
   }
 
-  // Disable in non-interactive mode (print mode, piped input, SDK)
+  // 在非交互模式下禁用（打印模式、管道输入、SDK）
   if (getIsNonInteractiveSession()) {
     logEvent('tengu_prompt_suggestion_init', {
       enabled: false,
@@ -74,7 +74,7 @@ export function shouldEnablePromptSuggestion(): boolean {
     return false
   }
 
-  // Disable for swarm teammates (only leader should show suggestions)
+  // 为 swarm 队友禁用（只有 leader 应该显示建议）
   if (isAgentSwarmsEnabled() && isTeammate()) {
     logEvent('tengu_prompt_suggestion_init', {
       enabled: false,
@@ -101,8 +101,8 @@ export function abortPromptSuggestion(): void {
 }
 
 /**
- * Returns a suppression reason if suggestions should not be generated,
- * or null if generation is allowed. Shared by main and pipelined paths.
+ * 如果不应生成建议则返回抑制原因，否则返回 null 表示允许生成。
+ * 由主路径和流水线路径共享。
  */
 export function getSuggestionSuppressReason(appState: AppState): string | null {
   if (!appState.promptSuggestionEnabled) return 'disabled'
@@ -119,8 +119,8 @@ export function getSuggestionSuppressReason(appState: AppState): string | null {
 }
 
 /**
- * Shared guard + generation logic used by both CLI TUI and SDK push paths.
- * Returns the suggestion with metadata, or null if suppressed/filtered.
+ * CLI TUI 和 SDK push 路径共用的守卫+生成逻辑。
+ * 返回带有元数据的建议，如果被抑制/过滤则返回 null。
  */
 export async function tryGenerateSuggestion(
   abortController: AbortController,
@@ -246,7 +246,7 @@ export function getParentCacheSuppressReason(
   const usage = lastAssistantMessage.message.usage
   const inputTokens = usage.input_tokens ?? 0
   const cacheWriteTokens = usage.cache_creation_input_tokens ?? 0
-  // The fork re-processes the parent's output (never cached) plus its own prompt.
+  // 分叉会重新处理父代理的输出（从未缓存）及其自身的提示。
   const outputTokens = usage.output_tokens ?? 0
 
   return (inputTokens as number) + (cacheWriteTokens as number) + (outputTokens as number) >
@@ -374,14 +374,14 @@ export function shouldFilterSuggestion(
         lower === 'nothing found.' ||
         lower.startsWith('nothing to suggest') ||
         lower.startsWith('no suggestion') ||
-        // Model spells out the prompt's "stay silent" instruction
+        // 模型直接说出提示中的"保持沉默"指令
         /\bsilence is\b|\bstay(s|ing)? silent\b/.test(lower) ||
-        // Model outputs bare "silence" wrapped in punctuation/whitespace
+        // 模型输出裸的"silence"并用标点/空白包裹
         /^\W*silence\W*$/.test(lower),
     ],
     [
       'meta_wrapped',
-      // Model wraps meta-reasoning in parens/brackets: (silence — ...), [no suggestion]
+      // 模型用括号/方括号包裹元推理：(silence — ...)、[no suggestion]
       () => /^\(.*\)$|^\[.*\]$/.test(suggestion),
     ],
     [
@@ -398,11 +398,11 @@ export function shouldFilterSuggestion(
       'too_few_words',
       () => {
         if (wordCount >= 2) return false
-        // Allow slash commands — these are valid user commands
+        // 允许斜杠命令 — 这些是有效的用户命令
         if (suggestion.startsWith('/')) return false
-        // Allow common single-word inputs that are valid user commands
+        // 允许常见的单词输入，这些是有效的用户命令
         const ALLOWED_SINGLE_WORDS = new Set([
-          // Affirmatives
+          // 肯定词
           'yes',
           'yeah',
           'yep',
@@ -411,7 +411,7 @@ export function shouldFilterSuggestion(
           'sure',
           'ok',
           'okay',
-          // Actions
+          // 动作词
           'push',
           'commit',
           'deploy',
@@ -420,7 +420,7 @@ export function shouldFilterSuggestion(
           'check',
           'exit',
           'quit',
-          // Negation
+          // 否定词
           'no',
         ])
         return !ALLOWED_SINGLE_WORDS.has(lower)

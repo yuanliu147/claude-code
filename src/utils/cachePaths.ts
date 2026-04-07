@@ -32,7 +32,7 @@ export const CACHE_PATHS = {
     join(
       paths.cache,
       getProjectDir(getFsImplementation().cwd()),
-      // Sanitize server name for Windows compatibility (colons are reserved for drive letters)
+      // 为 Windows 兼容性清理服务器名称（冒号保留用于驱动器字母）
       `mcp-logs-${sanitizePath(serverName)}`,
     ),
 }

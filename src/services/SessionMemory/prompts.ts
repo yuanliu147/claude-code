@@ -81,7 +81,7 @@ REMEMBER: Use the Edit tool in parallel and stop. Do not continue after the edit
 }
 
 /**
- * Load custom session memory template from file if it exists
+ * 如果存在则从文件加载自定义 session memory 模板
  */
 export async function loadSessionMemoryTemplate(): Promise<string> {
   const templatePath = join(
@@ -206,7 +206,7 @@ function substituteVariables(
   // (replacer fn treats $ literally), and (2) double-substitution when user
   // content happens to contain {{varName}} matching a later variable.
   return template.replace(/\{\{(\w+)\}\}/g, (match, key: string) =>
-    Object.prototype.hasOwnProperty.call(variables, key)
+    Object.hasOwn(variables, key)
       ? variables[key]!
       : match,
   )

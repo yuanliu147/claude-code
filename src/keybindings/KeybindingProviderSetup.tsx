@@ -296,10 +296,10 @@ function ChordInterceptor({
         'Global',
       ]
 
-      // Track whether we're completing a chord (pending was non-null)
+      // 跟踪我们是否正在完成和弦（pending 是否为非 null）
       const wasInChord = pendingChordRef.current !== null
 
-      // Check if this keystroke is part of a chord sequence
+      // 检查此按键是否是和弦序列的一部分
       const result = resolveKeyWithChordState(
         input,
         key,
@@ -310,34 +310,32 @@ function ChordInterceptor({
 
       switch (result.type) {
         case 'chord_started':
-          // This key starts a chord - store pending state and stop propagation
+          // 这个键开始了一个和弦——存储待处理状态并停止传播
           setPendingChord(result.pending)
           event.stopImmediatePropagation()
           break
 
         case 'match': {
-          // Clear pending state
+          // 清除待处理状态
           setPendingChord(null)
 
-          // Only invoke handlers and stop propagation for chord completions
-          // (multi-keystroke sequences). Single-keystroke matches should propagate
-          // to per-hook handlers to avoid interfering with other input handling
-          // (e.g., Enter needs to reach useTypeahead for autocomplete acceptance
-          // before the submit handler fires).
+          // 仅对和弦完成（多按键序列）调用处理程序并停止传播
+          // 单按键匹配应该传播到每个 hook 的处理程序，以避免干扰其他输入处理
+          // （例如，Enter 需要在提交处理程序触发之前到达 useTypeahead 进行自动补全接受）。
           if (wasInChord) {
-            // Find and invoke the handler for this action
-            // We need to check that the handler's context is in our resolved contexts
-            // (which includes handlerContexts + activeContexts + Global)
+            // 查找并调用此操作的处理程序
+            // 我们需要检查处理程序的上下文在我们的解析上下文中
+            //（包括 handlerContexts + activeContexts + Global）
             const contextsSet = new Set(contexts)
             if (registry) {
               const handlers = registry.get(result.action)
               if (handlers && handlers.size > 0) {
-                // Find handlers whose context is in our resolved contexts
+                // 查找其上下文在我们的解析上下文中的处理程序
                 for (const registration of handlers) {
                   if (contextsSet.has(registration.context)) {
                     registration.handler()
                     event.stopImmediatePropagation()
-                    break // Only invoke the first matching handler
+                    break // 仅调用第一个匹配的处理程序
                   }
                 }
               }
@@ -347,22 +345,22 @@ function ChordInterceptor({
         }
 
         case 'chord_cancelled':
-          // Invalid key during chord - clear pending state and swallow the
-          // keystroke so it doesn't propagate as a standalone action
-          // (e.g., ctrl+x ctrl+c should not fire app:interrupt).
+          // 和弦期间的无效键——清除待处理状态并吞掉
+          // 按键，这样它不会作为独立操作传播
+          //（例如，ctrl+x ctrl+c 不应该触发 app:interrupt）。
           setPendingChord(null)
           event.stopImmediatePropagation()
           break
 
         case 'unbound':
-          // Key is explicitly unbound - clear pending state and swallow
-          // the keystroke (it was part of a chord sequence).
+          // 按键被明确取消绑定——清除待处理状态并吞掉
+          // 按键（它是和弦序列的一部分）。
           setPendingChord(null)
           event.stopImmediatePropagation()
           break
 
         case 'none':
-          // No chord involvement - let other handlers process
+          // 没有和弦参与——让其他处理程序处理
           break
       }
     },

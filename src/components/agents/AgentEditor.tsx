@@ -78,8 +78,8 @@ export function AgentEditor({
       }
 
       try {
-        // Only custom/plugin agents can be edited
-        // this is for type safety; the UI shouldn't allow editing otherwise
+        // 只有自定义/插件 agent 可以被编辑
+        // 这是为了类型安全；UI 不应允许其他情况下的编辑
         if (!isCustomAgent(agent) && !isPluginAgent(agent)) {
           return false
         }

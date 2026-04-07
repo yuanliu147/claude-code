@@ -25,62 +25,63 @@ export function FileEditToolUpdatedMessage({
   verbose,
   previewHint,
 }: Props): React.ReactNode {
-  const { columns } = useTerminalSize()
-  const numAdditions = structuredPatch.reduce(
-    (acc, hunk) => acc + count(hunk.lines, _ => _.startsWith('+')),
-    0,
-  )
-  const numRemovals = structuredPatch.reduce(
-    (acc, hunk) => acc + count(hunk.lines, _ => _.startsWith('-')),
-    0,
-  )
+	const { columns } = useTerminalSize();
+	const numAdditions = structuredPatch.reduce(
+		(acc, hunk) => acc + count(hunk.lines, (_) => _.startsWith("+")),
+		0,
+	);
+	const numRemovals = structuredPatch.reduce(
+		(acc, hunk) => acc + count(hunk.lines, (_) => _.startsWith("-")),
+		0,
+	);
 
-  const text = (
-    <Text>
-      {numAdditions > 0 ? (
-        <>
-          Added <Text bold>{numAdditions}</Text>{' '}
-          {numAdditions > 1 ? 'lines' : 'line'}
-        </>
-      ) : null}
-      {numAdditions > 0 && numRemovals > 0 ? ', ' : null}
-      {numRemovals > 0 ? (
-        <>
-          {numAdditions === 0 ? 'R' : 'r'}emoved <Text bold>{numRemovals}</Text>{' '}
-          {numRemovals > 1 ? 'lines' : 'line'}
-        </>
-      ) : null}
-    </Text>
-  )
+	const text = (
+		<Text>
+			{numAdditions > 0 ? (
+				<>
+					Added <Text bold>{numAdditions}</Text>{" "}
+					{numAdditions > 1 ? "lines" : "line"}
+				</>
+			) : null}
+			{numAdditions > 0 && numRemovals > 0 ? ", " : null}
+			{numRemovals > 0 ? (
+				<>
+					{numAdditions === 0 ? "R" : "r"}emoved{" "}
+					<Text bold>{numRemovals}</Text>{" "}
+					{numRemovals > 1 ? "lines" : "line"}
+				</>
+			) : null}
+		</Text>
+	);
 
-  // Plan files: invert condensed behavior
-  // - Regular mode: just show the hint (user can type /plan to see full content)
-  // - Condensed mode (subagent view): show the diff
-  if (previewHint) {
-    if (style !== 'condensed' && !verbose) {
-      return (
-        <MessageResponse>
-          <Text dimColor>{previewHint}</Text>
-        </MessageResponse>
-      )
-    }
-  } else if (style === 'condensed' && !verbose) {
-    return text
-  }
+	// 计划文件：反转简洁行为
+	// - 普通模式：仅显示提示（用户可以输入 /plan 查看完整内容）
+	// - 简洁模式（子代理视图）：显示 diff
+	if (previewHint) {
+		if (style !== "condensed" && !verbose) {
+			return (
+				<MessageResponse>
+					<Text dimColor>{previewHint}</Text>
+				</MessageResponse>
+			);
+		}
+	} else if (style === "condensed" && !verbose) {
+		return text;
+	}
 
-  return (
-    <MessageResponse>
-      <Box flexDirection="column">
-        <Text>{text}</Text>
-        <StructuredDiffList
-          hunks={structuredPatch}
-          dim={false}
-          width={columns - 12}
-          filePath={filePath}
-          firstLine={firstLine}
-          fileContent={fileContent}
-        />
-      </Box>
-    </MessageResponse>
-  )
+	return (
+		<MessageResponse>
+			<Box flexDirection="column">
+				<Text>{text}</Text>
+				<StructuredDiffList
+					hunks={structuredPatch}
+					dim={false}
+					width={columns - 12}
+					filePath={filePath}
+					firstLine={firstLine}
+					fileContent={fileContent}
+				/>
+			</Box>
+		</MessageResponse>
+	);
 }

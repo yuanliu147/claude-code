@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { KeyboardEvent, useInput } from '@anthropic/ink'
-// backward-compat bridge until consumers wire handleKeyDown to <Box onKeyDown>
+// 在消费者将 handleKeyDown 连接到 <Box onKeyDown> 之前的向后兼容桥接
 import {
   Cursor,
   getLastKill,

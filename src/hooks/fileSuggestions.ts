@@ -30,7 +30,7 @@ import { ripGrep } from '../utils/ripgrep.js'
 import { getInitialSettings } from '../utils/settings/settings.js'
 import { createSignal } from '../utils/signal.js'
 
-// Lazily constructed singleton
+// 惰性构造的单例
 let fileIndex: FileIndex | null = null
 
 function getFileIndex(): FileIndex {
@@ -41,45 +41,45 @@ function getFileIndex(): FileIndex {
 }
 
 let fileListRefreshPromise: Promise<FileIndex> | null = null
-// Signal fired when an in-progress index build completes. Lets the
-// typeahead UI re-run its last search so partial results upgrade to full.
+// 进度索引构建完成时触发的信号。让
+// typeahead UI 重新运行其最后一次搜索，以便部分结果升级到完整。
 const indexBuildComplete = createSignal()
 export const onIndexBuildComplete = indexBuildComplete.subscribe
 let cacheGeneration = 0
 
-// Background fetch for untracked files
+// 后台获取未跟踪文件
 let untrackedFetchPromise: Promise<void> | null = null
 
-// Store tracked files so we can rebuild index with untracked
+// 存储跟踪的文件，以便我们可以使用 untracked 重建索引
 let cachedTrackedFiles: string[] = []
-// Store config files so mergeUntrackedIntoNormalizedCache preserves them
+// 存储配置文件，以便 mergeUntrackedIntoNormalizedCache 保留它们
 let cachedConfigFiles: string[] = []
-// Store tracked directories so mergeUntrackedIntoNormalizedCache doesn't
-// recompute ~270k path.dirname() calls on each merge
+// 存储跟踪的目录，以便 mergeUntrackedIntoNormalizedCache 不会
+// 在每次合并时重新计算约 270k 个 path.dirname() 调用
 let cachedTrackedDirs: string[] = []
 
-// Cache for .ignore/.rgignore patterns (keyed by repoRoot:cwd)
+// .ignore/.rgignore 模式的缓存（按 repoRoot:cwd 键控）
 let ignorePatternsCache: ReturnType<typeof ignore> | null = null
 let ignorePatternsCacheKey: string | null = null
 
-// Throttle state for background refresh. .git/index mtime triggers an
-// immediate refresh when tracked files change (add/checkout/commit/rm).
-// The time floor still refreshes every 5s to pick up untracked files,
-// which don't bump the index.
+// 后台刷新的节流状态。.git/index mtime 在跟踪文件更改时触发
+// 即时刷新（add/checkout/commit/rm）。
+// 时间下限仍然每 5s 刷新一次以获取未跟踪文件，
+// 这不会增加索引。
 let lastRefreshMs = 0
 let lastGitIndexMtime: number | null = null
 
-// Signatures of the path lists loaded into the Rust index. Two separate
-// signatures because the two loadFromFileList call sites use differently
-// structured arrays — a shared signature would ping-pong and never match.
-// Skips nucleo.restart() when git ls-files returns an unchanged list
-// (e.g. `git add` of an already-tracked file bumps index mtime but not the list).
+// 加载到 Rust 索引中的路径列表签名。两个独立的
+// 签名，因为两个 loadFromFileList 调用点使用不同
+// 结构的数组 — 共享签名会 ping-pong 且永远不会匹配。
+// 当 git ls-files 返回未更改列表时跳过 nucleo.restart()
+// （例如 `git add` 已跟踪文件会增加索引 mtime 但不会更改列表）。
 let loadedTrackedSignature: string | null = null
 let loadedMergedSignature: string | null = null
 
 /**
- * Clear all file suggestion caches.
- * Call this when resuming a session to ensure fresh file discovery.
+ * 清除所有文件建议缓存。
+ * 恢复会话时调用此函数以确保新的文件发现。
  */
 export function clearFileSuggestionCaches(): void {
   fileIndex = null
@@ -147,7 +147,7 @@ function getGitIndexMtime(): number | null {
 }
 
 /**
- * Normalize git paths relative to originalCwd
+ * 相对于 originalCwd 规范化 git 路径
  */
 function normalizeGitPaths(
   files: string[],
@@ -382,12 +382,12 @@ async function getFilesUsingGit(
 }
 
 /**
- * This function collects all parent directories for each file path
- * and returns a list of unique directory names with a trailing separator.
- * For example, if the input is ['src/index.js', 'src/utils/helpers.js'],
- * the output will be ['src/', 'src/utils/'].
- * @param files An array of file paths
- * @returns An array of unique directory names with a trailing separator
+ * 此函数为每个文件路径收集所有父目录
+ * 并返回带尾部分隔符的唯一目录列表。
+ * 例如，如果输入是 ['src/index.js', 'src/utils/helpers.js']，
+ * 输出将是 ['src/', 'src/utils/']。
+ * @param files 文件路径数组
+ * @returns 带尾部分隔符的唯一目录名称数组
  */
 export function getDirectoryNames(files: string[]): string[] {
   const directoryNames = new Set<string>()

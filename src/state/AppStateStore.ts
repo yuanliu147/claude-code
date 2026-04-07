@@ -470,7 +470,7 @@ export function getDefaultAppState(): AppState {
     tasks: {},
     agentNameRegistry: new Map(),
     verbose: false,
-    mainLoopModel: null, // alias, full name (as with --model or env var), or null (default)
+    mainLoopModel: null, // 别名、全名（与 --model 或 env var 相同）或 null（默认）
     mainLoopModelForSession: null,
     statusLineText: undefined,
     expandedView: 'none',

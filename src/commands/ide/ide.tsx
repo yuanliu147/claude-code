@@ -98,8 +98,7 @@ function IDEScreen({
     return (
       <IdeDisableAutoConnectDialog
         onComplete={() => {
-          // Always disconnect when user selects "None", regardless of their
-          // choice about disabling auto-connect
+          // 当用户选择"无"时始终断开连接，不管他们关于禁用自动连接的选择
           onSelect(undefined)
         }}
       />
@@ -326,12 +325,12 @@ export async function call(
     onChangeDynamicMcpConfig,
   } = context
 
-  // Handle 'open' argument
+  // 处理 'open' 参数
   if (args?.trim() === 'open') {
     const worktreeSession = getCurrentWorktreeSession()
     const targetPath = worktreeSession ? worktreeSession.worktreePath : getCwd()
 
-    // Detect available IDEs
+    // 检测可用的 IDE
     const detectedIDEs = await detectIDEs(true)
     const availableIDEs = detectedIDEs.filter(ide => ide.isValid)
 
@@ -340,7 +339,7 @@ export async function call(
       return null
     }
 
-    // Return IDE selection component
+    // 返回 IDE 选择组件
     return (
       <IDEOpenSelection
         availableIDEs={availableIDEs}
@@ -350,13 +349,13 @@ export async function call(
             return
           }
 
-          // Try to open the project in the selected IDE
+          // 尝试在选定的 IDE 中打开项目
           if (
             selectedIDE.name.toLowerCase().includes('vscode') ||
             selectedIDE.name.toLowerCase().includes('cursor') ||
             selectedIDE.name.toLowerCase().includes('windsurf')
           ) {
-            // VS Code-based IDEs
+            // 基于 VS Code 的 IDE
             const { code } = await execFileNoThrow('code', [targetPath])
             if (code === 0) {
               onDone(
@@ -368,7 +367,7 @@ export async function call(
               )
             }
           } else if (isSupportedJetBrainsTerminal()) {
-            // JetBrains IDEs - they usually open via their CLI tools
+            // JetBrains IDE - 通常通过 CLI 工具打开
             onDone(
               `Please open the ${worktreeSession ? 'worktree' : 'project'} manually in ${chalk.bold(selectedIDE.name)}: ${targetPath}`,
             )
@@ -398,7 +397,7 @@ export async function call(
     const onInstall = (ide: IdeType) => {
       if (context.onInstallIDEExtension) {
         context.onInstallIDEExtension(ide)
-        // The completion message will be shown after installation
+        // 安装完成后会显示完成消息
         if (isJetBrainsIde(ide)) {
           onDone(
             `Installed plugin to ${chalk.bold(toIDEDisplayName(ide))}\n` +
@@ -443,7 +442,7 @@ export async function call(
   )
 }
 
-// Connection timeout slightly longer than the 30s MCP connection timeout
+// 连接超时略长于 30s MCP 连接超时
 const IDE_CONNECTION_TIMEOUT_MS = 35000
 
 type IDECommandFlowProps = {
@@ -514,9 +513,9 @@ function IDECommandFlow({
         delete newConfig.ide
       }
       if (!selectedIDE) {
-        // Close the MCP transport and remove the client from state
+        // 关闭 MCP 传输并从状态中移除客户端
         if (ideClient && ideClient.type === 'connected' && currentIDE) {
-          // Null out onclose to prevent auto-reconnection
+          // 将 onclose 置空以防止自动重连
           ideClient.client.onclose = () => {}
           void clearServerCache('ide', ideClient.config)
           setAppState(prev => ({
@@ -608,8 +607,8 @@ export function formatWorkspaceFolders(
 
   const cwdNFC = cwd.normalize('NFC')
   const formattedFolders = foldersToShow.map(folder => {
-    // Strip cwd from the beginning if present
-    // Normalize both to NFC for consistent comparison (macOS uses NFD paths)
+    // 如果存在则从开头剥离 cwd
+    // 两者都规范化为 NFC 以进行一致比较（macOS 使用 NFD 路径）
     const folderNFC = folder.normalize('NFC')
     if (folderNFC.startsWith(cwdNFC + path.sep)) {
       folder = folderNFC.slice(cwdNFC.length + 1)

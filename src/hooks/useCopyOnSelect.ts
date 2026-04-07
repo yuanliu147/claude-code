@@ -7,21 +7,21 @@ import { getTheme } from '../utils/theme.js'
 type Selection = ReturnType<typeof useSelection>
 
 /**
- * Auto-copy the selection to the clipboard when the user finishes dragging
- * (mouse-up with a non-empty selection) or multi-clicks to select a word/line.
- * Mirrors iTerm2's "Copy to pasteboard on selection" — the highlight is left
- * intact so the user can see what was copied. Only fires in alt-screen mode
- * (selection state is ink-instance-owned; outside alt-screen, the native
- * terminal handles selection and this hook is a no-op via the ink stub).
+ * 当用户完成拖动（非空选择时释放鼠标）
+ * 或多次点击选择单词/行时，自动将选择复制到剪贴板。
+ * 类似于 iTerm2 的"选择时复制到粘贴板" - 突出显示保持
+ * 不变，以便用户可以看到复制的内容。仅在 alt-screen 模式下触发
+ * （选择状态由 ink 实例拥有；在 alt-screen 外部，
+ * 原生终端处理选择，此 hook 通过 ink stub 成为空操作）。
  *
- * selection.subscribe fires on every mutation (start/update/finish/clear/
- * multiclick). Both char drags and multi-clicks set isDragging=true while
- * pressed, so a selection appearing with isDragging=false is always a
- * drag-finish. copiedRef guards against double-firing on spurious notifies.
+ * selection.subscribe 在每次变更（开始/更新/完成/清除/
+ * 多击）时触发。字符拖动和多次点击在按下时都设置 isDragging=true，
+ * 因此带有 isDragging=false 的选择出现始终是拖动完成。
+ * copiedRef 防止虚假通知时的重复触发。
  *
- * onCopied is optional — when omitted, copy is silent (clipboard is written
- * but no toast/notification fires). FleetView uses this silent mode; the
- * fullscreen REPL passes showCopiedToast for user feedback.
+ * onCopied 是可选的 — 省略时，复制是静默的（剪贴板被写入
+ * 但不会触发 toast/通知）。FleetView 使用这种静默模式；
+ * 全屏 REPL 传递 showCopiedToast 以提供用户反馈。
  */
 export function useCopyOnSelect(
   selection: Selection,

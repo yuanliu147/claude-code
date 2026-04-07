@@ -12,8 +12,8 @@ import {
 } from '../utils/effort.js'
 
 /**
- * Build the text for the effort-changed notification, e.g. "◐ medium · /effort".
- * Returns undefined if the model doesn't support effort.
+ * 构建精力变更通知的文本，例如 "◐ medium · /effort"。
+ * 如果模型不支持精力则返回 undefined。
  */
 export function getEffortNotificationText(
   effortValue: EffortValue | undefined,
@@ -26,17 +26,17 @@ export function getEffortNotificationText(
 
 export function effortLevelToSymbol(level: EffortLevel): string {
   switch (level) {
-    case 'low':
-      return EFFORT_LOW
-    case 'medium':
-      return EFFORT_MEDIUM
-    case 'high':
-      return EFFORT_HIGH
-    case 'max':
-      return EFFORT_MAX
-    default:
-      // Defensive: level can originate from remote config. If an unknown
-      // value slips through, render the high symbol rather than undefined.
-      return EFFORT_HIGH
+		case "low":
+			return EFFORT_LOW;
+		case "medium":
+			return EFFORT_MEDIUM;
+		case "high":
+			return EFFORT_HIGH;
+		case "max":
+			return EFFORT_MAX;
+		default:
+			// 防御性：level 可能来自远程配置。如果未知值穿透，
+			// 渲染 high 符号而不是 undefined。
+			return EFFORT_HIGH;
   }
 }

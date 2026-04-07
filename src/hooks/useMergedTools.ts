@@ -6,16 +6,16 @@ import { useAppState } from '../state/AppState.js'
 import { mergeAndFilterTools } from '../utils/toolPool.js'
 
 /**
- * React hook that assembles the full tool pool for the REPL.
+ * 为 REPL 组装完整工具池的 React Hook。
  *
- * Uses assembleToolPool() (the shared pure function used by both REPL and runAgent)
- * to combine built-in tools with MCP tools, applying deny rules and deduplication.
- * Any extra initialTools are merged on top.
+ * 使用 assembleToolPool()（REPL 和 runAgent 都使用的共享纯函数）
+ * 来组合内置工具和 MCP 工具，应用拒绝规则和去重。
+ * 任何额外的 initialTools 都合并在上面。
  *
- * @param initialTools - Extra tools to include (built-in + startup MCP from props).
- *   These are merged with the assembled pool and take precedence in deduplication.
- * @param mcpTools - MCP tools discovered dynamically (from mcp state)
- * @param toolPermissionContext - Permission context for filtering
+ * @param initialTools - 要包含的额外工具（内置 + 启动时从 props 的 MCP）。
+ *   这些与组装池合并，并在去重中优先。
+ * @param mcpTools - 动态发现的 MCP 工具（来自 mcp 状态）
+ * @param toolPermissionContext - 用于过滤的权限上下文
  */
 export function useMergedTools(
   initialTools: Tools,
@@ -25,15 +25,15 @@ export function useMergedTools(
   let replBridgeEnabled = false
   let replBridgeOutboundOnly = false
   return useMemo(() => {
-    // assembleToolPool is the shared function that both REPL and runAgent use.
-    // It handles: getTools() + MCP deny-rule filtering + dedup + MCP CLI exclusion.
-    const assembled = assembleToolPool(toolPermissionContext, mcpTools)
+		// assembleToolPool 是 REPL 和 runAgent 都使用的共享函数。
+		// 它处理：getTools() + MCP 拒绝规则过滤 + 去重 + MCP CLI 排除。
+		const assembled = assembleToolPool(toolPermissionContext, mcpTools);
 
-    return mergeAndFilterTools(
-      initialTools,
-      assembled,
-      toolPermissionContext.mode,
-    )
+		return mergeAndFilterTools(
+			initialTools,
+			assembled,
+			toolPermissionContext.mode,
+		);
   }, [
     initialTools,
     mcpTools,

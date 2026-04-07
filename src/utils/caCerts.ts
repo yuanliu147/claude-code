@@ -105,9 +105,9 @@ export const getCACertificates = memoize((): string[] | undefined => {
 })
 
 /**
- * Clear the CA certificates cache.
- * Call this when environment variables that affect CA certs may have changed
- * (e.g., NODE_EXTRA_CA_CERTS, NODE_OPTIONS).
+ * 清除 CA 证书缓存。
+ * 在影响 CA 证书的环境变量可能已更改时调用此函数
+ *（例如 NODE_EXTRA_CA_CERTS、NODE_OPTIONS）。
  */
 export function clearCACertsCache(): void {
   getCACertificates.cache.clear?.()

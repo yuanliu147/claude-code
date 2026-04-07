@@ -1,6 +1,6 @@
 /**
- * Shared spawn module for teammate creation.
- * Extracted from TeammateTool to allow reuse by AgentTool.
+ * 用于队友创建的共享生成模块。
+ * 从 TeammateTool 提取以允许 AgentTool 重用。
  */
 
 import React from 'react'
@@ -72,8 +72,8 @@ import { isCustomAgent } from '../AgentTool/loadAgentsDir.js'
 function getDefaultTeammateModel(leaderModel: string | null): string {
   const configured = getGlobalConfig().teammateDefaultModel
   if (configured === null) {
-    // User picked "Default" in the /config picker — follow the leader.
-    return leaderModel ?? getHardcodedTeammateModelFallback()
+		// 用户在 /config 选择器中选择了"默认"——跟随领导者。
+		return leaderModel ?? getHardcodedTeammateModelFallback();
   }
   if (configured !== undefined) {
     return parseUserSpecifiedModel(configured)
@@ -224,13 +224,13 @@ function buildInheritedCliFlags(options?: {
   } else if (permissionMode === 'acceptEdits') {
     flags.push('--permission-mode acceptEdits')
   } else if (permissionMode === 'auto') {
-    // Teammates inherit auto mode so the classifier auto-approves their tool
-    // calls too. The teammate's own startup (permissionSetup.ts) handles
-    // GrowthBook gate checks and setAutoModeActive(true) independently.
+    // 队友继承自动模式，以便分类器也自动批准其工具
+    // 调用。队友自己的启动 (permissionSetup.ts) 处理
+    // GrowthBook 门控检查并独立调用 setAutoModeActive(true)。
     flags.push('--permission-mode auto')
   }
 
-  // Propagate --model if explicitly set via CLI
+  // 如果通过 CLI 显式设置，则传播 --model
   const modelOverride = getMainLoopModelOverride()
   if (modelOverride) {
     flags.push(`--model ${quote([modelOverride])}`)
@@ -439,16 +439,16 @@ async function handleSpawnSplitPane(
   const envStr = buildInheritedEnvVars()
   const spawnCommand = `cd ${quote([workingDir])} && env ${envStr} ${quote([binaryPath])} ${teammateArgs}${flagsStr}`
 
-  // Send the command to the new pane
-  // Use swarm socket when running outside tmux (external swarm session)
+  // 将命令发送到新窗格
+  // 在 tmux 外部运行时使用 swarm socket（外部 swarm 会话）
   await sendCommandToPane(paneId, spawnCommand, !insideTmux)
 
-  // Determine session/window names for output
+  // 确定会话/窗口名称以用于输出
   const sessionName = insideTmux ? 'current' : SWARM_SESSION_NAME
   const windowName = insideTmux ? 'current' : 'swarm-view'
 
-  // Track the teammate in AppState's teamContext with color
-  // If spawning without spawnTeam, set up the leader as team lead
+  // 在 AppState 的 teamContext 中用颜色跟踪队友
+  // 如果在没有 spawnTeam 的情况下生成，将负责人设置为团队负责人
   setAppState(prev => ({
     ...prev,
     teamContext: {

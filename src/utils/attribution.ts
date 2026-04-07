@@ -111,10 +111,10 @@ function isTerminalOutput(content: string): boolean {
 }
 
 /**
- * Count user messages with visible text content in a list of non-sidechain messages.
- * Excludes tool_result blocks, terminal output, and empty messages.
+ * 计算非 sidechain 消息列表中具有可见文本内容的用户消息数。
+ * 排除 tool_result 块、终端输出和空消息。
  *
- * Callers should pass messages already filtered to exclude sidechain messages.
+ * 调用方应传递已过滤的消息以排除 sidechain 消息。
  */
 export function countUserPromptsInMessages(
   messages: ReadonlyArray<{ type: string; message?: { content?: unknown } }>,

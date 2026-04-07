@@ -1,8 +1,8 @@
 /**
- * Component that registers global keybinding handlers.
+ * 注册全局键绑定处理器的组件。
  *
- * Must be rendered inside KeybindingSetup to have access to the keybinding context.
- * This component renders nothing - it just registers the keybinding handlers.
+ * 必须在 KeybindingSetup 内部渲染才能访问键绑定上下文。
+ * 此组件不渲染任何内容 - 只是注册键绑定处理器。
  */
 import { feature } from 'bun:bundle'
 import { useCallback } from 'react'

@@ -102,7 +102,7 @@ describe("createStore", () => {
     expect(store.getState().value).toBe(20);
   });
 
-  test("sequential setState calls produce final state", () => {
+  test("连续的 setState 调用产生最终状态", () => {
     const store = createStore({ count: 0 });
     store.setState(prev => ({ count: prev.count + 1 }));
     store.setState(prev => ({ count: prev.count + 1 }));

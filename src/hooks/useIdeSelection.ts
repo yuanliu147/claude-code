@@ -28,7 +28,7 @@ export type IDESelection = {
   filePath?: string
 }
 
-// Define the selection changed notification schema
+// 定义选择更改通知模式
 const SelectionChangedSchema = lazySchema(() =>
   z.object({
     method: z.literal('selection_changed'),

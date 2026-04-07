@@ -4,17 +4,16 @@ import { getShortcutDisplay } from '../keybindings/shortcutFormat.js'
 import { hasImageInClipboard } from '../utils/imagePaste.js'
 
 const NOTIFICATION_KEY = 'clipboard-image-hint'
-// Small debounce to batch rapid focus changes
+// 小幅防抖以批量处理快速焦点变化
 const FOCUS_CHECK_DEBOUNCE_MS = 1000
-// Don't show the hint more than once per this interval
+// 在此间隔内不显示超过一次提示
 const HINT_COOLDOWN_MS = 30000
 
 /**
- * Hook that shows a notification when the terminal regains focus
- * and the clipboard contains an image.
+ * 当终端重新获得焦点且剪贴板包含图像时显示通知的 Hook。
  *
- * @param isFocused - Whether the terminal is currently focused
- * @param enabled - Whether image paste is enabled (onImagePaste is defined)
+ * @param isFocused - 终端当前是否获得焦点
+ * @param enabled - 图像粘贴是否启用（onImagePaste 已定义）
  */
 export function useClipboardImageHint(
   isFocused: boolean,

@@ -2,7 +2,7 @@ import React from 'react'
 import { Box, Text, stringWidth } from '@anthropic/ink'
 import { truncateToWidth } from '../utils/format.js'
 
-// Constants for width calculations - derived from actual rendered strings
+// 用于宽度计算的常量 — 派生自实际渲染的字符串
 const ALL_TAB_LABEL = 'All'
 const TAB_PADDING = 2 // Space before and after tab text: " {tab} "
 const HASH_PREFIX_LENGTH = 1 // "#" prefix for non-All tabs
@@ -12,7 +12,7 @@ const RIGHT_HINT_SUFFIX = ' (tab to cycle)'
 const RIGHT_HINT_NO_COUNT = '(tab to cycle)'
 const MAX_OVERFLOW_DIGITS = 2 // Assume max 99 hidden tabs for width calculation
 
-// Computed widths
+// 计算宽度
 const LEFT_ARROW_WIDTH = LEFT_ARROW_PREFIX.length + MAX_OVERFLOW_DIGITS + 1 // "← NN " with gap
 const RIGHT_HINT_WIDTH_WITH_COUNT =
   RIGHT_HINT_WITH_COUNT_PREFIX.length +
@@ -34,7 +34,7 @@ function getTabWidth(tab: string, maxWidth?: number): number {
   if (tab === ALL_TAB_LABEL) {
     return ALL_TAB_LABEL.length + TAB_PADDING
   }
-  // For non-All tabs: " #{tag} " but truncate tag if needed
+  // 对于非 All 标签：" #{tag} " 但需要时截断标签
   const tagWidth = stringWidth(tab)
   const effectiveTagWidth = maxWidth
     ? Math.min(tagWidth, maxWidth - TAB_PADDING - HASH_PREFIX_LENGTH)
@@ -46,7 +46,7 @@ function getTabWidth(tab: string, maxWidth?: number): number {
  * Truncate a tag to fit within maxWidth, accounting for padding and hash prefix
  */
 function truncateTag(tag: string, maxWidth: number): string {
-  // Available space for the tag text itself: maxWidth - " #" - " "
+  // 标签文本本身可用的空间：maxWidth - " #" - " "
   const availableForTag = maxWidth - TAB_PADDING - HASH_PREFIX_LENGTH
   if (stringWidth(tag) <= availableForTag) {
     return tag
@@ -66,28 +66,28 @@ export function TagTabs({
   const resumeLabel = showAllProjects ? 'Resume (All Projects)' : 'Resume'
   const resumeLabelWidth = resumeLabel.length + 1 // +1 for gap
 
-  // Calculate how much space we have for tabs (use worst-case hint width)
+  // 计算标签的空间（使用最坏情况提示宽度）
   const rightHintWidth = Math.max(
     RIGHT_HINT_WIDTH_WITH_COUNT,
     RIGHT_HINT_WIDTH_NO_COUNT,
   )
   const maxTabsWidth = availableWidth - resumeLabelWidth - rightHintWidth - 2 // 2 for gaps
 
-  // Clamp selectedIndex to valid range
+  // 将 selectedIndex 箝位到有效范围
   const safeSelectedIndex = Math.max(
     0,
     Math.min(selectedIndex, tabs.length - 1),
   )
 
-  // Calculate width of each tab, with truncation for very long tags
+  // 计算每个标签的宽度，对于非常长的标签进行截断
   const maxSingleTabWidth = Math.max(20, Math.floor(maxTabsWidth / 2)) // At least show half the space for one tab
   const tabWidths = tabs.map(tab => getTabWidth(tab, maxSingleTabWidth))
 
-  // Find a window of tabs that fits, centered around selectedIndex
+  // 找到适合的标签窗口，以 selectedIndex 为中心
   let startIndex = 0
   let endIndex = tabs.length
 
-  // Calculate total width of all tabs
+  // 计算所有标签的总宽度
   const totalTabsWidth = tabWidths.reduce(
     (sum, w, i) => sum + w + (i < tabWidths.length - 1 ? 1 : 0),
     0,

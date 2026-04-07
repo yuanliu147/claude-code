@@ -26,10 +26,10 @@ export function AgentDetail({ agent, tools, onBack }: Props): React.ReactNode {
   const filePath = getActualRelativeAgentFilePath(agent)
   const backgroundColor = getAgentColor(agent.agentType)
 
-  // Handle Esc to go back
+  // 处理 Esc 键返回
   useKeybinding('confirm:no', onBack, { context: 'Confirmation' })
 
-  // Handle Enter to go back
+  // 处理 Enter 键返回
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'return') {
       e.preventDefault()

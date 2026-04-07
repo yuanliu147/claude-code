@@ -13,17 +13,17 @@ export function IdeAutoConnectDialog({
 }: IdeAutoConnectDialogProps): React.ReactNode {
   const handleSelect = useCallback(
     async (value: string) => {
-      const autoConnect = value === 'yes'
+		const autoConnect = value === "yes";
 
-      // Save the preference and mark dialog as shown
-      saveGlobalConfig(current => ({
-        ...current,
-        autoConnectIde: autoConnect,
-        hasIdeAutoConnectDialogBeenShown: true,
-      }))
+		// 保存偏好并标记对话框已显示
+		saveGlobalConfig((current) => ({
+			...current,
+			autoConnectIde: autoConnect,
+			hasIdeAutoConnectDialogBeenShown: true,
+		}));
 
-      onComplete()
-    },
+		onComplete();
+	},
     [onComplete],
   )
 

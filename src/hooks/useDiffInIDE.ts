@@ -65,11 +65,11 @@ export function useDiffInIDE({
   )
 
   const shouldShowDiffInIDE =
-    hasAccessToIDEExtensionDiffFeature(toolUseContext.options.mcpClients) &&
-    getGlobalConfig().diffTool === 'auto' &&
-    // Diffs should only be for file edits.
-    // File writes may come through here but are not supported for diffs.
-    !filePath.endsWith('.ipynb')
+		hasAccessToIDEExtensionDiffFeature(toolUseContext.options.mcpClients) &&
+		getGlobalConfig().diffTool === "auto" &&
+		// Diff 应该只用于文件编辑。
+		// 文件写入可能会通过这里，但不支持 diff。
+		!filePath.endsWith(".ipynb");
 
   const ideName =
     getConnectedIdeName(toolUseContext.options.mcpClients) ?? 'IDE'

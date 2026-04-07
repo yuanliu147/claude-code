@@ -30,74 +30,79 @@ type Props = {
 const AUTO_DISMISS_MS = 30_000
 
 export function EffortCallout({ model, onDone }: Props): React.ReactNode {
-  const defaultEffortConfig = getOpusDefaultEffortConfig()
-  // Latest-ref pattern — write via effect so React Compiler can memoize.
-  const onDoneRef = useRef(onDone)
-  useEffect(() => {
-    onDoneRef.current = onDone
-  })
+	const defaultEffortConfig = getOpusDefaultEffortConfig();
+	// Latest-ref 模式 — 通过 effect 写入，以便 React Compiler 可以进行 memoize。
+	const onDoneRef = useRef(onDone);
+	useEffect(() => {
+		onDoneRef.current = onDone;
+	});
 
-  const handleCancel = useCallback((): void => {
-    onDoneRef.current('dismiss')
-  }, [])
+	const handleCancel = useCallback((): void => {
+		onDoneRef.current("dismiss");
+	}, []);
 
-  // Permanently dismiss on mount so it only shows once
-  useEffect(() => {
-    markV2Dismissed()
-  }, [])
+	// Permanently dismiss on mount so it only shows once
+	useEffect(() => {
+		markV2Dismissed();
+	}, []);
 
-  // 30-second auto-dismiss timer
-  useEffect(() => {
-    const timeoutId = setTimeout(handleCancel, AUTO_DISMISS_MS)
-    return () => clearTimeout(timeoutId)
-  }, [handleCancel])
+	// 30秒自动关闭计时器
+	useEffect(() => {
+		const timeoutId = setTimeout(handleCancel, AUTO_DISMISS_MS);
+		return () => clearTimeout(timeoutId);
+	}, [handleCancel]);
 
-  const defaultEffort = getDefaultEffortForModel(model)
-  const defaultLevel = defaultEffort
-    ? convertEffortValueToLevel(defaultEffort)
-    : 'high'
+	const defaultEffort = getDefaultEffortForModel(model);
+	const defaultLevel = defaultEffort
+		? convertEffortValueToLevel(defaultEffort)
+		: "high";
 
-  const handleSelect = useCallback(
-    (value: EffortLevel): void => {
-      const effortLevel = value === defaultLevel ? undefined : value
-      updateSettingsForSource('userSettings', {
-        effortLevel: toPersistableEffort(effortLevel),
-      })
-      onDoneRef.current(value)
-    },
-    [defaultLevel],
-  )
+	const handleSelect = useCallback(
+		(value: EffortLevel): void => {
+			const effortLevel = value === defaultLevel ? undefined : value;
+			updateSettingsForSource("userSettings", {
+				effortLevel: toPersistableEffort(effortLevel),
+			});
+			onDoneRef.current(value);
+		},
+		[defaultLevel],
+	);
 
-  const options: OptionWithDescription<EffortLevel>[] = [
-    {
-      label: <EffortOptionLabel level="medium" text="Medium (recommended)" />,
-      value: 'medium',
-    },
-    { label: <EffortOptionLabel level="high" text="High" />, value: 'high' },
-    { label: <EffortOptionLabel level="low" text="Low" />, value: 'low' },
-  ]
+	const options: OptionWithDescription<EffortLevel>[] = [
+		{
+			label: (
+				<EffortOptionLabel level="medium" text="Medium (recommended)" />
+			),
+			value: "medium",
+		},
+		{
+			label: <EffortOptionLabel level="high" text="High" />,
+			value: "high",
+		},
+		{ label: <EffortOptionLabel level="low" text="Low" />, value: "low" },
+	];
 
-  return (
-    <PermissionDialog title={defaultEffortConfig.dialogTitle}>
-      <Box flexDirection="column" paddingX={2} paddingY={1}>
-        <Box marginBottom={1} flexDirection="column">
-          <Text>{defaultEffortConfig.dialogDescription}</Text>
-        </Box>
-        <Box marginBottom={1}>
-          <Text dimColor>
-            <EffortIndicatorSymbol level="low" /> low {'·'}{' '}
-            <EffortIndicatorSymbol level="medium" /> medium {'·'}{' '}
-            <EffortIndicatorSymbol level="high" /> high
-          </Text>
-        </Box>
-        <Select
-          options={options}
-          onChange={handleSelect}
-          onCancel={handleCancel}
-        />
-      </Box>
-    </PermissionDialog>
-  )
+	return (
+		<PermissionDialog title={defaultEffortConfig.dialogTitle}>
+			<Box flexDirection="column" paddingX={2} paddingY={1}>
+				<Box marginBottom={1} flexDirection="column">
+					<Text>{defaultEffortConfig.dialogDescription}</Text>
+				</Box>
+				<Box marginBottom={1}>
+					<Text dimColor>
+						<EffortIndicatorSymbol level="low" /> low {"·"}{" "}
+						<EffortIndicatorSymbol level="medium" /> medium {"·"}{" "}
+						<EffortIndicatorSymbol level="high" /> high
+					</Text>
+				</Box>
+				<Select
+					options={options}
+					onChange={handleSelect}
+					onCancel={handleCancel}
+				/>
+			</Box>
+		</PermissionDialog>
+	);
 }
 
 function EffortIndicatorSymbol({
@@ -131,42 +136,42 @@ function EffortOptionLabel({
  * - Everyone else: mark as dismissed so it never shows
  */
 export function shouldShowEffortCallout(model: string): boolean {
-  // Only show for Opus 4.6 for now
-  const parsed = parseUserSpecifiedModel(model)
-  if (!parsed.toLowerCase().includes('opus-4-6')) {
-    return false
-  }
+	// 目前仅对 Opus 4.6 显示
+	const parsed = parseUserSpecifiedModel(model);
+	if (!parsed.toLowerCase().includes("opus-4-6")) {
+		return false;
+	}
 
-  const config = getGlobalConfig()
-  if (config.effortCalloutV2Dismissed) return false
+	const config = getGlobalConfig();
+	if (config.effortCalloutV2Dismissed) return false;
 
-  // Don't show to brand-new users — they never knew the old default, so this
-  // isn't a change for them. Mark as dismissed so it stays suppressed.
-  if (config.numStartups <= 1) {
-    markV2Dismissed()
-    return false
-  }
+	// Don't show to brand-new users — they never knew the old default, so this
+	// isn't a change for them. Mark as dismissed so it stays suppressed.
+	if (config.numStartups <= 1) {
+		markV2Dismissed();
+		return false;
+	}
 
-  // Pro users already had medium default before this PR. Show the new copy,
-  // but skip if they already saw the v1 dialog — no point nagging twice.
-  if (isProSubscriber()) {
-    if (config.effortCalloutDismissed) {
-      markV2Dismissed()
-      return false
-    }
-    return getOpusDefaultEffortConfig().enabled
-  }
+	// Pro 用户在此 PR 之前已经有中等默认值。显示新的文案，
+	// 但如果他们已经看过 v1 对话框则跳过 — 重复提示没有意义。
+	if (isProSubscriber()) {
+		if (config.effortCalloutDismissed) {
+			markV2Dismissed();
+			return false;
+		}
+		return getOpusDefaultEffortConfig().enabled;
+	}
 
-  // Max/Team are the target of the tengu_grey_step2 config.
-  // Don't mark dismissed when config is disabled — they should see the dialog
-  // once it's enabled for them.
-  if (isMaxSubscriber() || isTeamSubscriber()) {
-    return getOpusDefaultEffortConfig().enabled
-  }
+	// Max/Team are the target of the tengu_grey_step2 config.
+	// Don't mark dismissed when config is disabled — they should see the dialog
+	// once it's enabled for them.
+	if (isMaxSubscriber() || isTeamSubscriber()) {
+		return getOpusDefaultEffortConfig().enabled;
+	}
 
-  // Everyone else (free tier, API key, non-subscribers): not in scope.
-  markV2Dismissed()
-  return false
+	// 其他所有人（免费版、API key、非订阅者）：不在范围内。
+	markV2Dismissed();
+	return false;
 }
 
 function markV2Dismissed(): void {

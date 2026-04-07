@@ -16,9 +16,9 @@ export function ModelSelector({
 }: ModelSelectorProps): React.ReactNode {
   const modelOptions = React.useMemo(() => {
     const base = getAgentModelOptions()
-    // If the agent's current model is a full ID (e.g. 'claude-opus-4-5') not
-    // in the alias list, inject it as an option so it can round-trip through
-    // confirm without being overwritten.
+    // 如果 agent 当前的模型是完整 ID（例如 'claude-opus-4-5'），而不在
+    // 别名列表中，则将其注入为一个选项，以便在确认时能够原样保留，
+    // 而不被覆盖。
     if (initialModel && !base.some(o => o.value === initialModel)) {
       return [
         {

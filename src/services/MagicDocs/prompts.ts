@@ -3,7 +3,7 @@ import { getClaudeConfigHomeDir } from '../../utils/envUtils.js'
 import { getFsImplementation } from '../../utils/fsOperations.js'
 
 /**
- * Get the Magic Docs update prompt template
+ * 获取 Magic Docs 更新提示模板
  */
 function getUpdatePromptTemplate(): string {
   return `IMPORTANT: This message and these instructions are NOT part of the actual user conversation. Do NOT include any references to "documentation updates", "magic docs", or these update instructions in the document content.
@@ -59,9 +59,9 @@ REMEMBER: Only update if there is substantial new information. The Magic Doc hea
 }
 
 /**
- * Load custom Magic Docs prompt from file if it exists
- * Custom prompts can be placed at ~/.claude/magic-docs/prompt.md
- * Use {{variableName}} syntax for variable substitution (e.g., {{docContents}}, {{docPath}}, {{docTitle}})
+ * 如果存在则从文件加载自定义 Magic Docs 提示
+ * 自定义提示可以放在 ~/.claude/magic-docs/prompt.md
+ * 使用 {{variableName}} 语法进行变量替换（例如 {{docContents}}、{{docPath}}、{{docTitle}}）
  */
 async function loadMagicDocsPrompt(): Promise<string> {
   const fs = getFsImplementation()
@@ -70,30 +70,30 @@ async function loadMagicDocsPrompt(): Promise<string> {
   try {
     return await fs.readFile(promptPath, { encoding: 'utf-8' })
   } catch {
-    // Silently fall back to default if custom prompt doesn't exist or fails to load
+    // 如果自定义提示不存在或加载失败，静默回退到默认模板
     return getUpdatePromptTemplate()
   }
 }
 
 /**
- * Substitute variables in the prompt template using {{variable}} syntax
+ * 使用 {{variable}} 语法替换提示模板中的变量
  */
 function substituteVariables(
   template: string,
   variables: Record<string, string>,
 ): string {
-  // Single-pass replacement avoids two bugs: (1) $ backreference corruption
-  // (replacer fn treats $ literally), and (2) double-substitution when user
-  // content happens to contain {{varName}} matching a later variable.
+  // 单次替换避免了两个 bug：（1）$ 反向引用损坏
+  // （替换函数将 $ 字面处理），以及（2）当用户
+  // 内容恰好包含与后续变量匹配的 {{varName}} 时的双重替换。
   return template.replace(/\{\{(\w+)\}\}/g, (match, key: string) =>
-    Object.prototype.hasOwnProperty.call(variables, key)
+    Object.hasOwn(variables, key)
       ? variables[key]!
       : match,
   )
 }
 
 /**
- * Build the Magic Docs update prompt with variable substitution
+ * 使用变量替换构建 Magic Docs 更新提示
  */
 export async function buildMagicDocsUpdatePrompt(
   docContents: string,
@@ -103,7 +103,7 @@ export async function buildMagicDocsUpdatePrompt(
 ): Promise<string> {
   const promptTemplate = await loadMagicDocsPrompt()
 
-  // Build custom instructions section if provided
+  // 如果提供了自定义指令则构建自定义指令部分
   const customInstructions = instructions
     ? `
 
@@ -115,7 +115,7 @@ The document author has provided specific instructions for how this file should 
 These instructions take priority over the general rules below. Make sure your updates align with these specific guidelines.`
     : ''
 
-  // Substitute variables in the prompt
+  // 在提示中替换变量
   const variables = {
     docContents,
     docPath,

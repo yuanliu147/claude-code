@@ -15,7 +15,7 @@ import { getTeamName } from './teammate.js'
  * Uses getTeamName() for consistency with isTeammate() swarm detection.
  */
 export function getStandaloneAgentName(appState: AppState): string | undefined {
-  // If in a team (swarm), don't return standalone name
+  // 如果在团队中（swarm），不返回独立名称
   if (getTeamName()) {
     return undefined
   }

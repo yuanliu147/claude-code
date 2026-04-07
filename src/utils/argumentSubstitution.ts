@@ -1,13 +1,13 @@
 /**
- * Utility for substituting $ARGUMENTS placeholders in skill/command prompts.
+ * 用于在 skill/command 提示中替换 $ARGUMENTS 占位符的工具函数。
  *
- * Supports:
- * - $ARGUMENTS - replaced with the full arguments string
- * - $ARGUMENTS[0], $ARGUMENTS[1], etc. - replaced with individual indexed arguments
- * - $0, $1, etc. - shorthand for $ARGUMENTS[0], $ARGUMENTS[1]
- * - Named arguments (e.g., $foo, $bar) - when argument names are defined in frontmatter
+ * 支持：
+ * - $ARGUMENTS - 替换为完整参数字符串
+ * - $ARGUMENTS[0]、$ARGUMENTS[1] 等 - 替换为各个索引参数
+ * - $0、$1 等 - $ARGUMENTS[0]、$ARGUMENTS[1] 的简写
+ * - 命名参数（例如 $foo、$bar）- 当 frontmatter 中定义了参数名称时
  *
- * Arguments are parsed using shell-quote for proper shell argument handling.
+ * 使用 shell-quote 解析参数以正确处理 shell 参数。
  */
 
 import { tryParseShellCommand } from './bash/shellQuote.js'
@@ -68,10 +68,10 @@ export function parseArgumentNames(
 }
 
 /**
- * Generate argument hint showing remaining unfilled args.
- * @param argNames - Array of argument names from frontmatter
- * @param typedArgs - Arguments the user has typed so far
- * @returns Hint string like "[arg2] [arg3]" or undefined if all filled
+ * 生成显示剩余未填充参数的提示。
+ * @param argNames - 来自 frontmatter 的参数名称数组
+ * @param typedArgs - 用户到目前为止已输入的参数
+ * @returns 类似 "[arg2] [arg3]" 的提示字符串，如果全部填充则返回 undefined
  */
 export function generateProgressiveArgumentHint(
   argNames: string[],

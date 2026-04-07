@@ -114,10 +114,10 @@ export function Status({
   const mcp = useAppState(s => s.mcp)
   const [theme] = useTheme()
 
-  // Sections are synchronous — compute in render so they're never empty.
-  // diagnosticsPromise is created once in Settings.tsx so it resolves once
-  // per pane invocation instead of re-fetching on every tab switch (Tab
-  // unmounts children when not selected, which was causing the flash).
+  // 部分是同步的 — 在渲染中计算，这样它们永远不会为空。
+  // diagnosticsPromise 在 Settings.tsx 中创建一次，所以它每个窗格调用解析一次
+  // 而不是每次标签切换时重新获取（Tab
+  // 在未选中时卸载子组件，这导致了闪烁）。
   const sections = React.useMemo(
     () => [
       buildPrimarySection(),
@@ -126,12 +126,12 @@ export function Status({
     [mainLoopModel, mcp, theme, context],
   )
 
-  // flexGrow so the "Esc to cancel" footer pins to the bottom of the
-  // Modal's inner ScrollBox when content is short. The ScrollBox content
-  // wrapper has flexGrow:1 (fills at least the viewport), so this stretches
-  // to match. Without it, short Status content floats at the top and the
-  // footer sits mid-modal with 2-3 trailing blank rows below. Outside a
-  // Modal (non-fullscreen), leave layout alone — no ScrollBox to fill.
+  // flexGrow 以便当内容短时 "Esc to cancel" 页脚固定在
+  // Modal 的内部 ScrollBox 底部。ScrollBox 的内容
+  // 包装器有 flexGrow:1（至少填充视口），所以这会
+  // 拉伸它。没有它，短 Status 内容浮动在顶部，
+  // 页脚位于 Modal 中间，下面有 2-3 个空白行。在
+  // Modal 外部（非全屏），不改变布局 — 没有 ScrollBox 需要填充。
   const grow = useIsInsideModal() ? 1 : undefined
 
   return (

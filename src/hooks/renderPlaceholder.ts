@@ -22,24 +22,24 @@ export function renderPlaceholder({
   renderedPlaceholder: string | undefined
   showPlaceholder: boolean
 } {
-  let renderedPlaceholder: string | undefined = undefined
+  let renderedPlaceholder: string | undefined 
 
   if (placeholder) {
     if (hidePlaceholderText) {
-      // Voice recording: show only the cursor, no placeholder text
-      renderedPlaceholder =
-        showCursor && focus && terminalFocus ? invert(' ') : ''
-    } else {
-      renderedPlaceholder = chalk.dim(placeholder)
+		// 语音录制：只显示光标，不显示占位符文本
+		renderedPlaceholder =
+			showCursor && focus && terminalFocus ? invert(" ") : "";
+	} else {
+		renderedPlaceholder = chalk.dim(placeholder);
 
-      // Show inverse cursor only when both input and terminal are focused
-      if (showCursor && focus && terminalFocus) {
-        renderedPlaceholder =
-          placeholder.length > 0
-            ? invert(placeholder[0]!) + chalk.dim(placeholder.slice(1))
-            : invert(' ')
-      }
-    }
+		// 仅在输入和终端都有焦点时显示反向光标
+		if (showCursor && focus && terminalFocus) {
+			renderedPlaceholder =
+				placeholder.length > 0
+					? invert(placeholder[0]!) + chalk.dim(placeholder.slice(1))
+					: invert(" ");
+		}
+	}
   }
 
   const showPlaceholder = value.length === 0 && Boolean(placeholder)

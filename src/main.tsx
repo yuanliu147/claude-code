@@ -1,11 +1,10 @@
-// These side-effects must run before all other imports:
-// 1. profileCheckpoint marks entry before heavy module evaluation begins
-// 2. startMdmRawRead fires MDM subprocesses (plutil/reg query) so they run in
-//    parallel with the remaining ~135ms of imports below
-// 3. startKeychainPrefetch fires both macOS keychain reads (OAuth + legacy API
-//    key) in parallel — isRemoteManagedSettingsEligible() otherwise reads them
-//    sequentially via sync spawn inside applySafeConfigEnvironmentVariables()
-//    (~65ms on every macOS startup)
+// 这些副作用必须在所有其他导入之前运行：
+// 1. profileCheckpoint 在重型模块评估开始之前标记入口
+// 2. startMdmRawRead 启动 MDM 子进程（plutil/reg query），以便它们与
+//    下面剩余的 ~135ms 导入并行运行
+// 3. startKeychainPrefetch 并行启动两个 macOS 钥匙串读取（OAuth + 旧 API
+//    key）——否则 isRemoteManagedSettingsEligible() 通过 applySafeConfigEnvironmentVariables()
+//    内的同步生成顺序读取它们（每次 macOS 启动 ~65ms）
 import { profileCheckpoint, profileReport } from './utils/startupProfiler.js'
 
 // eslint-disable-next-line custom-rules/no-top-level-side-effects
@@ -122,7 +121,7 @@ import { computeInitialTeamContext } from './utils/swarm/reconnection.js'
 import { initializeWarningHandler } from './utils/warningHandler.js'
 import { isWorktreeModeEnabled } from './utils/worktreeModeEnabled.js'
 
-// Lazy require to avoid circular dependency: teammate.ts -> AppState.tsx -> ... -> main.tsx
+// 惰性 require 以避免循环依赖：teammate.ts -> AppState.tsx -> ... -> main.tsx
 /* eslint-disable @typescript-eslint/no-require-imports */
 const getTeammateUtils = () =>
   require('./utils/teammate.js') as typeof import('./utils/teammate.js')
@@ -293,7 +292,8 @@ import {
 import { logSkillsLoaded } from './utils/telemetry/skillLoadedEvent.js'
 import { generateTempFilePath } from './utils/tempfile.js'
 import { validateUuid } from './utils/uuid.js'
-// Plugin startup checks are now handled non-blockingly in REPL.tsx
+// Plugin startup checks are now handled non-blocking in REPL.tsx
+// 插件启动检查现在在 REPL.tsx 中非阻塞处理
 
 import { registerMcpAddCommand } from 'src/commands/mcp/addCommand.js'
 import { registerMcpXaaIdpCommand } from 'src/commands/mcp/xaaIdpCommand.js'
@@ -452,9 +452,9 @@ import {
 profileCheckpoint('main_tsx_imports_loaded')
 
 /**
- * Log managed settings keys to Statsig for analytics.
- * This is called after init() completes to ensure settings are loaded
- * and environment variables are applied before model resolution.
+ * 将托管设置键记录到 Statsig 用于分析。
+ * 这在 init() 完成后调用，以确保在模型解析之前
+ * 加载了设置并应用了环境变量。
  */
 function logManagedSettings(): void {
   try {
@@ -469,59 +469,59 @@ function logManagedSettings(): void {
       })
     }
   } catch {
-    // Silently ignore errors - this is just for analytics
+    // 静默忽略错误——这只是用于分析
   }
 }
 
-// Check if running in debug/inspection mode
+// 检查是否在调试/检查模式中
 function isBeingDebugged() {
   const isBun = isRunningWithBun()
 
-  // Check for inspect flags in process arguments (including all variants)
+  // 检查进程参数中的 inspect 标志（包括所有变体）
   const hasInspectArg = process.execArgv.some(arg => {
     if (isBun) {
-      // Note: Bun has an issue with single-file executables where application arguments
-      // from process.argv leak into process.execArgv (similar to https://github.com/oven-sh/bun/issues/11673)
-      // This breaks use of --debug mode if we omit this branch
-      // We're fine to skip that check, because Bun doesn't support Node.js legacy --debug or --debug-brk flags
+      // 注意：Bun 在单文件可执行文件上有问题，应用程序参数
+      // 从 process.argv 泄漏到 process.execArgv（类似于 https://github.com/oven-sh/bun/issues/11673）
+      // 如果我们省略这个分支，这会破坏 --debug 模式的使用
+      // 我们可以跳过该检查，因为 Bun 不支持 Node.js 遗留的 --debug 或 --debug-brk 标志
       return /--inspect(-brk)?/.test(arg)
     } else {
-      // In Node.js, check for both --inspect and legacy --debug flags
+      // 在 Node.js 中，检查 --inspect 和遗留的 --debug 标志
       return /--inspect(-brk)?|--debug(-brk)?/.test(arg)
     }
   })
 
-  // Check if NODE_OPTIONS contains inspect flags
+  // 检查 NODE_OPTIONS 是否包含 inspect 标志
   const hasInspectEnv =
     process.env.NODE_OPTIONS &&
     /--inspect(-brk)?|--debug(-brk)?/.test(process.env.NODE_OPTIONS)
 
-  // Check if inspector is available and active (indicates debugging)
+  // 检查检查器是否可用且处于活动状态（表示正在调试）
   try {
-    // Dynamic import would be better but is async - use global object instead
+    // 动态导入会更好，但是异步的——改为使用全局对象
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const inspector = (global as any).require('inspector')
     const hasInspectorUrl = !!inspector.url()
     return hasInspectorUrl || hasInspectArg || hasInspectEnv
   } catch {
-    // Ignore error and fall back to argument detection
+    // 忽略错误并回退到参数检测
     return hasInspectArg || hasInspectEnv
   }
 }
 
-// Exit if we detect node debugging or inspection
+// 如果检测到节点调试或检查则退出
 if ("external" !== 'ant' && isBeingDebugged()) {
-  // Use process.exit directly here since we're in the top-level code before imports
-  // and gracefulShutdown is not yet available
+  // 由于我们在顶级代码中导入之前直接使用 process.exit，
+  // gracefulShutdown 尚不可用
   // eslint-disable-next-line custom-rules/no-top-level-side-effects
   process.exit(1)
 }
 
 /**
- * Per-session skill/plugin telemetry. Called from both the interactive path
- * and the headless -p path (before runHeadless) — both go through
- * main.tsx but branch before the interactive startup path, so it needs two
- * call sites here rather than one here + one in QueryEngine.
+ * 每个会话的技能/插件遥测。从交互路径和
+ * 头less -p 路径（在 runHeadless 之前）调用——两者都经过
+ * main.tsx，但在交互启动路径之前分支，所以它需要两个
+ * 此处的调用站点，而不是一个在此处 + 一个在 QueryEngine 中。
  */
 function logSessionTelemetry(): void {
   const model = parseUserSpecifiedModel(
@@ -578,8 +578,8 @@ async function logStartupTelemetry(): Promise<void> {
   })
 }
 
-// @[MODEL LAUNCH]: Consider any migrations you may need for model strings. See migrateSonnet1mToSonnet45.ts for an example.
-// Bump this when adding a new sync migration so existing users re-run the set.
+// @[MODEL LAUNCH]: 考虑模型字符串可能需要的任何迁移。参见 migrateSonnet1mToSonnet45.ts 示例。
+// 添加新的同步迁移时增加此值，以便现有用户重新运行集合。
 const CURRENT_MIGRATION_VERSION = 11
 function runMigrations(): void {
   if (getGlobalConfig().migrationVersion !== CURRENT_MIGRATION_VERSION) {
@@ -4583,14 +4583,14 @@ async function run(): Promise<CommanderCommand> {
         clearSessionCaches()
 
         let messages: MessageType[] | null = null
-        let processedResume: ProcessedResume | undefined = undefined
+        let processedResume: ProcessedResume | undefined
 
         let maybeSessionId = validateUuid(options.resume)
-        let searchTerm: string | undefined = undefined
+        let searchTerm: string | undefined
         // Store full LogOption when found by custom title (for cross-worktree resume)
         let matchedLog: LogOption | null = null
         // PR filter for --from-pr flag
-        let filterByPr: boolean | number | string | undefined = undefined
+        let filterByPr: boolean | number | string | undefined
 
         // Handle --from-pr flag
         if (options.fromPr) {

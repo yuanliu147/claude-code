@@ -2,8 +2,8 @@ import React from 'react'
 import { getDynamicConfig_BLOCKS_ON_INIT } from '../services/analytics/growthbook.js'
 
 /**
- * React hook for dynamic config values.
- * Returns the default value initially, then updates when the config is fetched.
+ * 用于动态配置值的 React Hook。
+ * 初始返回默认值，然后在获取配置时更新。
  */
 export function useDynamicConfig<T>(configName: string, defaultValue: T): T {
   const [configValue, setConfigValue] = React.useState<T>(defaultValue)

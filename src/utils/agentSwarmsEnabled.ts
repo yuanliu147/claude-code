@@ -2,10 +2,10 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from '../services/analytics/growt
 import { isEnvTruthy } from './envUtils.js'
 
 /**
- * Check if --agent-teams flag is provided via CLI.
- * Checks process.argv directly to avoid import cycles with bootstrap/state.
- * Note: The flag is only shown in help for ant users, but if external users
- * pass it anyway, it will work (subject to the killswitch).
+ * 检查是否通过 CLI 提供了 --agent-teams 标志。
+ * 直接检查 process.argv 以避免与 bootstrap/state 的导入循环。
+ * 注意：该标志仅对 ant 用户显示在帮助中，但如果外部用户传递它，
+ * 它仍然可以工作（受 killswitch 约束）。
  */
 function isAgentTeamsFlagSet(): boolean {
   return process.argv.includes('--agent-teams')
@@ -22,7 +22,7 @@ function isAgentTeamsFlagSet(): boolean {
  * 2. GrowthBook gate 'tengu_amber_flint' enabled (killswitch)
  */
 export function isAgentSwarmsEnabled(): boolean {
-  // Ant: always on
+  // Ant：始终开启
   if (process.env.USER_TYPE === 'ant') {
     return true
   }
@@ -35,7 +35,7 @@ export function isAgentSwarmsEnabled(): boolean {
     return false
   }
 
-  // Killswitch — always respected for external users
+  // Killswitch — 始终尊重外部用户
   if (!getFeatureValue_CACHED_MAY_BE_STALE('tengu_amber_flint', true)) {
     return false
   }

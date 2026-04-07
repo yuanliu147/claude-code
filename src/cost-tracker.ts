@@ -80,52 +80,57 @@ type StoredCostState = {
 }
 
 /**
- * Gets stored cost state from project config for a specific session.
- * Returns the cost data if the session ID matches, or undefined otherwise.
- * Use this to read costs BEFORE overwriting the config with saveCurrentSessionCosts().
+ * 从项目配置获取特定会话的存储成本状态。
+ * 如果会话 ID 匹配则返回成本数据，否则返回 undefined。
+ * 在使用 saveCurrentSessionCosts() 覆盖配置之前使用此方法读取成本。
  */
 export function getStoredSessionCosts(
   sessionId: string,
 ): StoredCostState | undefined {
-  const projectConfig = getCurrentProjectConfig()
+	const projectConfig = getCurrentProjectConfig();
 
-  // Only return costs if this is the same session that was last saved
-  if (projectConfig.lastSessionId !== sessionId) {
-    return undefined
-  }
+	// 仅在这是上次保存的同一会话时返回成本
+	if (projectConfig.lastSessionId !== sessionId) {
+		return undefined;
+	}
 
-  // Build model usage with context windows
-  let modelUsage: { [modelName: string]: ModelUsage } | undefined
-  if (projectConfig.lastModelUsage) {
-    modelUsage = Object.fromEntries(
-      Object.entries(projectConfig.lastModelUsage).map(([model, usage]) => [
-        model,
-        {
-          ...usage,
-          contextWindow: getContextWindowForModel(model, getSdkBetas()),
-          maxOutputTokens: getModelMaxOutputTokens(model).default,
-        },
-      ]),
-    )
-  }
+	// 使用上下文窗口构建模型使用量
+	let modelUsage: { [modelName: string]: ModelUsage } | undefined;
+	if (projectConfig.lastModelUsage) {
+		modelUsage = Object.fromEntries(
+			Object.entries(projectConfig.lastModelUsage).map(
+				([model, usage]) => [
+					model,
+					{
+						...usage,
+						contextWindow: getContextWindowForModel(
+							model,
+							getSdkBetas(),
+						),
+						maxOutputTokens: getModelMaxOutputTokens(model).default,
+					},
+				],
+			),
+		);
+	}
 
-  return {
-    totalCostUSD: projectConfig.lastCost ?? 0,
-    totalAPIDuration: projectConfig.lastAPIDuration ?? 0,
-    totalAPIDurationWithoutRetries:
-      projectConfig.lastAPIDurationWithoutRetries ?? 0,
-    totalToolDuration: projectConfig.lastToolDuration ?? 0,
-    totalLinesAdded: projectConfig.lastLinesAdded ?? 0,
-    totalLinesRemoved: projectConfig.lastLinesRemoved ?? 0,
-    lastDuration: projectConfig.lastDuration,
-    modelUsage,
-  }
+	return {
+		totalCostUSD: projectConfig.lastCost ?? 0,
+		totalAPIDuration: projectConfig.lastAPIDuration ?? 0,
+		totalAPIDurationWithoutRetries:
+			projectConfig.lastAPIDurationWithoutRetries ?? 0,
+		totalToolDuration: projectConfig.lastToolDuration ?? 0,
+		totalLinesAdded: projectConfig.lastLinesAdded ?? 0,
+		totalLinesRemoved: projectConfig.lastLinesRemoved ?? 0,
+		lastDuration: projectConfig.lastDuration,
+		modelUsage,
+	};
 }
 
 /**
- * Restores cost state from project config when resuming a session.
- * Only restores if the session ID matches the last saved session.
- * @returns true if cost state was restored, false otherwise
+ * 恢复会话时从项目配置恢复成本状态。
+ * 仅在会话 ID 与上次保存的会话匹配时恢复。
+ * @returns 如果恢复了成本状态则返回 true，否则返回 false
  */
 export function restoreCostStateForSession(sessionId: string): boolean {
   const data = getStoredSessionCosts(sessionId)
@@ -137,8 +142,8 @@ export function restoreCostStateForSession(sessionId: string): boolean {
 }
 
 /**
- * Saves the current session's costs to project config.
- * Call this before switching sessions to avoid losing accumulated costs.
+ * 将当前会话的成本保存到项目配置。
+ * 在切换会话之前调用此方法以避免丢失累积的成本。
  */
 export function saveCurrentSessionCosts(fpsMetrics?: FpsMetrics): void {
   saveCurrentProjectConfig(current => ({
@@ -179,50 +184,50 @@ function formatCost(cost: number, maxDecimalPlaces: number = 4): string {
 }
 
 function formatModelUsage(): string {
-  const modelUsageMap = getModelUsage()
-  if (Object.keys(modelUsageMap).length === 0) {
-    return 'Usage:                 0 input, 0 output, 0 cache read, 0 cache write'
-  }
+	const modelUsageMap = getModelUsage();
+	if (Object.keys(modelUsageMap).length === 0) {
+		return "Usage:                 0 input, 0 output, 0 cache read, 0 cache write";
+	}
 
-  // Accumulate usage by short name
-  const usageByShortName: { [shortName: string]: ModelUsage } = {}
-  for (const [model, usage] of Object.entries(modelUsageMap)) {
-    const shortName = getCanonicalName(model)
-    if (!usageByShortName[shortName]) {
-      usageByShortName[shortName] = {
-        inputTokens: 0,
-        outputTokens: 0,
-        cacheReadInputTokens: 0,
-        cacheCreationInputTokens: 0,
-        webSearchRequests: 0,
-        costUSD: 0,
-        contextWindow: 0,
-        maxOutputTokens: 0,
-      }
-    }
-    const accumulated = usageByShortName[shortName]
-    accumulated.inputTokens += usage.inputTokens
-    accumulated.outputTokens += usage.outputTokens
-    accumulated.cacheReadInputTokens += usage.cacheReadInputTokens
-    accumulated.cacheCreationInputTokens += usage.cacheCreationInputTokens
-    accumulated.webSearchRequests += usage.webSearchRequests
-    accumulated.costUSD += usage.costUSD
-  }
+	// 按短名称累积使用量
+	const usageByShortName: { [shortName: string]: ModelUsage } = {};
+	for (const [model, usage] of Object.entries(modelUsageMap)) {
+		const shortName = getCanonicalName(model);
+		if (!usageByShortName[shortName]) {
+			usageByShortName[shortName] = {
+				inputTokens: 0,
+				outputTokens: 0,
+				cacheReadInputTokens: 0,
+				cacheCreationInputTokens: 0,
+				webSearchRequests: 0,
+				costUSD: 0,
+				contextWindow: 0,
+				maxOutputTokens: 0,
+			};
+		}
+		const accumulated = usageByShortName[shortName];
+		accumulated.inputTokens += usage.inputTokens;
+		accumulated.outputTokens += usage.outputTokens;
+		accumulated.cacheReadInputTokens += usage.cacheReadInputTokens;
+		accumulated.cacheCreationInputTokens += usage.cacheCreationInputTokens;
+		accumulated.webSearchRequests += usage.webSearchRequests;
+		accumulated.costUSD += usage.costUSD;
+	}
 
-  let result = 'Usage by model:'
-  for (const [shortName, usage] of Object.entries(usageByShortName)) {
-    const usageString =
-      `  ${formatNumber(usage.inputTokens)} input, ` +
-      `${formatNumber(usage.outputTokens)} output, ` +
-      `${formatNumber(usage.cacheReadInputTokens)} cache read, ` +
-      `${formatNumber(usage.cacheCreationInputTokens)} cache write` +
-      (usage.webSearchRequests > 0
-        ? `, ${formatNumber(usage.webSearchRequests)} web search`
-        : '') +
-      ` (${formatCost(usage.costUSD)})`
-    result += `\n` + `${shortName}:`.padStart(21) + usageString
-  }
-  return result
+	let result = "Usage by model:";
+	for (const [shortName, usage] of Object.entries(usageByShortName)) {
+		const usageString =
+			`  ${formatNumber(usage.inputTokens)} input, ` +
+			`${formatNumber(usage.outputTokens)} output, ` +
+			`${formatNumber(usage.cacheReadInputTokens)} cache read, ` +
+			`${formatNumber(usage.cacheCreationInputTokens)} cache write` +
+			(usage.webSearchRequests > 0
+				? `, ${formatNumber(usage.webSearchRequests)} web search`
+				: "") +
+			` (${formatCost(usage.costUSD)})`;
+		result += `\n` + `${shortName}:`.padStart(21) + usageString;
+	}
+	return result;
 }
 
 export function formatTotalCost(): string {

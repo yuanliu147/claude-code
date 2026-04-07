@@ -30,7 +30,7 @@ export function CreateAgentWizard({
   onComplete,
   onCancel,
 }: Props): ReactNode {
-  // Create step components with props
+  // 创建带 props 的步骤组件
   const steps: WizardStepComponent<AgentWizardData>[] = [
     LocationStep, // 0
     MethodStep, // 1
@@ -41,7 +41,7 @@ export function CreateAgentWizard({
     () => <ToolsStep tools={tools} />, // 6
     ModelStep, // 7
     ColorStep, // 8
-    // MemoryStep is conditionally included based on GrowthBook gate
+    // MemoryStep 根据 GrowthBook 开关条件性包含
     ...(isAutoMemoryEnabled() ? [MemoryStep] : []),
     () => (
       <ConfirmStepWrapper
@@ -57,8 +57,8 @@ export function CreateAgentWizard({
       steps={steps}
       initialData={{}}
       onComplete={() => {
-        // Wizard completion is handled by ConfirmStepWrapper
-        // which calls onComplete with the appropriate message
+        // 向导完成由 ConfirmStepWrapper 处理
+        // 它会以适当的消息调用 onComplete
       }}
       onCancel={onCancel}
       title="Create new agent"

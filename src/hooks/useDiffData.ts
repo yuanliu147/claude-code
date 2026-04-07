@@ -28,8 +28,8 @@ export type DiffData = {
 }
 
 /**
- * Hook to fetch current git diff data on demand.
- * Fetches both stats and hunks when component mounts.
+ * 按需获取当前 git diff 数据的 Hook。
+ * 组件挂载时获取统计数据和 hunks。
  */
 export function useDiffData(): DiffData {
   const [diffResult, setDiffResult] = useState<GitDiffResult | null>(null)

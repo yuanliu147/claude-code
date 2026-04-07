@@ -23,7 +23,7 @@ interface InvalidConfigDialogProps {
 }
 
 /**
- * Dialog shown when the Claude config file contains invalid JSON
+ * 当 Claude 配置文件包含无效 JSON 时显示的对话框
  */
 function InvalidConfigDialog({
   filePath,
@@ -31,84 +31,89 @@ function InvalidConfigDialog({
   onExit,
   onReset,
 }: InvalidConfigDialogProps): React.ReactNode {
-  // Handler for Select onChange
-  const handleSelect = (value: string) => {
-    if (value === 'exit') {
-      onExit()
-    } else {
-      onReset()
-    }
-  }
+	// Select onChange 的处理程序
+	const handleSelect = (value: string) => {
+		if (value === "exit") {
+			onExit();
+		} else {
+			onReset();
+		}
+	};
 
-  return (
-    <Dialog title="Configuration Error" color="error" onCancel={onExit}>
-      <Box flexDirection="column" gap={1}>
-        <Text>
-          The configuration file at <Text bold>{filePath}</Text> contains
-          invalid JSON.
-        </Text>
-        <Text>{errorDescription}</Text>
-      </Box>
-      <Box flexDirection="column">
-        <Text bold>Choose an option:</Text>
-        <Select
-          options={[
-            { label: 'Exit and fix manually', value: 'exit' },
-            { label: 'Reset with default configuration', value: 'reset' },
-          ]}
-          onChange={handleSelect}
-          onCancel={onExit}
-        />
-      </Box>
-    </Dialog>
-  )
+	return (
+		<Dialog title="Configuration Error" color="error" onCancel={onExit}>
+			<Box flexDirection="column" gap={1}>
+				<Text>
+					The configuration file at <Text bold>{filePath}</Text>{" "}
+					contains invalid JSON.
+				</Text>
+				<Text>{errorDescription}</Text>
+			</Box>
+			<Box flexDirection="column">
+				<Text bold>Choose an option:</Text>
+				<Select
+					options={[
+						{ label: "Exit and fix manually", value: "exit" },
+						{
+							label: "Reset with default configuration",
+							value: "reset",
+						},
+					]}
+					onChange={handleSelect}
+					onCancel={onExit}
+				/>
+			</Box>
+		</Dialog>
+	);
 }
 
 /**
- * Safe fallback theme name for error dialogs to avoid circular dependency.
- * Uses a hardcoded dark theme that doesn't require reading from config.
+ * 用于错误对话框的安全回退主题名称，以避免循环依赖。
+ * 使用硬编码的深色主题，不需要从配置中读取。
  */
 const SAFE_ERROR_THEME_NAME: ThemeName = 'dark'
 
 export async function showInvalidConfigDialog({
-  error,
+	error,
 }: InvalidConfigHandlerProps): Promise<void> {
-  // Extend RenderOptions with theme property for this specific usage
-  type SafeRenderOptions = Parameters<typeof render>[1] & { theme?: ThemeName }
+	// 为此特定用法扩展 RenderOptions 的 theme 属性
+	type SafeRenderOptions = Parameters<typeof render>[1] & {
+		theme?: ThemeName;
+	};
 
-  const renderOptions: SafeRenderOptions = {
-    ...getBaseRenderOptions(false),
-    // IMPORTANT: Use hardcoded theme name to avoid circular dependency with getGlobalConfig()
-    // This allows the error dialog to show even when config file has JSON syntax errors
-    theme: SAFE_ERROR_THEME_NAME,
-  }
+	const renderOptions: SafeRenderOptions = {
+		...getBaseRenderOptions(false),
+		// 重要：使用硬编码的主题名称以避免与 getGlobalConfig() 的循环依赖
+		// 这允许错误对话框在配置文件有 JSON 语法错误时仍然显示
+		theme: SAFE_ERROR_THEME_NAME,
+	};
 
-  await new Promise<void>(async resolve => {
-    const { unmount } = await render(
-      <AppStateProvider>
-        <KeybindingSetup>
-          <InvalidConfigDialog
-            filePath={error.filePath}
-            errorDescription={error.message}
-            onExit={() => {
-              unmount()
-              void resolve()
-              process.exit(1)
-            }}
-            onReset={() => {
-              writeFileSync_DEPRECATED(
-                error.filePath,
-                jsonStringify(error.defaultConfig, null, 2),
-                { flush: false, encoding: 'utf8' },
-              )
-              unmount()
-              void resolve()
-              process.exit(0)
-            }}
-          />
-        </KeybindingSetup>
-      </AppStateProvider>,
-      renderOptions,
-    )
-  })
+	await new Promise<void>(async (resolve) => {
+		const { unmount } = await render(
+			<AppStateProvider>
+				<KeybindingSetup>
+					<InvalidConfigDialog
+						filePath={error.filePath}
+						errorDescription={error.message}
+						onExit={() => {
+							unmount();
+							void resolve();
+							process.exit(1);
+						}}
+						onReset={() => {
+							writeFileSync_DEPRECATED(
+								error.filePath,
+								jsonStringify(error.defaultConfig, null, 2),
+								{ flush: false, encoding: "utf8" },
+							);
+							unmount();
+							void resolve();
+							process.exit(0);
+						}}
+					/>
+				</KeybindingSetup>
+			</AppStateProvider>,
+			renderOptions,
+		);
+	});
 }

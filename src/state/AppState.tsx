@@ -17,7 +17,7 @@ import { applySettingsChange } from '../utils/settings/applySettingsChange.js'
 import type { SettingSource } from '../utils/settings/constants.js'
 import { createStore } from './store.js'
 
-// DCE: voice context is ant-only. External builds get a passthrough.
+// DCE: 语音上下文是 ant 专有功能。外部构建版本使用透传实现。
 /* eslint-disable @typescript-eslint/no-require-imports */
 const VoiceProvider: (props: { children: React.ReactNode }) => React.ReactNode =
   feature('VOICE_MODE')
@@ -31,9 +31,9 @@ import {
   getDefaultAppState,
 } from './AppStateStore.js'
 
-// TODO: Remove these re-exports once all callers import directly from
-// ./AppStateStore.js. Kept for back-compat during migration so .ts callers
-// can incrementally move off the .tsx import and stop pulling React.
+// TODO: 一旦所有调用者直接从 ./AppStateStore.js 导入，就移除这些重新导出。
+// 在迁移过程中保留是为了向后兼容，使 .ts 调用者可以逐步从 .tsx 导入迁移过来，
+// 从而避免引入 React 依赖。
 export {
   type AppState,
   type AppStateStore,
@@ -59,11 +59,11 @@ export function AppStateProvider({
   initialState,
   onChangeAppState,
 }: Props): React.ReactNode {
-  // Don't allow nested AppStateProviders.
+  // 不允许嵌套 AppStateProviders。
   const hasAppStateContext = useContext(HasAppStateContext)
   if (hasAppStateContext) {
     throw new Error(
-      'AppStateProvider can not be nested within another AppStateProvider',
+      'AppStateProvider 不能嵌套在另一个 AppStateProvider 内部',
     )
   }
 
@@ -77,11 +77,11 @@ export function AppStateProvider({
     ),
   )
 
-  // Check on mount if bypass mode should be disabled
-  // This handles the race condition where remote settings load BEFORE this component mounts,
-  // meaning the settings change notification was sent when no listeners were subscribed.
-  // On subsequent sessions, the cached remote-settings.json is read during initial setup,
-  // but on the first session the remote fetch may complete before React mounts.
+  // 在挂载时检查是否应禁用 bypass 模式
+  // 这处理了远程设置在组件挂载之前加载的竞态条件，
+  // 意味着设置更改通知是在没有订阅者的情况下发送的。
+  // 在后续会话中，cached remote-settings.json 会在初始设置期间读取，
+  // 但在第一次会话中，远程获取可能在 React 挂载之前完成。
   useEffect(() => {
     const { toolPermissionContext } = store.getState()
     if (
@@ -125,7 +125,7 @@ function useAppStore(): AppStateStore {
   const store = useContext(AppStoreContext)
   if (!store) {
     throw new ReferenceError(
-      'useAppState/useSetAppState cannot be called outside of an <AppStateProvider />',
+      'useAppState/useSetAppState 不能在 <AppStateProvider /> 之外调用',
     )
   }
   return store
@@ -187,8 +187,8 @@ export function useAppStateStore(): AppStateStore {
 const NOOP_SUBSCRIBE = () => () => {}
 
 /**
- * Safe version of useAppState that returns undefined if called outside of AppStateProvider.
- * Useful for components that may be rendered in contexts where AppStateProvider isn't available.
+ * useAppState 的安全版本，如果在 AppStateProvider 之外调用则返回 undefined。
+ * 对于可能在 AppStateProvider 不可用的上下文中渲染的组件很有用。
  */
 export function useAppStateMaybeOutsideOfProvider<T>(
   selector: (state: AppState) => T,

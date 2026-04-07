@@ -96,7 +96,7 @@ Key principles for your system prompts:
 Remember: The agents you create should be autonomous experts capable of handling their designated tasks with minimal additional guidance. Your system prompts are their complete operational manual.
 `
 
-// Agent memory instructions to include in the system prompt when memory is mentioned or relevant
+// 当提及或相关时，在系统提示中包含的 agent 记忆指令
 const AGENT_MEMORY_INSTRUCTIONS = `
 
 7. **Agent Memory Instructions**: If the user mentions "memory", "remember", "learn", "persist", or similar concepts, OR if the agent would benefit from building up knowledge across conversations (e.g., code reviewers learning patterns, architects learning codebase structure, etc.), include domain-specific memory update instructions in the systemPrompt.
@@ -135,13 +135,13 @@ export async function generateAgent(
 
   const userMessage = createUserMessage({ content: prompt })
 
-  // Fetch user and system contexts
+  // 获取用户和系统上下文
   const userContext = await getUserContext()
 
-  // Prepend user context to messages and append system context to system prompt
+  // 将用户上下文前置到消息中，并将系统上下文追加到系统提示
   const messagesWithContext = prependUserContext([userMessage], userContext)
 
-  // Include memory instructions when the feature is enabled
+  // 当功能启用时包含记忆指令
   const systemPrompt = isAutoMemoryEnabled()
     ? AGENT_CREATION_SYSTEM_PROMPT + AGENT_MEMORY_INSTRUCTIONS
     : AGENT_CREATION_SYSTEM_PROMPT

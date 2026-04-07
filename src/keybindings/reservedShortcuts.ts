@@ -112,7 +112,7 @@ function normalizeStep(step: string): string {
         'shift',
       ].includes(lower)
     ) {
-      // Normalize modifier names
+      // 规范化修饰符名称
       if (lower === 'control') modifiers.push('ctrl')
       else if (lower === 'option' || lower === 'opt') modifiers.push('alt')
       else if (lower === 'command' || lower === 'cmd') modifiers.push('cmd')

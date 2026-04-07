@@ -36,8 +36,8 @@ export function useShortcutDisplay(
   const isFallback = resolved === undefined
   const reason = keybindingContext ? 'action_not_found' : 'no_context'
 
-  // Log fallback usage once per mount (not on every render) to avoid
-  // flooding analytics with events from frequent re-renders.
+  // 在每次挂载时记录一次 fallback 使用（不是每次渲染）以避免
+  // 频繁重新渲染时向分析工具发送大量事件。
   const hasLoggedRef = useRef(false)
   useEffect(() => {
     if (isFallback && !hasLoggedRef.current) {

@@ -16,12 +16,12 @@ export function matchesNegativeKeyword(input: string): boolean {
 export function matchesKeepGoingKeyword(input: string): boolean {
   const lowerInput = input.toLowerCase().trim()
 
-  // Match "continue" only if it's the entire prompt
+  // 仅在提示词完全是 "continue" 时匹配
   if (lowerInput === 'continue') {
     return true
   }
 
-  // Match "keep going" or "go on" anywhere in the input
+  // 在输入中任何位置匹配 "keep going" 或 "go on"
   const keepGoingPattern = /\b(keep going|go on)\b/
   return keepGoingPattern.test(lowerInput)
 }

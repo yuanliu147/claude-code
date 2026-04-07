@@ -1,8 +1,8 @@
 /**
- * User-Agent string helpers.
+ * User-Agent 字符串辅助函数。
  *
- * Kept dependency-free so SDK-bundled code (bridge, cli/transports) can
- * import without pulling in auth.ts and its transitive dependency tree.
+ * 保持零依赖，以便 SDK 打包的代码（bridge、cli/transports）可以在
+ * 不引入 auth.ts 及其传递依赖的情况下导入。
  */
 
 export function getClaudeCodeUserAgent(): string {

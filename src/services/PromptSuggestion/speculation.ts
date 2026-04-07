@@ -201,8 +201,8 @@ function isUserMessageWithArrayContent(
 }
 
 export function prepareMessagesForInjection(messages: Message[]): Message[] {
-  // Find tool_use IDs that have SUCCESSFUL results (not errors/interruptions)
-  // Pending tool_use blocks (no result) and interrupted ones will be stripped
+  // 查找有成功结果（不是错误/中断）的 tool_use ID
+  // 待处理的 tool_use 块（没有结果）和中断的将被剥离
   type ToolResult = {
     type: 'tool_result'
     tool_use_id: string
@@ -243,9 +243,8 @@ export function prepareMessagesForInjection(messages: Message[]): Message[] {
       b.type === 'tool_result' &&
       !toolIdsWithSuccessfulResults.has(b.tool_use_id!)
     ) &&
-    // Abort during speculation yields a standalone interrupt user message
-    // (query.ts createUserInterruptionMessage). Strip it so it isn't surfaced
-    // to the model as real user input.
+    // 在推测期间中止会产生一个独立的 interrupt 用户消息
+    // (query.ts createUserInterruptionMessage)。剥离它以免作为真实用户输入暴露给模型。
     !(
       b.type === 'text' &&
       (b.text === INTERRUPT_MESSAGE ||
@@ -258,8 +257,8 @@ export function prepareMessagesForInjection(messages: Message[]): Message[] {
       const content = msg.message.content.filter(keep)
       if (content.length === msg.message.content.length) return msg
       if (content.length === 0) return null
-      // Drop messages where all remaining blocks are whitespace-only text
-      // (API rejects these with 400: "text content blocks must contain non-whitespace text")
+      // 丢弃所有剩余块都是纯空白文本的消息
+      //（API 会用 400 拒绝："text content blocks must contain non-whitespace text"）
       const hasNonWhitespaceContent = content.some(
         (b: { type: string; text?: string }) =>
           b.type !== 'text' || (b.text !== undefined && b.text.trim() !== ''),
@@ -315,7 +314,7 @@ function updateActiveSpeculationState(
     if (prev.speculation.status !== 'active') return prev
     const current = prev.speculation as ActiveSpeculationState
     const updates = updater(current)
-    // Check if any values actually changed to avoid unnecessary re-renders
+    // 检查是否有实际值变化以避免不必要的重新渲染
     const hasChanges = Object.entries(updates).some(
       ([key, value]) => current[key as keyof ActiveSpeculationState] !== value,
     )
@@ -408,7 +407,7 @@ export async function startSpeculation(
 ): Promise<void> {
   if (!isSpeculationEnabled()) return
 
-  // Abort any existing speculation before starting a new one
+  // 在开始新的推测之前中止任何现有推测
   abortSpeculation(setAppState)
 
   const id = randomUUID().slice(0, 8)
@@ -462,7 +461,7 @@ export async function startSpeculation(
         const isWriteTool = WRITE_TOOLS.has(tool.name)
         const isSafeReadOnlyTool = SAFE_READ_ONLY_TOOLS.has(tool.name)
 
-        // Check permission mode BEFORE allowing file edits
+        // 在允许文件编辑之前检查权限模式
         if (isWriteTool) {
           const appState = context.toolUseContext.getAppState()
           const { mode, isBypassPermissionsModeAvailable } =
@@ -494,7 +493,7 @@ export async function startSpeculation(
           }
         }
 
-        // Handle file path rewriting for overlay isolation
+        // 处理文件路径重写以实现覆盖隔离
         if (isWriteTool || isSafeReadOnlyTool) {
           const pathKey =
             'notebook_path' in input
@@ -526,24 +525,24 @@ export async function startSpeculation(
             }
 
             if (isWriteTool) {
-              // Copy-on-write: copy original to overlay if not yet there
+              // 写时复制：如果原始文件尚不存在则复制到覆盖层
               if (!writtenPathsRef.current.has(rel)) {
                 const overlayFile = join(overlayPath, rel)
                 await mkdir(dirname(overlayFile), { recursive: true })
                 try {
                   await copyFile(join(cwd, rel), overlayFile)
                 } catch {
-                  // Original may not exist (new file creation) - that's fine
+                  // 原始文件可能不存在（新建文件）— 没关系
                 }
                 writtenPathsRef.current.add(rel)
               }
               input = { ...input, [pathKey]: join(overlayPath, rel) }
             } else {
-              // Read: redirect to overlay if file was previously written
+              // 读取：如果文件之前已写入则重定向到覆盖层
               if (writtenPathsRef.current.has(rel)) {
                 input = { ...input, [pathKey]: join(overlayPath, rel) }
               }
-              // Otherwise read from main (no rewrite)
+              // 否则从主目录读取（不重写）
             }
 
             logForDebugging(
@@ -559,7 +558,7 @@ export async function startSpeculation(
               },
             }
           }
-          // Read tools without explicit path (e.g. Glob/Grep defaulting to CWD) are safe
+          // 没有显式路径的读取工具（例如默认使用 CWD 的 Glob/Grep）是安全的
           if (isSafeReadOnlyTool) {
             return {
               behavior: 'allow' as const,
@@ -570,10 +569,10 @@ export async function startSpeculation(
               },
             }
           }
-          // Write tools with undefined path → fall through to default deny
+          // 路径未定义的写工具 → 落入默认拒绝
         }
 
-        // Stop at non-read-only bash commands
+        // 在非只读 bash 命令处停止
         if (tool.name === 'Bash') {
           const command =
             'command' in input && typeof input.command === 'string'
@@ -596,7 +595,7 @@ export async function startSpeculation(
               'speculation_bash_boundary',
             )
           }
-          // Read-only bash command — allow during speculation
+          // 只读 bash 命令 — 在推测期间允许
           return {
             behavior: 'allow' as const,
             updatedInput: input,
@@ -607,7 +606,7 @@ export async function startSpeculation(
           }
         }
 
-        // Deny all other tools by default
+        // 默认拒绝所有其他工具
         logForDebugging(`[Speculation] Stopping at denied tool: ${tool.name}`)
         const detail = String(
           ('url' in input && input.url) ||
@@ -741,13 +740,13 @@ export async function acceptSpeculation(
   }
   safeRemoveOverlay(overlayPath)
 
-  // Use snapshot boundary as default (available since state.status === 'active' was checked above)
+  // 使用快照边界作为默认值（因为上面已检查 state.status === 'active'）
   let boundary: CompletionBoundary | null = state.boundary
   let timeSavedMs =
     Math.min(acceptedAt, boundary?.completedAt ?? Infinity) - startTime
 
   setAppState(prev => {
-    // Refine with latest React state if speculation is still active
+    // 如果推测仍在活动状态，用最新的 React 状态细化
     if (prev.speculation.status === 'active' && prev.speculation.boundary) {
       boundary = prev.speculation.boundary
       const endTime = Math.min(acceptedAt, boundary.completedAt ?? Infinity)
@@ -904,7 +903,7 @@ export async function handleSpeculationAccept(
       newSessionTotal,
     )
 
-    // Inject speculated messages
+    // 注入推测的消息
     setMessages(prev => [...prev, ...cleanMessages])
 
     const extracted = extractReadFilesFromMessages(

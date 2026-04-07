@@ -13,24 +13,24 @@ import { MarkdownTable } from './MarkdownTable.js'
 
 type Props = {
   children: string
-  /** When true, render all text content as dim */
+  /** 当为 true 时，将所有文本内容渲染为暗淡色 */
   dimColor?: boolean
 }
 
-// Module-level token cache — marked.lexer is the hot cost on virtual-scroll
-// remounts (~3ms per message). useMemo doesn't survive unmount→remount, so
-// scrolling back to a previously-visible message re-parses. Messages are
-// immutable in history; same content → same tokens. Keyed by hash to avoid
-// retaining full content strings (turn50→turn99 RSS regression, #24180).
+// 模块级别的 token 缓存 — marked.lexer 是虚拟滚动
+// 重新挂载时的热点成本（每条消息约 3ms）。useMemo 不能在卸载→重新挂载后存活，所以
+// 滚动回之前可见的消息会重新解析。消息在历史中是
+// 不可变的；相同内容 → 相同 tokens。通过哈希作为键以避免
+// 保留完整内容字符串（turn50→turn99 RSS 回归，#24180）。
 const TOKEN_CACHE_MAX = 500
 const tokenCache = new Map<string, Token[]>()
 
-// Characters that indicate markdown syntax. If none are present, skip the
-// ~3ms marked.lexer call entirely — render as a single paragraph. Covers
-// the majority of short assistant responses and user prompts that are
-// plain sentences. Checked via indexOf (not regex) for speed.
-// Single regex: matches any MD marker or ordered-list start (N. at line start).
-// One pass instead of 10× includes scans.
+// 指示 markdown 语法的字符。如果没有，则跳过
+// 约 3ms 的 marked.lexer 调用 — 作为单个段落渲染。覆盖
+// 大多数简短的助手响应和用户提示，它们是
+// 纯句子。为速度通过 indexOf（而不是 regex）检查。
+// 单个正则表达式：匹配任何 MD 标记或有序列表开始（行首的 N.）。
+// 一次扫描而不是 10× includes 扫描。
 const MD_SYNTAX_RE = /[#*`|[>\-_~]|\n\n|^\d+\. |\n\d+\. /
 function hasMarkdownSyntax(s: string): boolean {
   // Sample first 500 chars — if markdown exists it's usually early (headers,
@@ -39,10 +39,10 @@ function hasMarkdownSyntax(s: string): boolean {
 }
 
 function cachedLexer(content: string): Token[] {
-  // Fast path: plain text with no markdown syntax → single paragraph token.
-  // Skips marked.lexer's full GFM parse (~3ms on long content). Not cached —
-  // reconstruction is a single object allocation, and caching would retain
-  // 4× content in raw/text fields plus the hash key for zero benefit.
+  // 快速路径：没有 markdown 语法的纯文本 → 单个段落 token。
+  // 跳过 marked.lexer 的完整 GFM 解析（长内容约 3ms）。不缓存 —
+  // 重建是单个对象分配，缓存会在 raw/text 字段中保留
+  // 4× 内容加上哈希键，零收益。
   if (!hasMarkdownSyntax(content)) {
     return [
       {

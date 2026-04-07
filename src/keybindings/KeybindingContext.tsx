@@ -194,17 +194,17 @@ export function useOptionalKeybindingContext(): KeybindingContextValue | null {
 }
 
 /**
- * Hook to register a keybinding context as active while the component is mounted.
+ * Hook 用于在组件挂载时将 keybinding 上下文注册为活动状态。
  *
- * When a context is registered, its keybindings take precedence over Global bindings.
- * This allows context-specific bindings (like ThemePicker's ctrl+t) to override
- * global bindings (like the todo toggle) when the context is active.
+ * 当上下文被注册时，其 keybinding 优先于 Global 绑定。
+ * 这允许上下文特定的绑定（如 ThemePicker 的 ctrl+t）覆盖
+ * 全局绑定（如 todo 切换），当上下文处于活动状态时。
  *
  * @example
  * ```tsx
  * function ThemePicker() {
  *   useRegisterKeybindingContext('ThemePicker')
- *   // Now ThemePicker's ctrl+t binding takes precedence over Global
+ *   // 现在 ThemePicker 的 ctrl+t 绑定优先于 Global
  * }
  * ```
  */

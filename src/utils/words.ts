@@ -1,11 +1,11 @@
 /**
- * Random word slug generator for plan IDs
- * Inspired by https://github.com/nas5w/random-word-slugs
- * with Claude-flavored words
+ * 用于计划 ID 的随机词段生成器
+ * 灵感来自 https://github.com/nas5w/random-word-slugs
+ * 带有 Claude 风格的词汇
  */
 import { randomBytes } from 'crypto'
 
-// Adjectives for slug generation - whimsical and delightful
+// 用于词段生成的形容词 - 奇特而可爱
 const ADJECTIVES = [
   // Classic pleasant adjectives
   'abundant',
@@ -231,7 +231,7 @@ const ADJECTIVES = [
   'virtual',
 ] as const
 
-// Nouns for slug generation - whimsical creatures, nature, and fun objects
+// 用于词段生成的名词 - 奇特生物、自然和有趣物体
 const NOUNS = [
   // Nature & cosmic
   'aurora',
@@ -648,7 +648,7 @@ const NOUNS = [
   'yao',
 ] as const
 
-// Verbs for the middle word - whimsical action words
+// 中间词的动词 - 奇特的动作词
 const VERBS = [
   'baking',
   'beaming',
@@ -762,17 +762,17 @@ const VERBS = [
 ] as const
 
 /**
- * Generate a cryptographically random integer in the range [0, max)
+ * 在范围 [0, max) 内生成加密安全的随机整数
  */
 function randomInt(max: number): number {
-  // Use crypto.randomBytes for better randomness than Math.random
+  // 使用 crypto.randomBytes 以获得比 Math.random 更好的随机性
   const bytes = randomBytes(4)
   const value = bytes.readUInt32BE(0)
   return value % max
 }
 
 /**
- * Pick a random element from an array
+ * 从数组中随机选择一个元素
  */
 function pickRandom<T>(array: readonly T[]): T {
   return array[randomInt(array.length)]!
@@ -790,8 +790,8 @@ export function generateWordSlug(): string {
 }
 
 /**
- * Generate a shorter random word slug in the format "adjective-noun"
- * Example: "graceful-unicorn", "cosmic-lighthouse"
+ * 生成格式为 "adjective-noun" 的较短随机词段
+ * 示例："graceful-unicorn"、"cosmic-lighthouse"
  */
 export function generateShortWordSlug(): string {
   const adjective = pickRandom(ADJECTIVES)

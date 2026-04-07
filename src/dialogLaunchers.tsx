@@ -1,10 +1,10 @@
 /**
- * Thin launchers for one-off dialog JSX sites in main.tsx.
- * Each launcher dynamically imports its component and wires the `done` callback
- * identically to the original inline call site. Zero behavior change.
+ * main.tsx 中一次性对话框 JSX 站点的精简启动器。
+ * 每个启动器动态导入其组件，并以与原始内联调用站点相同的方式连接 `done` 回调。
+ * 零行为更改。
  *
- * Part of the main.tsx React/JSX extraction effort. See sibling PRs
- * perf/extract-interactive-helpers and perf/launch-repl.
+ * main.tsx React/JSX 提取工作的一部分。参见同级 PR
+ * perf/extract-interactive-helpers 和 perf/launch-repl。
  */
 import React from 'react'
 import type { AssistantSession } from './assistant/sessionDiscovery.js'
@@ -25,8 +25,8 @@ type ResumeConversationProps = React.ComponentProps<
 >
 
 /**
- * Site ~3173: SnapshotUpdateDialog (agent memory snapshot update prompt).
- * Original callback wiring: onComplete={done}, onCancel={() => done('keep')}.
+ * 站点 ~3173: SnapshotUpdateDialog（代理内存快照更新提示）。
+ * 原始回调连接：onComplete={done}, onCancel={() => done('keep')}。
  */
 export async function launchSnapshotUpdateDialog(
   root: Root,
@@ -74,8 +74,8 @@ export async function launchInvalidSettingsDialog(
 }
 
 /**
- * Site ~4229: AssistantSessionChooser (pick a bridge session to attach to).
- * Original callback wiring: onSelect={id => done(id)}, onCancel={() => done(null)}.
+ * 站点 ~4229: AssistantSessionChooser（选择要附加的桥接会话）。
+ * 原始回调连接：onSelect={id => done(id)}, onCancel={() => done(null)}。
  */
 export async function launchAssistantSessionChooser(
   root: Root,
@@ -124,8 +124,8 @@ export async function launchAssistantInstallWizard(
 }
 
 /**
- * Site ~4549: TeleportResumeWrapper (interactive teleport session picker).
- * Original callback wiring: onComplete={done}, onCancel={() => done(null)}, source="cliArg".
+ * 站点 ~4549: TeleportResumeWrapper（交互式传送会话选择器）。
+ * 原始回调连接：onComplete={done}, onCancel={() => done(null)}, source="cliArg"。
  */
 export async function launchTeleportResumeWrapper(
   root: Root,
@@ -167,9 +167,9 @@ export async function launchTeleportRepoMismatchDialog(
 }
 
 /**
- * Site ~4903: ResumeConversation mount (interactive session picker).
- * Uses renderAndRun, NOT showSetupDialog. Wraps in <App><KeybindingSetup>.
- * Preserves original Promise.all parallelism between getWorktreePaths and imports.
+ * 站点 ~4903: ResumeConversation 挂载（交互式会话选择器）。
+ * 使用 renderAndRun，不是 showSetupDialog。包装在 <App><KeybindingSetup> 中。
+ * 保留 getWorktreePaths 和导入之间的原始 Promise.all 并行性。
  */
 export async function launchResumeChooser(
   root: Root,

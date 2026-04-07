@@ -154,7 +154,7 @@ const getPowerShellTool = () => {
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 /**
- * Predefined tool presets that can be used with --tools flag
+ * 预定义的工具预设，可与 --tools 标志一起使用
  */
 export const TOOL_PRESETS = ['default'] as const
 
@@ -181,12 +181,13 @@ export function getToolsForDefaultPreset(): string[] {
 }
 
 /**
- * Get the complete exhaustive list of all tools that could be available
- * in the current environment (respecting process.env flags).
- * This is the source of truth for ALL tools.
+ * 获取当前环境下可能可用的所有工具的完整详尽列表
+ *（尊重 process.env 标志）。
+ * 这是所有工具的真实来源。
  */
 /**
- * NOTE: This MUST stay in sync with https://console.statsig.com/4aF3Ewatb6xPVpCwxb5nA3/dynamic_configs/claude_code_global_system_caching, in order to cache the system prompt across users.
+ * 注意：这必须与 https://console.statsig.com/4aF3Ewatb6xPVpCwxb5nA3/dynamic_configs/claude_code_global_system_caching 保持同步，
+ * 以便在用户之间缓存系统提示。
  */
 export function getAllBaseTools(): Tools {
   return [
@@ -242,8 +243,8 @@ export function getAllBaseTools(): Tools {
     ...(process.env.NODE_ENV === 'test' ? [TestingPermissionTool] : []),
     ListMcpResourcesTool,
     ReadMcpResourceTool,
-    // Include ToolSearchTool when tool search might be enabled (optimistic check)
-    // The actual decision to defer tools happens at request time in claude.ts
+    // 当可能启用工具搜索时包含 ToolSearchTool（乐观检查）
+    // 实际决定延迟工具发生在 claude.ts 中的请求时
     ...(isToolSearchEnabledOptimistic() ? [ToolSearchTool] : []),
   ]
 }
@@ -267,11 +268,11 @@ export function filterToolsByDenyRules<
 }
 
 export const getTools = (permissionContext: ToolPermissionContext): Tools => {
-  // Simple mode: only Bash, Read, and Edit tools
+  // 简单模式：仅 Bash、Read 和 Edit 工具
   if (isEnvTruthy(process.env.CLAUDE_CODE_SIMPLE)) {
-    // --bare + REPL mode: REPL wraps Bash/Read/Edit/etc inside the VM, so
-    // return REPL instead of the raw primitives. Matches the non-bare path
-    // below which also hides REPL_ONLY_TOOLS when REPL is enabled.
+    // --bare + REPL 模式：REPL 在 VM 内部包装 Bash/Read/Edit/etc，
+    // 所以返回 REPL 而不是原始原语。与下面 REPL 启用时
+    // 也隐藏 REPL_ONLY_TOOLS 的非 bare 路径匹配。
     if (isReplModeEnabled() && REPLTool) {
       const replSimple: Tool[] = [REPLTool]
       if (
@@ -283,9 +284,9 @@ export const getTools = (permissionContext: ToolPermissionContext): Tools => {
       return filterToolsByDenyRules(replSimple, permissionContext)
     }
     const simpleTools: Tool[] = [BashTool, FileReadTool, FileEditTool]
-    // When coordinator mode is also active, include AgentTool and TaskStopTool
-    // so the coordinator gets Task+TaskStop (via useMergedTools filtering) and
-    // workers get Bash/Read/Edit (via filterToolsForAgent filtering).
+    // 当协调者模式也激活时，包含 AgentTool 和 TaskStopTool，
+    // 以便协调者获得 Task+TaskStop（通过 useMergedTools 过滤），
+    // 工作线程获得 Bash/Read/Edit（通过 filterToolsForAgent 过滤）。
     if (
       feature('COORDINATOR_MODE') &&
       coordinatorModeModule?.isCoordinatorMode()
@@ -325,20 +326,20 @@ export const getTools = (permissionContext: ToolPermissionContext): Tools => {
 }
 
 /**
- * Assemble the full tool pool for a given permission context and MCP tools.
+ * 为给定的权限上下文和 MCP 工具组装完整的工具池。
  *
- * This is the single source of truth for combining built-in tools with MCP tools.
- * Both REPL.tsx (via useMergedTools hook) and runAgent.ts (for coordinator workers)
- * use this function to ensure consistent tool pool assembly.
+ * 这是将内置工具与 MCP 工具组合的单一真实来源。
+ * REPL.tsx（通过 useMergedTools hook）和 runAgent.ts（用于协调者工作线程）
+ * 都使用此函数以确保一致的工具池组装。
  *
- * The function:
- * 1. Gets built-in tools via getTools() (respects mode filtering)
- * 2. Filters MCP tools by deny rules
- * 3. Deduplicates by tool name (built-in tools take precedence)
+ * 函数：
+ * 1. 通过 getTools() 获取内置工具（尊重模式过滤）
+ * 2. 通过拒绝规则过滤 MCP 工具
+ * 3. 按工具名称去重（内置工具优先）
  *
- * @param permissionContext - Permission context for filtering built-in tools
- * @param mcpTools - MCP tools from appState.mcp.tools
- * @returns Combined, deduplicated array of built-in and MCP tools
+ * @param permissionContext - 用于过滤内置工具的权限上下文
+ * @param mcpTools - 来自 appState.mcp.tools 的 MCP 工具
+ * @returns 内置工具和 MCP 工具的组合、去重数组
  */
 export function assembleToolPool(
   permissionContext: ToolPermissionContext,
@@ -365,18 +366,18 @@ export function assembleToolPool(
 }
 
 /**
- * Get all tools including both built-in tools and MCP tools.
+ * 获取包含内置工具和 MCP 工具的所有工具。
  *
- * This is the preferred function when you need the complete tools list for:
- * - Tool search threshold calculations (isToolSearchEnabled)
- * - Token counting that includes MCP tools
- * - Any context where MCP tools should be considered
+ * 当需要完整工具列表时，这是首选函数：
+ * - 工具搜索阈值计算（isToolSearchEnabled）
+ * - 包含 MCP 工具的令牌计数
+ * - MCP 工具应该被考虑的任何上下文
  *
- * Use getTools() only when you specifically need just built-in tools.
+ * 仅当您特别需要内置工具时使用 getTools()。
  *
- * @param permissionContext - Permission context for filtering built-in tools
- * @param mcpTools - MCP tools from appState.mcp.tools
- * @returns Combined array of built-in and MCP tools
+ * @param permissionContext - 用于过滤内置工具的权限上下文
+ * @param mcpTools - 来自 appState.mcp.tools 的 MCP 工具
+ * @returns 内置工具和 MCP 工具的组合数组
  */
 export function getMergedTools(
   permissionContext: ToolPermissionContext,

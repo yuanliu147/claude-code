@@ -49,12 +49,12 @@ export type ActiveAgentForInput =
   | { type: 'named_agent'; task: LocalAgentTaskState }
 
 /**
- * Determine where user input should be routed.
- * Returns:
- * - { type: 'leader' } when not viewing a teammate (input goes to leader)
- * - { type: 'viewed', task } when viewing an agent (input goes to that agent)
+ * 确定用户输入应该路由到哪里。
+ * 返回：
+ * - 当不查看 teammate 时为 { type: 'leader' }（输入发送到 leader）
+ * - 当正在查看 agent 时为 { type: 'viewed', task }（输入发送到该 agent）
  *
- * Used by input routing logic to direct user messages to the correct agent.
+ * 由输入路由逻辑使用，用于将用户消息定向到正确的 agent。
  */
 export function getActiveAgentForInput(
   appState: AppState,

@@ -17,25 +17,27 @@ const LogEventSchema = lazySchema(() =>
 
 export function useIdeLogging(mcpClients: MCPServerConnection[]): void {
   useEffect(() => {
-    // Skip if there are no clients
-    if (!mcpClients.length) {
-      return
-    }
+		// 如果没有客户端则跳过
+		if (!mcpClients.length) {
+			return;
+		}
 
-    // Find the IDE client from the MCP clients list
-    const ideClient = getConnectedIdeClient(mcpClients)
-    if (ideClient) {
-      // Register the log event handler
-      ideClient.client.setNotificationHandler(
-        LogEventSchema(),
-        notification => {
-          const { eventName, eventData } = notification.params
-          logEvent(
-            `tengu_ide_${eventName}`,
-            eventData as { [key: string]: boolean | number | undefined },
-          )
-        },
-      )
-    }
-  }, [mcpClients])
+		// 从 MCP 客户端列表中找到 IDE 客户端
+		const ideClient = getConnectedIdeClient(mcpClients);
+		if (ideClient) {
+			// 注册日志事件处理器
+			ideClient.client.setNotificationHandler(
+				LogEventSchema(),
+				(notification) => {
+					const { eventName, eventData } = notification.params;
+					logEvent(
+						`tengu_ide_${eventName}`,
+						eventData as {
+							[key: string]: boolean | number | undefined;
+						},
+					);
+				},
+			);
+		}
+  };, [mcpClients])
 }

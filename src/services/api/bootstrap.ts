@@ -50,8 +50,8 @@ async function fetchBootstrapAPI(): Promise<BootstrapResponse | null> {
     return null
   }
 
-  // OAuth preferred (requires user:profile scope — service-key OAuth tokens
-  // lack it and would 403). Fall back to API key auth for console users.
+  // OAuth 优先（需要 user:profile scope — 服务密钥 OAuth 令牌
+  // 缺少它会 403）。为控制台用户回退到 API 密钥认证。
   const apiKey = getAnthropicApiKey()
   const hasUsableOAuth =
     getClaudeAIOAuthTokens()?.accessToken && hasProfileScope()

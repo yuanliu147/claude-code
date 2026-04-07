@@ -29,51 +29,58 @@ export function FallbackToolUseErrorMessage({
   if (typeof result !== 'string') {
     error = 'Tool execution failed'
   } else {
-    const extractedError = extractTag(result, 'tool_use_error') ?? result
-    // Remove sandbox_violations tags from error display (Claude still sees them in the tool result)
-    const withoutSandboxViolations = removeSandboxViolationTags(extractedError)
-    // Strip <error> tags but keep their content (tags are for the model, not the UI)
-    const withoutErrorTags = withoutSandboxViolations.replace(/<\/?error>/g, '')
-    const trimmed = withoutErrorTags.trim()
-    if (!verbose && trimmed.includes('InputValidationError: ')) {
-      error = 'Invalid tool parameters'
-    } else if (
-      trimmed.startsWith('Error: ') ||
-      trimmed.startsWith('Cancelled: ')
-    ) {
-      error = trimmed
-    } else {
-      error = `Error: ${trimmed}`
-    }
+		const extractedError = extractTag(result, "tool_use_error") ?? result;
+		// 从错误显示中移除 sandbox_violations 标签（Claude 在工具结果中仍能看到它们）
+		const withoutSandboxViolations =
+			removeSandboxViolationTags(extractedError);
+		// Strip <error> tags but keep their content (tags are for the model, not the UI)
+		const withoutErrorTags = withoutSandboxViolations.replace(
+			/<\/?error>/g,
+			"",
+		);
+		const trimmed = withoutErrorTags.trim();
+		if (!verbose && trimmed.includes("InputValidationError: ")) {
+			error = "Invalid tool parameters";
+		} else if (
+			trimmed.startsWith("Error: ") ||
+			trimmed.startsWith("Cancelled: ")
+		) {
+			error = trimmed;
+		} else {
+			error = `Error: ${trimmed}`;
+		}
   }
 
   const plusLines = countCharInString(error, '\n') + 1 - MAX_RENDERED_LINES
 
   return (
-    <MessageResponse>
-      <Box flexDirection="column">
-        <Text color="error">
-          {stripUnderlineAnsi(
-            verbose
-              ? error
-              : error.split('\n').slice(0, MAX_RENDERED_LINES).join('\n'),
-          )}
-        </Text>
-        {!verbose && plusLines > 0 && (
-          // The careful <Text> layout is a workaround for the dim-bold
-          // rendering bug
-          <Box>
-            <Text dimColor>
-              … +{plusLines} {plusLines === 1 ? 'line' : 'lines'} (
-            </Text>
-            <Text dimColor bold>
-              {transcriptShortcut}
-            </Text>
-            <Text> </Text>
-            <Text dimColor>to see all)</Text>
-          </Box>
-        )}
-      </Box>
-    </MessageResponse>
-  )
+		<MessageResponse>
+			<Box flexDirection="column">
+				<Text color="error">
+					{stripUnderlineAnsi(
+						verbose
+							? error
+							: error
+									.split("\n")
+									.slice(0, MAX_RENDERED_LINES)
+									.join("\n"),
+					)}
+				</Text>
+				{!verbose && plusLines > 0 && (
+					// 仔细的 <Text> 布局是 dim-bold 渲染 bug 的变通方法
+					<Box>
+						<Text dimColor>
+							… +{plusLines} {plusLines === 1 ? "line" : "lines"}{" "}
+							(
+						</Text>
+						<Text dimColor bold>
+							{transcriptShortcut}
+						</Text>
+						<Text> </Text>
+						<Text dimColor>to see all)</Text>
+					</Box>
+				)}
+			</Box>
+		</MessageResponse>
+  );
 }

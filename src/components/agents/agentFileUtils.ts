@@ -15,7 +15,7 @@ import { getErrnoCode } from '../../utils/errors.js'
 import { AGENT_PATHS } from './types.js'
 
 /**
- * Formats agent data as markdown file content
+ * 将 agent 数据格式化为 markdown 文件内容
  */
 export function formatAgentAsMarkdown(
   agentType: string,
@@ -27,16 +27,16 @@ export function formatAgentAsMarkdown(
   memory?: AgentMemoryScope,
   effort?: EffortValue,
 ): string {
-  // For YAML double-quoted strings, we need to escape:
-  // - Backslashes: \ -> \\
-  // - Double quotes: " -> \"
-  // - Newlines: \n -> \\n (so yaml reads it as literal backslash-n, not newline)
+  // 对于 YAML 双引号字符串，需要转义：
+  // - 反斜杠：\ -> \\
+  // - 双引号：" -> \"
+  // - 换行符：\n -> \\n（使 yaml 将其读取为字面量反斜杠-n，而非换行符）
   const escapedWhenToUse = whenToUse
     .replace(/\\/g, '\\\\') // Escape backslashes first
     .replace(/"/g, '\\"') // Escape double quotes
     .replace(/\n/g, '\\\\n') // Escape newlines as \\n so yaml preserves them as \n
 
-  // Omit tools field entirely when tools is undefined or ['*'] (all tools allowed)
+  // 当 tools 为 undefined 或 ['*']（允许所有工具）时，完全省略 tools 字段
   const isAllTools =
     tools === undefined || (tools.length === 1 && tools[0] === '*')
   const toolsLine = isAllTools ? '' : `\ntools: ${tools.join(', ')}`
@@ -55,7 +55,7 @@ ${systemPrompt}
 }
 
 /**
- * Gets the directory path for an agent location
+ * 获取 agent 位置的目录路径
  */
 function getAgentDirectoryPath(location: SettingSource): string {
   switch (location) {
@@ -86,8 +86,8 @@ function getRelativeAgentDirectoryPath(location: SettingSource): string {
 }
 
 /**
- * Gets the file path for a new agent based on its name
- * Used when creating new agent files
+ * 根据名称获取新 agent 的文件路径
+ * 创建新 agent 文件时使用
  */
 export function getNewAgentFilePath(agent: {
   source: SettingSource
@@ -98,8 +98,8 @@ export function getNewAgentFilePath(agent: {
 }
 
 /**
- * Gets the actual file path for an agent (handles filename vs agentType mismatch)
- * Always use this for existing agents to get their real file location
+ * 获取 agent 的实际文件路径（处理文件名与 agentType 不匹配的情况）
+ * 对于已有 agent，始终使用此方法获取其真实文件位置
  */
 export function getActualAgentFilePath(agent: AgentDefinition): string {
   if (agent.source === 'built-in') {
@@ -115,8 +115,8 @@ export function getActualAgentFilePath(agent: AgentDefinition): string {
 }
 
 /**
- * Gets the relative file path for a new agent based on its name
- * Used for displaying where new agent files will be created
+ * 根据名称获取新 agent 的相对文件路径
+ * 用于显示新 agent 文件将被创建的位置
  */
 export function getNewRelativeAgentFilePath(agent: {
   source: SettingSource | 'built-in'
@@ -130,7 +130,7 @@ export function getNewRelativeAgentFilePath(agent: {
 }
 
 /**
- * Gets the actual relative file path for an agent (handles filename vs agentType mismatch)
+ * 获取 agent 的实际相对文件路径（处理文件名与 agentType 不匹配的情况）
  */
 export function getActualRelativeAgentFilePath(agent: AgentDefinition): string {
   if (isBuiltInAgent(agent)) {
@@ -149,7 +149,7 @@ export function getActualRelativeAgentFilePath(agent: AgentDefinition): string {
 }
 
 /**
- * Ensures the directory for an agent location exists
+ * 确保 agent 位置的目录存在
  */
 async function ensureAgentDirectoryExists(
   source: SettingSource,
@@ -160,8 +160,8 @@ async function ensureAgentDirectoryExists(
 }
 
 /**
- * Saves an agent to the filesystem
- * @param checkExists - If true, throws error if file already exists
+ * 将 agent 保存到文件系统
+ * @param checkExists - 如果为 true，文件已存在时抛出错误
  */
 export async function saveAgentToFile(
   source: SettingSource | 'built-in',
@@ -203,7 +203,7 @@ export async function saveAgentToFile(
 }
 
 /**
- * Updates an existing agent file
+ * 更新已有的 agent 文件
  */
 export async function updateAgentFile(
   agent: AgentDefinition,
@@ -236,7 +236,7 @@ export async function updateAgentFile(
 }
 
 /**
- * Deletes an agent file
+ * 删除 agent 文件
  */
 export async function deleteAgentFromFile(
   agent: AgentDefinition,

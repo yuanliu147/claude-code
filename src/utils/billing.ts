@@ -67,7 +67,7 @@ export function hasClaudeAiBillingAccess(): boolean {
     return true
   }
 
-  // Team/Enterprise - check for admin or billing roles
+  // 团队/企业 - 检查管理员或计费角色
   const config = getGlobalConfig()
   const orgRole = config.oauthAccount?.organizationRole
 

@@ -25,66 +25,66 @@ export function AutoUpdaterWrapper({
   showSuccessMessage,
   verbose,
 }: Props): React.ReactNode {
-  const [useNativeInstaller, setUseNativeInstaller] = React.useState<
-    boolean | null
-  >(null)
-  const [isPackageManager, setIsPackageManager] = React.useState<
-    boolean | null
-  >(null)
+	const [useNativeInstaller, setUseNativeInstaller] = React.useState<
+		boolean | null
+	>(null);
+	const [isPackageManager, setIsPackageManager] = React.useState<
+		boolean | null
+	>(null);
 
-  React.useEffect(() => {
-    async function checkInstallation() {
-      // Skip installation type detection if auto-updates are disabled (ant-only)
-      // This avoids potentially slow package manager detection (spawnSync calls)
-      if (
-        feature('SKIP_DETECTION_WHEN_AUTOUPDATES_DISABLED') &&
-        isAutoUpdaterDisabled()
-      ) {
-        logForDebugging(
-          'AutoUpdaterWrapper: Skipping detection, auto-updates disabled',
-        )
-        return
-      }
+	React.useEffect(() => {
+		async function checkInstallation() {
+			// 如果自动更新被禁用则跳过安装类型检测（ant 专用）
+			// 这可以避免潜在的慢速包管理器检测（spawnSync 调用）
+			if (
+				feature("SKIP_DETECTION_WHEN_AUTOUPDATES_DISABLED") &&
+				isAutoUpdaterDisabled()
+			) {
+				logForDebugging(
+					"AutoUpdaterWrapper: Skipping detection, auto-updates disabled",
+				);
+				return;
+			}
 
-      const installationType = await getCurrentInstallationType()
-      logForDebugging(
-        `AutoUpdaterWrapper: Installation type: ${installationType}`,
-      )
-      setUseNativeInstaller(installationType === 'native')
-      setIsPackageManager(installationType === 'package-manager')
-    }
+			const installationType = await getCurrentInstallationType();
+			logForDebugging(
+				`AutoUpdaterWrapper: Installation type: ${installationType}`,
+			);
+			setUseNativeInstaller(installationType === "native");
+			setIsPackageManager(installationType === "package-manager");
+		}
 
-    void checkInstallation()
-  }, [])
+		void checkInstallation();
+	}, []);
 
-  // Don't render until we know the installation type
-  if (useNativeInstaller === null || isPackageManager === null) {
-    return null
-  }
+	// 在知道安装类型之前不渲染
+	if (useNativeInstaller === null || isPackageManager === null) {
+		return null;
+	}
 
-  if (isPackageManager) {
-    return (
-      <PackageManagerAutoUpdater
-        verbose={verbose}
-        onAutoUpdaterResult={onAutoUpdaterResult}
-        autoUpdaterResult={autoUpdaterResult}
-        isUpdating={isUpdating}
-        onChangeIsUpdating={onChangeIsUpdating}
-        showSuccessMessage={showSuccessMessage}
-      />
-    )
-  }
+	if (isPackageManager) {
+		return (
+			<PackageManagerAutoUpdater
+				verbose={verbose}
+				onAutoUpdaterResult={onAutoUpdaterResult}
+				autoUpdaterResult={autoUpdaterResult}
+				isUpdating={isUpdating}
+				onChangeIsUpdating={onChangeIsUpdating}
+				showSuccessMessage={showSuccessMessage}
+			/>
+		);
+	}
 
-  const Updater = useNativeInstaller ? NativeAutoUpdater : AutoUpdater
+	const Updater = useNativeInstaller ? NativeAutoUpdater : AutoUpdater;
 
-  return (
-    <Updater
-      verbose={verbose}
-      onAutoUpdaterResult={onAutoUpdaterResult}
-      autoUpdaterResult={autoUpdaterResult}
-      isUpdating={isUpdating}
-      onChangeIsUpdating={onChangeIsUpdating}
-      showSuccessMessage={showSuccessMessage}
-    />
-  )
+	return (
+		<Updater
+			verbose={verbose}
+			onAutoUpdaterResult={onAutoUpdaterResult}
+			autoUpdaterResult={autoUpdaterResult}
+			isUpdating={isUpdating}
+			onChangeIsUpdating={onChangeIsUpdating}
+			showSuccessMessage={showSuccessMessage}
+		/>
+	);
 }

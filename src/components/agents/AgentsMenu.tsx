@@ -48,7 +48,7 @@ export function AgentsMenu({ tools, onExit }: Props): React.ReactNode {
   const { allAgents, activeAgents: agents } = agentDefinitions
   const [changes, setChanges] = useState<string[]>([])
 
-  // Get MCP tools from app state and merge with local tools
+  // 从应用状态获取 MCP 工具并与本地工具合并
   const mergedTools = useMergedTools(tools, mcpTools, toolPermissionContext)
 
   useExitOnCtrlCDWithKeybindings()
@@ -98,7 +98,7 @@ export function AgentsMenu({ tools, onExit }: Props): React.ReactNode {
           ...prev,
           `Deleted agent: ${chalk.bold(agent.agentType)}`,
         ])
-        // Go back to the agents list after deletion
+        // 删除后返回 agent 列表
         setModeState({ mode: 'list-agents', source: 'all' })
       } catch (error) {
         logError(toError(error))
@@ -107,7 +107,7 @@ export function AgentsMenu({ tools, onExit }: Props): React.ReactNode {
     [setAppState],
   )
 
-  // Render based on mode
+      // 根据模式渲染
   switch (modeState.mode) {
     case 'list-agents': {
       const agentsToShow =
@@ -123,7 +123,7 @@ export function AgentsMenu({ tools, onExit }: Props): React.ReactNode {
             ]
           : agentsBySource[modeState.source]
 
-      // Resolve overrides and filter to the agents we want to show
+      // 解析覆盖关系并过滤出需要显示的 agent
       const allResolved = resolveAgentOverrides(agentsToShow, agents)
       const resolvedAgents: ResolvedAgent[] = allResolved
 
@@ -167,7 +167,7 @@ export function AgentsMenu({ tools, onExit }: Props): React.ReactNode {
       )
 
     case 'agent-menu': {
-      // Always use fresh agent data
+      // 始终使用最新的 agent 数据
       const freshAgent = allAgents.find(
         a =>
           a.agentType === modeState.agent.agentType &&
@@ -245,7 +245,7 @@ export function AgentsMenu({ tools, onExit }: Props): React.ReactNode {
     }
 
     case 'view-agent': {
-      // Always use fresh agent data from allAgents
+      // 始终使用来自 allAgents 的最新 agent 数据
       const freshAgent = allAgents.find(
         a =>
           a.agentType === modeState.agent.agentType &&

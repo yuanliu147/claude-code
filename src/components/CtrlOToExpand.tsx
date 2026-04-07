@@ -6,9 +6,9 @@ import { useShortcutDisplay } from '../keybindings/useShortcutDisplay.js'
 import { KeyboardShortcutHint } from '@anthropic/ink'
 import { InVirtualListContext } from './messageActions.js'
 
-// Context to track if we're inside a sub agent
-// Similar to MessageResponseContext, this helps us avoid showing
-// too many "(ctrl+o to expand)" hints in sub agent output
+// 用于追踪是否在子代理中的上下文
+// 类似于 MessageResponseContext，这帮助我们避免在子代理输出中显示
+// 太多 "(ctrl+o to expand)" 提示
 const SubAgentContext = React.createContext(false)
 
 export function SubAgentProvider({

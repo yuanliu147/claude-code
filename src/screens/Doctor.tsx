@@ -250,7 +250,7 @@ export function Doctor({ onDone }: Props): React.ReactNode {
     )
   }
 
-  // Format the diagnostic output according to spec
+  // 根据规范格式化诊断输出
   return (
     <Pane>
       <Box flexDirection="column">

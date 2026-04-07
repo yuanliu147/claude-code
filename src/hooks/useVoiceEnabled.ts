@@ -6,15 +6,15 @@ import {
 } from '../voice/voiceModeEnabled.js'
 
 /**
- * Combines user intent (settings.voiceEnabled) with auth + GB kill-switch.
- * Only the auth half is memoized on authVersion — it's the expensive one
- * (cold getClaudeAIOAuthTokens memoize → sync `security` spawn, ~60ms/call,
- * ~180ms total in profile v5 when token refresh cleared the cache mid-session).
- * GB is a cheap cached-map lookup and stays outside the memo so a mid-session
- * kill-switch flip still takes effect on the next render.
+ * 结合用户意图（settings.voiceEnabled）与 auth + GB kill-switch。
+ * 只有 auth 部分在 authVersion 上 memoized — 它是昂贵的
+ * （冷 `security` spawn 的 getClaudeAIOAuthTokens memoize，~60ms/调用，
+ * 在 token 刷新清除缓存时会话期间约 ~180ms）。
+ * GB 是一个廉价的缓存映射查找，放在 memo 外面，
+ * 以便会话中的 kill-switch 翻转仍然在下一次渲染时生效。
  *
- * authVersion bumps on /login only. Background token refresh leaves it alone
- * (user is still authed), so the auth memo stays correct without re-eval.
+ * authVersion 仅在 /login 时增加。后台 token 刷新不触动它
+ * （用户仍然已认证），所以 auth memo 保持正确而无需重新评估。
  */
 export function useVoiceEnabled(): boolean {
   const userIntent = useAppState(s => s.settings.voiceEnabled === true)

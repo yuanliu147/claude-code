@@ -17,21 +17,21 @@ export function ClaudeMdExternalIncludesDialog({
   externalIncludes,
 }: Props): React.ReactNode {
   React.useEffect(() => {
-    // Log when dialog is shown
-    logEvent('tengu_claude_md_includes_dialog_shown', {})
+		// 对话框显示时记录日志
+		logEvent("tengu_claude_md_includes_dialog_shown", {});
   }, [])
 
   const handleSelection = useCallback(
     (value: 'yes' | 'no') => {
       if (value === 'no') {
-        logEvent('tengu_claude_md_external_includes_dialog_declined', {})
-        // Mark that we've shown the dialog but it was declined
-        saveCurrentProjectConfig(current => ({
-          ...current,
-          hasClaudeMdExternalIncludesApproved: false,
-          hasClaudeMdExternalIncludesWarningShown: true,
-        }))
-      } else {
+			logEvent("tengu_claude_md_external_includes_dialog_declined", {});
+			// 标记对话框已显示但被拒绝
+			saveCurrentProjectConfig((current) => ({
+				...current,
+				hasClaudeMdExternalIncludesApproved: false,
+				hasClaudeMdExternalIncludesWarningShown: true,
+			}));
+		} else {
         logEvent('tengu_claude_md_external_includes_dialog_accepted', {})
         saveCurrentProjectConfig(current => ({
           ...current,

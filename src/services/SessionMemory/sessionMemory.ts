@@ -1,7 +1,7 @@
 /**
- * Session Memory automatically maintains a markdown file with notes about the current conversation.
- * It runs periodically in the background using a forked subagent to extract key information
- * without interrupting the main conversation flow.
+ * Session Memory 自动维护一个包含当前对话笔记的 markdown 文件。
+ * 它在后台周期性运行，使用分叉的子代理来提取关键信息，
+ * 而不会中断主对话流程。
  */
 
 import { writeFile } from 'fs/promises'

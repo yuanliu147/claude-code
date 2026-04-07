@@ -12,13 +12,13 @@ export function ColorStep(): ReactNode {
   const { goNext, goBack, updateWizardData, wizardData } =
     useWizard<AgentWizardData>()
 
-  // Handle escape key - ColorPicker handles its own escape internally
+  // 处理 Escape 键 - ColorPicker 内部自行处理其 escape
   useKeybinding('confirm:no', goBack, { context: 'Confirmation' })
 
   const handleConfirm = (color?: string): void => {
     updateWizardData({
       selectedColor: color,
-      // Prepare final agent for confirmation
+      // 准备最终 agent 以供确认
       finalAgent: {
         agentType: wizardData.agentType!,
         whenToUse: wizardData.whenToUse!,

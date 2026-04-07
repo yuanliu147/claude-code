@@ -1,47 +1,47 @@
 /**
- * Deterministic Agent ID System
+ * 确定性的 Agent ID 系统
  *
- * This module provides helper functions for formatting and parsing deterministic
- * agent IDs used in the swarm/teammate system.
+ * 此模块提供用于格式化和解析在 swarm/teammate 系统中使用的确定性
+ * agent ID 的辅助函数。
  *
- * ## ID Formats
+ * ## ID 格式
  *
- * **Agent IDs**: `agentName@teamName`
- * - Example: `team-lead@my-project`, `researcher@my-project`
- * - The @ symbol acts as a separator between agent name and team name
+ * **Agent ID**：`agentName@teamName`
+ * - 示例：`team-lead@my-project`、`researcher@my-project`
+ * - @ 符号用作 agent 名称和团队名称之间的分隔符
  *
- * **Request IDs**: `{requestType}-{timestamp}@{agentId}`
- * - Example: `shutdown-1702500000000@researcher@my-project`
- * - Used for shutdown requests, plan approvals, etc.
+ * **请求 ID**：`{requestType}-{timestamp}@{agentId}`
+ * - 示例：`shutdown-1702500000000@researcher@my-project`
+ * - 用于关闭请求、计划批准等。
  *
- * ## Why Deterministic IDs?
+ * ## 为什么使用确定性 ID？
  *
- * Deterministic IDs provide several benefits:
+ * 确定性 ID 有几个好处：
  *
- * 1. **Reproducibility**: The same agent spawned with the same name in the same team
- *    always gets the same ID, enabling reconnection after crashes/restarts.
+ * 1. **可重现性**：在同一团队中以相同名称生成的相同 agent
+ *    总是获得相同的 ID，能够在崩溃/重启后重新连接。
  *
- * 2. **Human-readable**: IDs are meaningful and debuggable (e.g., `tester@my-project`).
+ * 2. **人类可读**：ID 有意义且可调试（例如 `tester@my-project`）。
  *
- * 3. **Predictable**: Team leads can compute a teammate's ID without looking it up,
- *    simplifying message routing and task assignment.
+ * 3. **可预测**：团队负责人可以计算 teammate 的 ID 而无需查找，
+ *    简化消息路由和任务分配。
  *
- * ## Constraints
+ * ## 约束
  *
- * - Agent names must NOT contain `@` (it's used as the separator)
- * - Use `sanitizeAgentName()` from TeammateTool.ts to strip @ from names
+ * - Agent 名称不得包含 `@`（它用作分隔符）
+ * - 使用 `sanitizeAgentName()`（来自 TeammateTool.ts）从名称中剥离 @
  */
 
 /**
- * Formats an agent ID in the format `agentName@teamName`.
+ * 格式化 agent ID，格式为 `agentName@teamName`。
  */
 export function formatAgentId(agentName: string, teamName: string): string {
   return `${agentName}@${teamName}`
 }
 
 /**
- * Parses an agent ID into its components.
- * Returns null if the ID doesn't contain the @ separator.
+ * 将 agent ID 解析为其组成部分。
+ * 如果 ID 不包含 @ 分隔符则返回 null。
  */
 export function parseAgentId(
   agentId: string,
@@ -57,7 +57,7 @@ export function parseAgentId(
 }
 
 /**
- * Formats a request ID in the format `{requestType}-{timestamp}@{agentId}`.
+ * 格式化请求 ID，格式为 `{requestType}-{timestamp}@{agentId}`。
  */
 export function generateRequestId(
   requestType: string,
@@ -68,8 +68,8 @@ export function generateRequestId(
 }
 
 /**
- * Parses a request ID into its components.
- * Returns null if the request ID doesn't match the expected format.
+ * 将请求 ID 解析为其组成部分。
+ * 如果请求 ID 不匹配预期格式则返回 null。
  */
 export function parseRequestId(
   requestId: string,

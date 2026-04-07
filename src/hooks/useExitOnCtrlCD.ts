@@ -19,28 +19,28 @@ type UseKeybindingsHook = (
 ) => void
 
 /**
- * Handle ctrl+c and ctrl+d for exiting the application.
+ * 处理 ctrl+c 和 ctrl+d 以退出应用程序。
  *
- * Uses a time-based double-press mechanism:
- * - First press: Shows "Press X again to exit" message
- * - Second press within timeout: Exits the application
+ * 使用基于时间的双击机制：
+ * - 第一次点击：显示"再次按 X 退出"消息
+ * - 超时内的第二次点击：退出应用程序
  *
- * Note: We use time-based double-press rather than the chord system because
- * we want the first ctrl+c to also trigger interrupt (handled elsewhere).
- * The chord system would prevent the first press from firing any action.
+ * 注意：我们使用基于时间的双击而不是和弦系统，因为我们希望
+ * 第一次 ctrl+c 也能触发中断（在其他地方处理）。
+ * 和弦系统会阻止第一次点击触发任何操作。
  *
- * These keys are hardcoded and cannot be rebound via keybindings.json.
+ * 这些键是硬编码的，不能通过 keybindings.json 重新绑定。
  *
- * @param useKeybindingsHook - The useKeybindings hook to use for registering handlers
- *                            (dependency injection to avoid import cycles)
- * @param onInterrupt - Optional callback for features to handle interrupt (ctrl+c).
- *                      Return true if handled, false to fall through to double-press exit.
- * @param onExit - Optional custom exit handler
- * @param isActive - Whether the keybinding is active (default true). Set false
- *                   while an embedded TextInput is focused — TextInput's own
- *                   ctrl+c/d handlers will manage cancel/exit, and Dialog's
- *                   handler would otherwise double-fire (child useInput runs
- *                   before parent useKeybindings, so both see every keypress).
+ * @param useKeybindingsHook - 用于注册处理程序的 useKeybindings hook
+ *                            （依赖注入以避免导入循环）
+ * @param onInterrupt - 功能处理中断的可选回调（ctrl+c）。
+ *                      如果已处理返回 true，false 则继续双击退出。
+ * @param onExit - 可选的自定义退出处理程序
+ * @param isActive - 键绑定是否激活（默认为 true）。当嵌入的 TextInput
+ *                   获得焦点时设置为 false — TextInput 自己的
+ *                   ctrl+c/d 处理程序将管理取消/退出，而 Dialog 的
+ *                   处理程序否则会双重触发（子 useInput 在
+ *                   父 useKeybindings 之前运行，所以两者都看到每个按键）。
  */
 export function useExitOnCtrlCD(
   useKeybindingsHook: UseKeybindingsHook,

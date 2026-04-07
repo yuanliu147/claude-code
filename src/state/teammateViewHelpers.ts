@@ -109,9 +109,9 @@ export function exitTeammateView(
 }
 
 /**
- * Context-sensitive x: running → abort, terminal → dismiss.
- * Dismiss sets evictAfter=0 so the filter hides immediately.
- * If viewing the dismissed agent, also exits to leader.
+ * 根据上下文敏感的 x：running → abort，terminal → dismiss。
+ * Dismiss 将 evictAfter=0 以便过滤器立即隐藏。
+ * 如果正在查看被关闭的 agent，也退出到 leader。
  */
 export function stopOrDismissAgent(
   taskId: string,

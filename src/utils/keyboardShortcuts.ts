@@ -1,6 +1,5 @@
-// Special characters that macOS Option+key produces, mapped to their
-// keybinding equivalents. Used to detect Option+key shortcuts on macOS
-// terminals that don't have "Option as Meta" enabled.
+// macOS Option+按键产生的特殊字符，映射到等效的快捷键。
+// 用于在未启用 "Option as Meta" 的 macOS 终端上检测 Option+按键快捷键。
 export const MACOS_OPTION_SPECIAL_CHARS = {
   '†': 'alt+t', // Option+T -> thinking toggle
   π: 'alt+p', // Option+P -> model picker

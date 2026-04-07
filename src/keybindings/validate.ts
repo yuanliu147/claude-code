@@ -477,7 +477,7 @@ export function formatWarnings(warnings: KeybindingWarning[]): string {
 
   if (errors.length > 0) {
     lines.push(
-      `Found ${errors.length} keybinding ${plural(errors.length, 'error')}:`,
+      `发现 ${errors.length} 个 keybinding ${plural(errors.length, 'error')}：`,
     )
     for (const e of errors) {
       lines.push(formatWarning(e))
@@ -487,7 +487,7 @@ export function formatWarnings(warnings: KeybindingWarning[]): string {
   if (warns.length > 0) {
     if (lines.length > 0) lines.push('')
     lines.push(
-      `Found ${warns.length} keybinding ${plural(warns.length, 'warning')}:`,
+      `发现 ${warns.length} 个 keybinding ${plural(warns.length, 'warning')}：`,
     )
     for (const w of warns) {
       lines.push(formatWarning(w))

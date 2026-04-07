@@ -229,7 +229,7 @@ export const KeybindingsSchema = lazySchema(() =>
 )
 
 /**
- * TypeScript types derived from the schema.
+ * 从 schema 派生的 TypeScript 类型。
  */
 export type KeybindingsSchemaType = z.infer<
   ReturnType<typeof KeybindingsSchema>

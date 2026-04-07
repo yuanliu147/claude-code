@@ -41,7 +41,7 @@ export function AgentProgressLine({
   const treeChar = isLast ? '└─' : '├─'
   const isBackgrounded = isAsync && isResolved
 
-  // Determine the status text
+  // 确定状态文本
   const getStatusText = (): string => {
     if (!isResolved) {
       return lastToolInfo || 'Initializing…'

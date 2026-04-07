@@ -78,13 +78,12 @@ import { checkPathConstraints } from './pathValidation.js'
 import { checkSedConstraints } from './sedValidation.js'
 import { shouldUseSandbox } from './shouldUseSandbox.js'
 
-// DCE cliff: Bun's feature() evaluator has a per-function complexity budget.
-// bashToolHasPermission is right at the limit. `import { X as Y }` aliases
-// inside the import block count toward this budget; when they push it over
-// the threshold Bun can no longer prove feature('BASH_CLASSIFIER') is a
-// constant and silently evaluates the ternaries to `false`, dropping every
-// pendingClassifierCheck spread. Keep aliases as top-level const rebindings
-// instead. (See also the comment on checkSemanticsDeny below.)
+// DCE 悬崖：Bun 的 feature() 求值器每个函数有复杂度预算。
+// bashToolHasPermission 正好在限制上。import 块内的 `import { X as Y }` 别名
+// 计入这个预算；当它们超过阈值时，Bun 无法再证明 feature('BASH_CLASSIFIER') 是
+// 常量，并静默地将三元表达式求值为 `false`，丢弃每一个
+// spread 的 pendingClassifierCheck。请改用顶层 const 重绑定
+// 作为别名。（另见下面 checkSemanticsDeny 上的注释。）
 const bashCommandIsSafeAsync = bashCommandIsSafeAsync_DEPRECATED
 const splitCommand = splitCommand_DEPRECATED
 
@@ -92,14 +91,14 @@ const splitCommand = splitCommand_DEPRECATED
 // skip safe env vars before extracting the command name.
 const ENV_VAR_ASSIGN_RE = /^[A-Za-z_]\w*=/
 
-// CC-643: On complex compound commands, splitCommand_DEPRECATED can produce a
-// very large subcommands array (possible exponential growth; #21405's ReDoS fix
-// may have been incomplete). Each subcommand then runs tree-sitter parse +
-// ~20 validators + logEvent (bashSecurity.ts), and with memoized metadata the
-// resulting microtask chain starves the event loop — REPL freeze at 100% CPU,
-// strace showed /proc/self/stat reads at ~127Hz with no epoll_wait. Fifty is
-// generous: legitimate user commands don't split that wide. Above the cap we
-// fall back to 'ask' (safe default — we can't prove safety, so we prompt).
+// CC-643：在复杂的复合命令上，splitCommand_DEPRECATED 可能产生
+// 非常大的 subcommands 数组（可能的指数增长；#21405 的 ReDoS 修复
+// 可能不完整）。然后每个子命令运行 tree-sitter 解析 +
+// ~20 个验证器 + logEvent (bashSecurity.ts)，并且使用记忆化元数据时，
+// 生成的微任务链会使事件循环饿死 —— REPL 在 100% CPU 冻结，
+// strace 显示 /proc/self/stat 读取在 ~127Hz，没有 epoll_wait。
+// 50 是慷慨的：合法的用户命令不会分割那么宽。超过上限时我们
+// 回退到 'ask'（安全默认值 —— 我们无法证明安全，所以提示）。
 export const MAX_SUBCOMMANDS_FOR_SECURITY_CHECK = 50
 
 // GH#11380: Cap the number of per-subcommand rules suggested for compound

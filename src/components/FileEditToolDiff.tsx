@@ -35,17 +35,16 @@ type DiffData = {
 }
 
 export function FileEditToolDiff(props: Props): React.ReactNode {
-  // Snapshot on mount — the diff must stay consistent even if the file changes
-  // while the dialog is open. useMemo on props.edits would re-read the file on
-  // every render because callers pass fresh array literals.
-  const [dataPromise] = useState(() =>
-    loadDiffData(props.file_path, props.edits),
-  )
-  return (
-    <Suspense fallback={<DiffFrame placeholder />}>
-      <DiffBody promise={dataPromise} file_path={props.file_path} />
-    </Suspense>
-  )
+	// 挂载时快照 — 即使对话框打开时文件发生变化，diff 也必须保持一致。
+	// 对 props.edits 使用 useMemo 会在每次渲染时重新读取文件，因为调用者传递新鲜的数组字面量。
+	const [dataPromise] = useState(() =>
+		loadDiffData(props.file_path, props.edits),
+	);
+	return (
+		<Suspense fallback={<DiffFrame placeholder />}>
+			<DiffBody promise={dataPromise} file_path={props.file_path} />
+		</Suspense>
+	);
 }
 
 function DiffBody({
@@ -94,64 +93,71 @@ function DiffFrame({
 }
 
 async function loadDiffData(
-  file_path: string,
-  edits: FileEdit[],
+	file_path: string,
+	edits: FileEdit[],
 ): Promise<DiffData> {
-  const valid = edits.filter(e => e.old_string != null && e.new_string != null)
-  const single = valid.length === 1 ? valid[0]! : undefined
+	const valid = edits.filter(
+		(e) => e.old_string != null && e.new_string != null,
+	);
+	const single = valid.length === 1 ? valid[0]! : undefined;
 
-  // SedEditPermissionRequest passes the entire file as old_string. Scanning for
-  // a needle ≥ CHUNK_SIZE allocates O(needle) for the overlap buffer — skip the
-  // file read entirely and diff the inputs we already have.
-  if (single && single.old_string.length >= CHUNK_SIZE) {
-    return diffToolInputsOnly(file_path, [single])
-  }
+	// SedEditPermissionRequest 传递整个文件作为 old_string。扫描
+	// needle ≥ CHUNK_SIZE 会为重叠缓冲区分配 O(needle) — 完全跳过
+	// 文件读取，直接 diff 我们已有的输入。
+	if (single && single.old_string.length >= CHUNK_SIZE) {
+		return diffToolInputsOnly(file_path, [single]);
+	}
 
-  try {
-    const handle = await openForScan(file_path)
-    if (handle === null) return diffToolInputsOnly(file_path, valid)
-    try {
-      // Multi-edit and empty old_string genuinely need full-file for sequential
-      // replacements — structuredPatch needs before/after strings. replace_all
-      // routes through the chunked path below (shows first-occurrence window;
-      // matches within the slice still replace via edit.replace_all).
-      if (!single || single.old_string === '') {
-        const file = await readCapped(handle)
-        if (file === null) return diffToolInputsOnly(file_path, valid)
-        const normalized = valid.map(e => normalizeEdit(file, e))
-        return {
-          patch: getPatchForDisplay({
-            filePath: file_path,
-            fileContents: file,
-            edits: normalized,
-          }),
-          firstLine: firstLineOf(file),
-          fileContent: file,
-        }
-      }
+	try {
+		const handle = await openForScan(file_path);
+		if (handle === null) return diffToolInputsOnly(file_path, valid);
+		try {
+			// 多编辑和空 old_string 真正需要完整文件进行顺序
+			// 替换 — structuredPatch 需要 before/after 字符串。replace_all
+			// 通过下面的分块路径路由（显示第一次出现的窗口；
+			// 在切片内的匹配仍然通过 edit.replace_all 替换）。
+			if (!single || single.old_string === "") {
+				const file = await readCapped(handle);
+				if (file === null) return diffToolInputsOnly(file_path, valid);
+				const normalized = valid.map((e) => normalizeEdit(file, e));
+				return {
+					patch: getPatchForDisplay({
+						filePath: file_path,
+						fileContents: file,
+						edits: normalized,
+					}),
+					firstLine: firstLineOf(file),
+					fileContent: file,
+				};
+			}
 
-      const ctx = await scanForContext(handle, single.old_string, CONTEXT_LINES)
-      if (ctx.truncated || ctx.content === '') {
-        return diffToolInputsOnly(file_path, [single])
-      }
-      const normalized = normalizeEdit(ctx.content, single)
-      const hunks = getPatchForDisplay({
-        filePath: file_path,
-        fileContents: ctx.content,
-        edits: [normalized],
-      })
-      return {
-        patch: adjustHunkLineNumbers(hunks, ctx.lineOffset - 1),
-        firstLine: ctx.lineOffset === 1 ? firstLineOf(ctx.content) : null,
-        fileContent: ctx.content,
-      }
-    } finally {
-      await handle.close()
-    }
-  } catch (e) {
-    logError(e as Error)
-    return diffToolInputsOnly(file_path, valid)
-  }
+			const ctx = await scanForContext(
+				handle,
+				single.old_string,
+				CONTEXT_LINES,
+			);
+			if (ctx.truncated || ctx.content === "") {
+				return diffToolInputsOnly(file_path, [single]);
+			}
+			const normalized = normalizeEdit(ctx.content, single);
+			const hunks = getPatchForDisplay({
+				filePath: file_path,
+				fileContents: ctx.content,
+				edits: [normalized],
+			});
+			return {
+				patch: adjustHunkLineNumbers(hunks, ctx.lineOffset - 1),
+				firstLine:
+					ctx.lineOffset === 1 ? firstLineOf(ctx.content) : null,
+				fileContent: ctx.content,
+			};
+		} finally {
+			await handle.close();
+		}
+	} catch (e) {
+		logError(e as Error);
+		return diffToolInputsOnly(file_path, valid);
+	}
 }
 
 function diffToolInputsOnly(filePath: string, edits: FileEdit[]): DiffData {

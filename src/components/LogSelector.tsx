@@ -61,8 +61,8 @@ function normalizeAndTruncateToWidth(text: string, maxWidth: number): string {
   return truncateToWidth(normalized, maxWidth)
 }
 
-// Width of prefixes that TreeSelect will add
-const PARENT_PREFIX_WIDTH = 2 // '▼ ' or '▶ '
+// TreeSelect 将添加的前缀宽度
+const PARENT_PREFIX_WIDTH = 2 // '▼ ' 或 '▶ '
 const CHILD_PREFIX_WIDTH = 4 // '  ▸ '
 
 // Deep search constants
@@ -128,7 +128,7 @@ function buildLogLabel(
     forkCount = 0,
   } = options || {}
 
-  // TreeSelect will add the prefix, so we just need to account for its width
+  // TreeSelect 会添加前缀，所以我们只需要考虑它的宽度
   const prefixWidth =
     isGroupHeader && forkCount > 0
       ? PARENT_PREFIX_WIDTH

@@ -4,16 +4,16 @@ import { Box, Dialog, Link, Text } from '@anthropic/ink'
 import { updateSettingsForSource } from '../utils/settings/settings.js'
 import { Select } from './CustomSelect/index.js'
 
-// NOTE: This copy is legally reviewed — do not modify without Legal team approval.
+// 注意：此文案已通过法务审核 - 未经法务团队批准请勿修改。
 export const AUTO_MODE_DESCRIPTION =
   "Auto mode lets Claude handle permission prompts automatically — Claude checks each tool call for risky actions and prompt injection before executing. Actions Claude identifies as safe are executed, while actions Claude identifies as risky are blocked and Claude may try a different approach. Ideal for long-running tasks. Sessions are slightly more expensive. Claude can make mistakes that allow harmful commands to run, it's recommended to only use in isolated environments. Shift+Tab to change mode."
 
 type Props = {
-  onAccept(): void
-  onDecline(): void
-  // Startup gate: decline exits the process, so relabel accordingly.
-  declineExits?: boolean
-}
+	onAccept(): void;
+	onDecline(): void;
+	// 启动门控：拒绝时退出进程，因此相应地重新标记标签。
+	declineExits?: boolean;
+};
 
 export function AutoModeOptInDialog({
   onAccept,

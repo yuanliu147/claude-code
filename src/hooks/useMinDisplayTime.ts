@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 
 /**
- * Throttles a value so each distinct value stays visible for at least `minMs`.
- * Prevents fast-cycling progress text from flickering past before it's readable.
+ * 节流值，以便每个不同的值至少保持可见 `minMs`。
+ * 防止快速循环的进度文本在可读之前闪烁过去。
  *
- * Unlike debounce (wait for quiet) or throttle (limit rate), this guarantees
- * each value gets its minimum screen time before being replaced.
+ * 与 debounce（等待安静）或 throttle（限制速率）不同，这保证了
+ * 每个值在被替换之前都有其最低屏幕时间。
  */
 export function useMinDisplayTime<T>(value: T, minMs: number): T {
   const [displayed, setDisplayed] = useState(value)

@@ -1,20 +1,20 @@
 /**
- * Analytics service - public API for event logging
+ * Analytics 服务 - 事件日志记录的公共 API
  *
- * This module serves as the main entry point for analytics events in Claude CLI.
+ * 本模块作为 Claude CLI 中 analytics 事件的主要入口点。
  *
- * DESIGN: This module has NO dependencies to avoid import cycles.
- * Events are queued until attachAnalyticsSink() is called during app initialization.
- * The sink handles routing to Datadog and 1P event logging.
+ * 设计：本模块没有依赖项以避免导入循环。
+ * 事件在 attachAnalyticsSink() 调用之前被排队。
+ * sink 负责路由到 Datadog 和 1P 事件日志记录。
  */
 
 /**
- * Marker type for verifying analytics metadata doesn't contain sensitive data
+ * 用于验证 analytics 元数据不包含敏感数据的标记类型
  *
- * This type forces explicit verification that string values being logged
- * don't contain code snippets, file paths, or other sensitive information.
+ * 此类型强制显式验证被记录的字符串值
+ * 不包含代码片段、文件路径或其他敏感信息。
  *
- * Usage: `myString as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS`
+ * 用法：`myString as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS`
  */
 export type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS = never
 

@@ -42,7 +42,7 @@ export function OutputStylePicker({
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // Load all output styles including custom ones
+    // 加载所有输出样式，包括自定义样式
     getAllOutputStyles(getCwd())
       .then(allStyles => {
         const options = mapConfigsToOptions(allStyles)
@@ -50,7 +50,7 @@ export function OutputStylePicker({
         setIsLoading(false)
       })
       .catch(() => {
-        // On error, fall back to built-in styles only
+        // 错误时，仅回退到内置样式
         const builtInOptions = mapConfigsToOptions(OUTPUT_STYLE_CONFIG)
         setStyleOptions(builtInOptions)
         setIsLoading(false)

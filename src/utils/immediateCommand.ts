@@ -1,11 +1,10 @@
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../services/analytics/growthbook.js'
 
 /**
- * Whether inference-config commands (/model, /fast, /effort) should execute
- * immediately (during a running query) rather than waiting for the current
- * turn to finish.
+ * 推理配置命令（/model, /fast, /effort）是否应该立即执行
+ *（在运行中的查询期间）而不是等待当前回合结束。
  *
- * Always enabled for ants; gated by experiment for external users.
+ * 对内部用户（ant）始终启用；外部用户通过实验控制。
  */
 export function shouldInferenceConfigCommandBeImmediate(): boolean {
   return (

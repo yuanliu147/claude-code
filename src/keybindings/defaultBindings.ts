@@ -338,8 +338,8 @@ export const DEFAULT_BINDINGS: KeybindingBlock[] = [
       escape: 'select:cancel',
     },
   },
-  // Plugin dialog actions (manage, browse, discover plugins)
-  // Navigation (select:*) uses the Select context above
+  // 插件对话框操作（管理、浏览、发现插件）
+  // 导航（select:*）使用上面的 Select 上下文
   {
     context: 'Plugin',
     bindings: {

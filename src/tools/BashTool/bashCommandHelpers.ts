@@ -28,131 +28,135 @@ async function segmentedCommandPermissionResult(
   ) => Promise<PermissionResult>,
   checkers: CommandIdentityCheckers,
 ): Promise<PermissionResult> {
-  // Check for multiple cd commands across all segments
-  const cdCommands = segments.filter(segment => {
-    const trimmed = segment.trim()
-    return checkers.isNormalizedCdCommand(trimmed)
-  })
-  if (cdCommands.length > 1) {
-    const decisionReason = {
-      type: 'other' as const,
-      reason:
-        'Multiple directory changes in one command require approval for clarity',
-    }
-    return {
-      behavior: 'ask',
-      decisionReason,
-      message: createPermissionRequestMessage(BashTool.name, decisionReason),
-    }
-  }
+	// 检查所有段中的多个 cd 命令
+	const cdCommands = segments.filter((segment) => {
+		const trimmed = segment.trim();
+		return checkers.isNormalizedCdCommand(trimmed);
+	});
+	if (cdCommands.length > 1) {
+		const decisionReason = {
+			type: "other" as const,
+			reason: "Multiple directory changes in one command require approval for clarity",
+		};
+		return {
+			behavior: "ask",
+			decisionReason,
+			message: createPermissionRequestMessage(
+				BashTool.name,
+				decisionReason,
+			),
+		};
+	}
 
-  // SECURITY: Check for cd+git across pipe segments to prevent bare repo fsmonitor bypass.
-  // When cd and git are in different pipe segments (e.g., "cd sub && echo | git status"),
-  // each segment is checked independently and neither triggers the cd+git check in
-  // bashPermissions.ts. We must detect this cross-segment pattern here.
-  // Each pipe segment can itself be a compound command (e.g., "cd sub && echo"),
-  // so we split each segment into subcommands before checking.
-  {
-    let hasCd = false
-    let hasGit = false
-    for (const segment of segments) {
-      const subcommands = splitCommand_DEPRECATED(segment)
-      for (const sub of subcommands) {
-        const trimmed = sub.trim()
-        if (checkers.isNormalizedCdCommand(trimmed)) {
-          hasCd = true
-        }
-        if (checkers.isNormalizedGitCommand(trimmed)) {
-          hasGit = true
-        }
-      }
-    }
-    if (hasCd && hasGit) {
-      const decisionReason = {
-        type: 'other' as const,
-        reason:
-          'Compound commands with cd and git require approval to prevent bare repository attacks',
-      }
-      return {
-        behavior: 'ask',
-        decisionReason,
-        message: createPermissionRequestMessage(BashTool.name, decisionReason),
-      }
-    }
-  }
+	// 安全检查：检查管道段之间的 cd+git 以防止裸仓库 fsmonitor 绕过。
+	// 当 cd 和 git 在不同的管道段中时（例如 "cd sub && echo | git status"），
+	// each segment is checked independently and neither triggers the cd+git check in
+	// bashPermissions.ts. We must detect this cross-segment pattern here.
+	// Each pipe segment can itself be a compound command (e.g., "cd sub && echo"),
+	// so we split each segment into subcommands before checking.
+	{
+		let hasCd = false;
+		let hasGit = false;
+		for (const segment of segments) {
+			const subcommands = splitCommand_DEPRECATED(segment);
+			for (const sub of subcommands) {
+				const trimmed = sub.trim();
+				if (checkers.isNormalizedCdCommand(trimmed)) {
+					hasCd = true;
+				}
+				if (checkers.isNormalizedGitCommand(trimmed)) {
+					hasGit = true;
+				}
+			}
+		}
+		if (hasCd && hasGit) {
+			const decisionReason = {
+				type: "other" as const,
+				reason: "Compound commands with cd and git require approval to prevent bare repository attacks",
+			};
+			return {
+				behavior: "ask",
+				decisionReason,
+				message: createPermissionRequestMessage(
+					BashTool.name,
+					decisionReason,
+				),
+			};
+		}
+	}
 
-  const segmentResults = new Map<string, PermissionResult>()
+	const segmentResults = new Map<string, PermissionResult>();
 
-  // Check each segment through the full permission system
-  for (const segment of segments) {
-    const trimmedSegment = segment.trim()
-    if (!trimmedSegment) continue // Skip empty segments
+	// Check each segment through the full permission system
+	for (const segment of segments) {
+		const trimmedSegment = segment.trim();
+		if (!trimmedSegment) continue; // Skip empty segments
 
-    const segmentResult = await bashToolHasPermissionFn({
-      ...input,
-      command: trimmedSegment,
-    })
-    segmentResults.set(trimmedSegment, segmentResult)
-  }
+		const segmentResult = await bashToolHasPermissionFn({
+			...input,
+			command: trimmedSegment,
+		});
+		segmentResults.set(trimmedSegment, segmentResult);
+	}
 
-  // Check if any segment is denied (after evaluating all)
-  const deniedSegment = Array.from(segmentResults.entries()).find(
-    ([, result]) => result.behavior === 'deny',
-  )
+	// Check if any segment is denied (after evaluating all)
+	const deniedSegment = Array.from(segmentResults.entries()).find(
+		([, result]) => result.behavior === "deny",
+	);
 
-  if (deniedSegment) {
-    const [segmentCommand, segmentResult] = deniedSegment
-    return {
-      behavior: 'deny',
-      message:
-        segmentResult.behavior === 'deny'
-          ? segmentResult.message
-          : `Permission denied for: ${segmentCommand}`,
-      decisionReason: {
-        type: 'subcommandResults',
-        reasons: segmentResults,
-      },
-    }
-  }
+	if (deniedSegment) {
+		const [segmentCommand, segmentResult] = deniedSegment;
+		return {
+			behavior: "deny",
+			message:
+				segmentResult.behavior === "deny"
+					? segmentResult.message
+					: `Permission denied for: ${segmentCommand}`,
+			decisionReason: {
+				type: "subcommandResults",
+				reasons: segmentResults,
+			},
+		};
+	}
 
-  const allAllowed = Array.from(segmentResults.values()).every(
-    result => result.behavior === 'allow',
-  )
+	const allAllowed = Array.from(segmentResults.values()).every(
+		(result) => result.behavior === "allow",
+	);
 
-  if (allAllowed) {
-    return {
-      behavior: 'allow',
-      updatedInput: input,
-      decisionReason: {
-        type: 'subcommandResults',
-        reasons: segmentResults,
-      },
-    }
-  }
+	if (allAllowed) {
+		return {
+			behavior: "allow",
+			updatedInput: input,
+			decisionReason: {
+				type: "subcommandResults",
+				reasons: segmentResults,
+			},
+		};
+	}
 
-  // Collect suggestions from segments that need approval
-  const suggestions: PermissionUpdate[] = []
-  for (const [, result] of segmentResults) {
-    if (
-      result.behavior !== 'allow' &&
-      'suggestions' in result &&
-      result.suggestions
-    ) {
-      suggestions.push(...result.suggestions)
-    }
-  }
+	// Collect suggestions from segments that need approval
+	const suggestions: PermissionUpdate[] = [];
+	for (const [, result] of segmentResults) {
+		if (
+			result.behavior !== "allow" &&
+			"suggestions" in result &&
+			result.suggestions
+		) {
+			suggestions.push(...result.suggestions);
+		}
+	}
 
-  const decisionReason = {
-    type: 'subcommandResults' as const,
-    reasons: segmentResults,
-  }
+	const decisionReason = {
+		type: "subcommandResults" as const,
+		reasons: segmentResults,
+	};
 
-  return {
-    behavior: 'ask',
-    message: createPermissionRequestMessage(BashTool.name, decisionReason),
-    decisionReason,
-    suggestions: suggestions.length > 0 ? suggestions : undefined,
-  }
+	return {
+		behavior: "ask",
+		message: createPermissionRequestMessage(BashTool.name, decisionReason),
+		decisionReason,
+		suggestions: suggestions.length > 0 ? suggestions : undefined,
+	};
 }
 
 /**

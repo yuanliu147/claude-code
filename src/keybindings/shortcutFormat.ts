@@ -19,21 +19,21 @@ import type { KeybindingContextName } from './types.js'
 const LOGGED_FALLBACKS = new Set<string>()
 
 /**
- * Get the display text for a configured shortcut without React hooks.
- * Use this in non-React contexts (commands, services, etc.).
+ * 在非 React 上下文中获取已配置快捷键的显示文本。
+ * 用于命令、服务等非 React 调用场景。
  *
- * This lives in its own module (not useShortcutDisplay.ts) so that
- * non-React callers like query/stopHooks.ts don't pull React into their
- * module graph via the sibling hook.
+ * 单独放在一个模块中（不是 useShortcutDisplay.ts），
+ * 这样非 React 调用方（如 query/stopHooks.ts）不会通过
+ * sibling hook 将 React 引入其模块图。
  *
- * @param action - The action name (e.g., 'app:toggleTranscript')
- * @param context - The keybinding context (e.g., 'Global')
- * @param fallback - Fallback text if binding not found
- * @returns The configured shortcut display text
+ * @param action - 操作名称（例如 'app:toggleTranscript'）
+ * @param context - keybinding 上下文（例如 'Global'）
+ * @param fallback - 如果找不到绑定时的备用文本
+ * @returns 已配置的快捷键显示文本
  *
  * @example
  * const expandShortcut = getShortcutDisplay('app:toggleTranscript', 'Global', 'ctrl+o')
- * // Returns the user's configured binding, or 'ctrl+o' as default
+ * // 返回用户配置的绑定，或 'ctrl+o' 作为默认值
  */
 export function getShortcutDisplay(
   action: string,

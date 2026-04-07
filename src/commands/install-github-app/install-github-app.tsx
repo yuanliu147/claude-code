@@ -32,7 +32,7 @@ const INITIAL_STATE: State = {
   step: 'check-gh',
   selectedRepoName: '',
   currentRepo: '',
-  useCurrentRepo: false, // Default to false, will be set to true if repo detected
+  useCurrentRepo: false, // 默认为 false，如果检测到仓库则设为 true
   apiKeyOrOAuthToken: '',
   useExistingKey: true,
   currentWorkflowInstallStep: 0,
@@ -68,7 +68,7 @@ function InstallGitHubApp(props: {
   const checkGitHubCLI = useCallback(async () => {
     const warnings: Warning[] = []
 
-    // Check if gh is installed
+    // 检查 gh 是否已安装
     const ghVersionResult = await execa('gh --version', {
       shell: true,
       reject: false,
@@ -103,7 +103,7 @@ function InstallGitHubApp(props: {
         ],
       })
     } else {
-      // Check if required scopes are present in the Token scopes line
+      // 检查 Token scopes 行中是否存在所需的范围
       const tokenScopesMatch = authResult.stdout.match(/Token scopes:.*$/m)
       if (tokenScopesMatch) {
         const scopes = tokenScopesMatch[0]
@@ -742,11 +742,11 @@ function InstallGitHubApp(props: {
               ...prev,
               selectedWorkflows,
             }))
-            // Check if user has existing local API key
+            // 检查用户是否有现有的本地 API 密钥
             if (existingApiKey) {
               void checkExistingSecret()
             } else {
-              // No local key, go straight to API key step
+              // 没有本地密钥，直接转到 API 密钥步骤
               setState(prev => ({ ...prev, step: 'api-key' }))
             }
           }}

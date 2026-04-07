@@ -446,7 +446,7 @@ import { DevBar } from '../components/DevBar.js';
 import { UltraplanChoiceDialog } from '../components/ultraplan/UltraplanChoiceDialog.js';
 import { UltraplanLaunchDialog } from '../components/ultraplan/UltraplanLaunchDialog.js';
 import { launchUltraplan } from '../commands/ultraplan.js';
-// Session manager removed - using AppState now
+// 会话管理器已移除——现在使用 AppState
 import type { RemoteSessionConfig } from '../remote/RemoteSessionManager.js'
 import { REMOTE_SAFE_COMMANDS } from '../commands.js'
 import type { RemoteMessageContent } from '../utils/teleport/api.js'

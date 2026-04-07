@@ -363,22 +363,22 @@ async function getSkills(cwd: string): Promise<{
       getSkillDirCommands(cwd).catch(err => {
         logError(toError(err))
         logForDebugging(
-          'Skill directory commands failed to load, continuing without them',
+          '技能目录命令加载失败，继续执行而不加载它们',
         )
         return []
       }),
       getPluginSkills().catch(err => {
         logError(toError(err))
-        logForDebugging('Plugin skills failed to load, continuing without them')
+        logForDebugging('插件技能加载失败，继续执行而不加载它们')
         return []
       }),
     ])
-    // Bundled skills are registered synchronously at startup
+    // 捆绑的技能在启动时同步注册
     const bundledSkills = getBundledSkills()
-    // Built-in plugin skills come from enabled built-in plugins
+    // 内置插件技能来自已启用的内置插件
     const builtinPluginSkills = getBuiltinPluginSkillCommands()
     logForDebugging(
-      `getSkills returning: ${skillDirCommands.length} skill dir commands, ${pluginSkills.length} plugin skills, ${bundledSkills.length} bundled skills, ${builtinPluginSkills.length} builtin plugin skills`,
+      `getSkills 返回: ${skillDirCommands.length} 个技能目录命令, ${pluginSkills.length} 个插件技能, ${bundledSkills.length} 个捆绑技能, ${builtinPluginSkills.length} 个内置插件技能`,
     )
     return {
       skillDirCommands,
@@ -387,9 +387,9 @@ async function getSkills(cwd: string): Promise<{
       builtinPluginSkills,
     }
   } catch (err) {
-    // This should never happen since we catch at the Promise level, but defensive
+    // 这永远不应该发生，因为我们在 Promise 级别捕获了，但这是防御性的
     logError(toError(err))
-    logForDebugging('Unexpected error in getSkills, returning empty')
+    logForDebugging('getSkills 中出现意外错误，返回空结果')
     return {
       skillDirCommands: [],
       pluginSkills: [],
@@ -408,13 +408,13 @@ const getWorkflowCommands = feature('WORKFLOW_SCRIPTS')
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 /**
- * Filters commands by their declared `availability` (auth/provider requirement).
- * Commands without `availability` are treated as universal.
- * This runs before `isEnabled()` so that provider-gated commands are hidden
- * regardless of feature-flag state.
+ * 根据命令声明的 `availability`（认证/提供商要求）过滤命令。
+ * 没有 `availability` 的命令被视为通用的。
+ * 这在 `isEnabled()` 之前运行，因此提供商门控命令
+ * 无论 feature-flag 状态如何都会被隐藏。
  *
- * Not memoized — auth state can change mid-session (e.g. after /login),
- * so this must be re-evaluated on every getCommands() call.
+ * 不记忆化 - 认证状态可以在会话中更改（例如在 /login 之后），
+ * 所以这必须在每次 getCommands() 调用时重新评估。
  */
 export function meetsAvailabilityRequirement(cmd: Command): boolean {
   if (!cmd.availability || cmd.availability.length === 0) return true
@@ -424,9 +424,9 @@ export function meetsAvailabilityRequirement(cmd: Command): boolean {
         if (isClaudeAISubscriber()) return true
         break
       case 'console':
-        // Console API key user = direct 1P API customer (not 3P, not claude.ai).
-        // Excludes 3P (Bedrock/Vertex/Foundry) who don't set ANTHROPIC_BASE_URL
-        // and gateway users who proxy through a custom base URL.
+        // Console API key 用户 = 直接的 1P API 客户（不是 3P，不是 claude.ai）。
+        // 排除 3P（Bedrock/Vertex/Foundry），他们不设置 ANTHROPIC_BASE_URL，
+        // 以及通过自定义 base URL 代理的网关用户。
         if (
           !isClaudeAISubscriber() &&
           !isUsing3PServices() &&
@@ -445,8 +445,8 @@ export function meetsAvailabilityRequirement(cmd: Command): boolean {
 }
 
 /**
- * Loads all command sources (skills, plugins, workflows). Memoized by cwd
- * because loading is expensive (disk I/O, dynamic imports).
+ * 加载所有命令源（技能、插件、工作流）。按 cwd 记忆化，
+ * 因为加载成本很高（磁盘 I/O、动态导入）。
  */
 const loadAllCommands = memoize(async (cwd: string): Promise<Command[]> => {
   const [
@@ -471,17 +471,17 @@ const loadAllCommands = memoize(async (cwd: string): Promise<Command[]> => {
 })
 
 /**
- * Returns commands available to the current user. The expensive loading is
- * memoized, but availability and isEnabled checks run fresh every call so
- * auth changes (e.g. /login) take effect immediately.
+ * 返回当前用户可用的命令。昂贵的加载已记忆化，
+ * 但可用性和 isEnabled 检查每次调用时都会重新运行，
+ * 以便认证更改（例如 /login）立即生效。
  */
 export async function getCommands(cwd: string): Promise<Command[]> {
   const allCommands = await loadAllCommands(cwd)
 
-  // Get dynamic skills discovered during file operations
+  // 获取在文件操作期间发现的动态技能
   const dynamicSkills = getDynamicSkills()
 
-  // Build base commands without dynamic skills
+  // 构建不包含动态技能的基础命令
   const baseCommands = allCommands.filter(
     _ => meetsAvailabilityRequirement(_) && isCommandEnabled(_),
   )

@@ -10,65 +10,66 @@ import type { HistoryEntry, PastedContent } from '../utils/config.js'
 
 export type HistoryMode = PromptInputMode
 
-// Load history entries in chunks to reduce disk reads on rapid keypresses
+// 分块加载历史记录以减少快速按键时的磁盘读取
 const HISTORY_CHUNK_SIZE = 10
 
-// Shared state for batching concurrent load requests into a single disk read
-// Mode filter is included to ensure we don't mix filtered and unfiltered caches
+// 用于批量处理并发加载请求的共享状态（合并为单次磁盘读取）
+// 包含模式过滤器以确保不会混淆过滤和未过滤的缓存
 let pendingLoad: Promise<HistoryEntry[]> | null = null
 let pendingLoadTarget = 0
-let pendingLoadModeFilter: HistoryMode | undefined = undefined
+let pendingLoadModeFilter: HistoryMode | undefined 
 
 async function loadHistoryEntries(
   minCount: number,
   modeFilter?: HistoryMode,
 ): Promise<HistoryEntry[]> {
-  // Round up to next chunk to avoid repeated small reads
-  const target = Math.ceil(minCount / HISTORY_CHUNK_SIZE) * HISTORY_CHUNK_SIZE
+	// 向上取整到下一个块，以避免重复的小读取
+	const target =
+		Math.ceil(minCount / HISTORY_CHUNK_SIZE) * HISTORY_CHUNK_SIZE;
 
-  // If a load is already pending with the same mode filter and will satisfy our needs, wait for it
-  if (
-    pendingLoad &&
-    pendingLoadTarget >= target &&
-    pendingLoadModeFilter === modeFilter
-  ) {
-    return pendingLoad
-  }
+	// 如果已有挂起的加载请求且模式过滤器相同且能满足需求，则等待它
+	if (
+		pendingLoad &&
+		pendingLoadTarget >= target &&
+		pendingLoadModeFilter === modeFilter
+	) {
+		return pendingLoad;
+	}
 
-  // If a load is pending but won't satisfy our needs or has different filter, we need to wait for it
-  // to complete first, then start a new one (can't interrupt an ongoing read)
-  if (pendingLoad) {
-    await pendingLoad
-  }
+	// If a load is pending but won't satisfy our needs or has different filter, we need to wait for it
+	// to complete first, then start a new one (can't interrupt an ongoing read)
+	if (pendingLoad) {
+		await pendingLoad;
+	}
 
-  // Start a new load
-  pendingLoadTarget = target
-  pendingLoadModeFilter = modeFilter
-  pendingLoad = (async () => {
-    const entries: HistoryEntry[] = []
-    let loaded = 0
-    for await (const entry of getHistory()) {
-      // If mode filter is specified, only include entries that match the mode
-      if (modeFilter) {
-        const entryMode = getModeFromInput(entry.display)
-        if (entryMode !== modeFilter) {
-          continue
-        }
-      }
-      entries.push(entry)
-      loaded++
-      if (loaded >= pendingLoadTarget) break
-    }
-    return entries
-  })()
+	// Start a new load
+	pendingLoadTarget = target;
+	pendingLoadModeFilter = modeFilter;
+	pendingLoad = (async () => {
+		const entries: HistoryEntry[] = [];
+		let loaded = 0;
+		for await (const entry of getHistory()) {
+			// If mode filter is specified, only include entries that match the mode
+			if (modeFilter) {
+				const entryMode = getModeFromInput(entry.display);
+				if (entryMode !== modeFilter) {
+					continue;
+				}
+			}
+			entries.push(entry);
+			loaded++;
+			if (loaded >= pendingLoadTarget) break;
+		}
+		return entries;
+	})();
 
-  try {
-    return await pendingLoad
-  } finally {
-    pendingLoad = null
-    pendingLoadTarget = 0
-    pendingLoadModeFilter = undefined
-  }
+	try {
+		return await pendingLoad;
+	} finally {
+		pendingLoad = null;
+		pendingLoadTarget = 0;
+		pendingLoadModeFilter = undefined;
+	}
 }
 
 export function useArrowKeyHistory(

@@ -6,11 +6,11 @@ import { getClaudeConfigHomeDir } from './envUtils.js'
 import { errorMessage, getErrnoCode } from './errors.js'
 import { getPlatform } from './platform.js'
 
-// Cache states:
-// undefined = not yet loaded (need to check disk)
-// null = checked disk, no files exist (don't check again)
-// string = loaded and cached (use cached value)
-let sessionEnvScript: string | null | undefined = undefined
+// 缓存状态：
+// undefined = 尚未加载（需要检查磁盘）
+// null = 已检查磁盘，文件不存在（不再检查）
+// string = 已加载并缓存（使用缓存值）
+let sessionEnvScript: string | null | undefined 
 
 export async function getSessionEnvDirPath(): Promise<string> {
   const sessionEnvDir = join(
@@ -69,8 +69,8 @@ export async function getSessionEnvironmentScript(): Promise<string | null> {
 
   const scripts: string[] = []
 
-  // Check for CLAUDE_ENV_FILE passed from parent process (e.g., HFI trajectory runner)
-  // This allows venv/conda activation to persist across shell commands
+  // 检查从父进程传入的 CLAUDE_ENV_FILE（例如 HFI 轨迹运行器）
+  // 这允许 venv/conda 激活在 shell 命令之间持久化
   const envFile = process.env.CLAUDE_ENV_FILE
   if (envFile) {
     try {
@@ -89,12 +89,12 @@ export async function getSessionEnvironmentScript(): Promise<string | null> {
     }
   }
 
-  // Load hook environment files from session directory
+  // 从会话目录加载钩子环境文件
   const sessionEnvDir = await getSessionEnvDirPath()
   try {
     const files = await readdir(sessionEnvDir)
-    // We are sorting the hook env files by the order in which they are listed
-    // in the settings.json file so that the resulting env is deterministic
+    // 按照 settings.json 文件中列出的顺序对钩子环境文件排序
+    // 以确保最终环境是确定性的
     const hookFiles = files
       .filter(f => HOOK_ENV_REGEX.test(f))
       .sort(sortHookEnvFiles)

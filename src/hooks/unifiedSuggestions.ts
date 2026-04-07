@@ -41,7 +41,7 @@ type SuggestionSource =
   | AgentSuggestionSource
 
 /**
- * Creates a unified suggestion item from a source
+ * 从源创建统一的建议项目
  */
 function createSuggestionFromSource(source: SuggestionSource): SuggestionItem {
   switch (source.type) {

@@ -20,8 +20,8 @@ export function LanguagePicker({
     (initialLanguage ?? '').length,
   )
 
-  // Use configurable keybinding for ESC to cancel
-  // Use Settings context so 'n' key doesn't trigger cancel (allows typing 'n' in input)
+  // 使用可配置的键绑定来 ESC 取消
+  // 使用设置上下文，这样 'n' 键不会触发取消（允许在输入中输入 'n'）
   useKeybinding('confirm:no', onCancel, { context: 'Settings' })
 
   function handleSubmit(): void {

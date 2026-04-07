@@ -138,16 +138,16 @@ const proactiveModule =
     : null
 /* eslint-enable @typescript-eslint/no-require-imports */
 
-// Progress display constants (for showing background hint)
-const PROGRESS_THRESHOLD_MS = 2000 // Show background hint after 2 seconds
+// 进度显示常量（用于显示后台提示）
+const PROGRESS_THRESHOLD_MS = 2000 // 2秒后显示后台提示
 
-// Check if background tasks are disabled at module load time
+// 检查后台任务是否在模块加载时被禁用
 const isBackgroundTasksDisabled =
   // eslint-disable-next-line custom-rules/no-process-env-top-level -- Intentional: schema must be defined at module load
   isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS)
 
-// Auto-background agent tasks after this many ms (0 = disabled)
-// Enabled by env var OR GrowthBook gate (checked lazily since GB may not be ready at module load)
+// 在此毫秒数后自动后台运行代理任务（0 = 禁用）
+// 通过环境变量或 GrowthBook 门控启用（延迟检查，因为 GB 可能在模块加载时还未就绪）
 function getAutoBackgroundMs(): number {
   if (
     isEnvTruthy(process.env.CLAUDE_AUTO_BACKGROUND_TASKS) ||
@@ -158,9 +158,10 @@ function getAutoBackgroundMs(): number {
   return 0
 }
 
-// Multi-agent type constants are defined inline inside gated blocks to enable dead code elimination
+// 多代理类型常量定义在门控代码块内以启用死代码消除
 
 // Base input schema without multi-agent parameters
+// 不带多代理参数的基础输入 schema
 const baseInputSchema = lazySchema(() =>
   z.object({
     description: z
@@ -186,7 +187,7 @@ const baseInputSchema = lazySchema(() =>
   }),
 )
 
-// Full schema combining base + multi-agent params + isolation
+// 合并基础 schema + 多代理参数 + 隔离选项的完整 schema
 const fullInputSchema = lazySchema(() => {
   // Multi-agent parameters
   const multiAgentInputSchema = z.object({
@@ -231,12 +232,11 @@ const fullInputSchema = lazySchema(() => {
     })
 })
 
-// Strip optional fields from the schema when the backing feature is off so
-// the model never sees them. Done via .omit() rather than conditional spread
-// inside .extend() because the spread-ternary breaks Zod's type inference
-// (field type collapses to `unknown`). The ternary return produces a union
-// type, but call() destructures via the explicit AgentToolInput type below
-// which always includes all optional fields.
+// 当底层功能关闭时，从 schema 中剥离可选字段
+// 以便模型不会看到这些字段。使用 .omit() 而不是在 .extend() 内部进行条件展开
+// 因为展开三元运算符会破坏 Zod 的类型推断（字段类型会塌陷为 `unknown`）。
+// 三元返回产生联合类型，但 call() 通过下面的显式 AgentToolInput 类型进行解构
+// 该类型始终包含所有可选字段。
 export const inputSchema = lazySchema(() => {
   const schema = feature('KAIROS')
     ? fullInputSchema()
@@ -403,41 +403,40 @@ export const AgentTool = buildTool({
     const startTime = Date.now()
     const model = isCoordinatorMode() ? undefined : modelParam
 
-    // Get app state for permission mode and agent filtering
+    // 获取应用状态以获取权限模式和代理过滤
     const appState = toolUseContext.getAppState()
     const permissionMode = appState.toolPermissionContext.mode
-    // In-process teammates get a no-op setAppState; setAppStateForTasks
-    // reaches the root store so task registration/progress/kill stay visible.
+    // 进程内队友获得 no-op setAppState；setAppStateForTasks
+    // 到达根 store 以便任务注册/进度/终止保持可见。
     const rootSetAppState =
       toolUseContext.setAppStateForTasks ?? toolUseContext.setAppState
 
-    // Check if user is trying to use agent teams without access
+    // 检查用户是否尝试使用代理团队但没有访问权限
     if (team_name && !isAgentSwarmsEnabled()) {
       throw new Error('Agent Teams is not yet available on your plan.')
     }
 
-    // Teammates (in-process or tmux) passing `name` would trigger spawnTeammate()
-    // below, but TeamFile.members is a flat array with one leadAgentId — nested
-    // teammates land in the roster with no provenance and confuse the lead.
+    // 传递 `name` 的队友（进程内或 tmux）会在下面触发 spawnTeammate()
+    // 但 TeamFile.members 是一个扁平数组，只有一个 leadAgentId —— 嵌套的
+    // 队友会进入花名册但没有来源，混淆了负责人。
     const teamName = resolveTeamName({ team_name }, appState)
     if (isTeammate() && teamName && name) {
       throw new Error(
         'Teammates cannot spawn other teammates — the team roster is flat. To spawn a subagent instead, omit the `name` parameter.',
       )
     }
-    // In-process teammates cannot spawn background agents (their lifecycle is
-    // tied to the leader's process). Tmux teammates are separate processes and
-    // can manage their own background agents.
+    // 进程内队友不能生成后台代理（它们的生命周期绑定到 leader 的进程）。
+    // Tmux 队友是单独的进程，可以管理自己的后台代理。
     if (isInProcessTeammate() && teamName && run_in_background === true) {
       throw new Error(
         'In-process teammates cannot spawn background agents. Use run_in_background=false for synchronous subagents.',
       )
     }
 
-    // Check if this is a multi-agent spawn request
-    // Spawn is triggered when team_name is set (from param or context) and name is provided
+    // 检查这是否是多代理生成请求
+    // 当设置 team_name（来自参数或上下文）且提供了 name 时触发生成
     if (teamName && name) {
-      // Set agent definition color for grouped UI display before spawning
+      // 在生成前设置代理定义颜色以进行分组 UI 显示
       const agentDef = subagent_type
         ? toolUseContext.options.agentDefinitions.activeAgents.find(
             a => a.agentType === subagent_type,
@@ -461,10 +460,10 @@ export const AgentTool = buildTool({
         toolUseContext,
       )
 
-      // Type assertion uses TeammateSpawnedOutput (defined above) instead of any.
-      // This type is excluded from the exported outputSchema for dead code elimination.
-      // Cast through unknown because TeammateSpawnedOutput is intentionally
-      // not part of the exported Output union (for dead code elimination purposes).
+      // 类型断言使用 TeammateSpawnedOutput（上面定义）而不是 any。
+      // 此类型从导出的 outputSchema 中排除以实现死代码消除。
+      // 通过 unknown 进行转换，因为 TeammateSpawnedOutput 有意不是
+      // 导出 Output 联合的一部分（为了死代码消除目的）。
       const spawnResult: TeammateSpawnedOutput = {
         status: 'teammate_spawned' as const,
         prompt,

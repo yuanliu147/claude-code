@@ -105,8 +105,8 @@ export function matchesKeystroke(
 }
 
 /**
- * Check if Ink's Key + input matches a parsed binding's first keystroke.
- * For single-keystroke bindings only (Phase 1).
+ * 检查 Ink 的 Key + input 是否与解析绑定的第一个按键匹配。
+ * 仅用于单按键绑定（第 1 阶段）。
  */
 export function matchesBinding(
   input: string,

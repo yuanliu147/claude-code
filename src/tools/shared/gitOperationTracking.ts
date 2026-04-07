@@ -1,11 +1,9 @@
 /**
- * Shell-agnostic git operation tracking for usage metrics.
+ * Shell 无关的 git 操作跟踪，用于使用量指标。
  *
- * Detects `git commit`, `git push`, `gh pr create`, `glab mr create`, and
- * curl-based PR creation in command strings, then increments OTLP counters
- * and fires analytics events. The regexes operate on raw command text so they
- * work identically for Bash and PowerShell (both invoke git/gh/glab/curl as
- * external binaries with the same argv syntax).
+ * 检测命令字符串中的 `git commit`、`git push`、`gh pr create`、`glab mr create` 和
+ * 基于 curl 的 PR 创建，然后递增 OTLP 计数器并触发分析事件。正则表达式对原始命令文本进行操作，
+ * 因此它们在 Bash 和 PowerShell 中工作相同（都调用具有相同 argv 语法的外部 git/gh/glab/curl 二进制文件）。
  */
 
 import { getCommitCounter, getPrCounter } from '../../bootstrap/state.js'
@@ -15,10 +13,10 @@ import {
 } from '../../services/analytics/index.js'
 
 /**
- * Build a regex that matches `git <subcmd>` while tolerating git's global
- * options between `git` and the subcommand (e.g. `-c key=val`, `-C path`,
- * `--git-dir=path`). Common when the model retries with
- * `git -c commit.gpgsign=false commit` after a signing failure.
+ * 构建匹配 `git <subcmd>` 的正则表达式，同时容忍 git 的全局
+ * 选项在 `git` 和子命令之间（例如 `-c key=val`、`-C path`、
+ * `--git-dir=path`）。模型在签名失败后使用
+ * `git -c commit.gpgsign=false commit` 重试时常见。
  */
 function gitCmdRe(subcmd: string, suffix = ''): RegExp {
   return new RegExp(

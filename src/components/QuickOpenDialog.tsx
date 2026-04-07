@@ -22,14 +22,14 @@ const VISIBLE_RESULTS = 8
 const PREVIEW_LINES = 20
 
 /**
- * Quick Open dialog (ctrl+shift+p / cmd+shift+p).
- * Fuzzy file finder with a syntax-highlighted preview of the focused file.
+ * 快速打开对话框（ctrl+shift+p / cmd+shift+p）。
+ * 带有所选文件语法高亮预览的模糊文件查找器。
  */
 export function QuickOpenDialog({ onDone, onInsert }: Props): React.ReactNode {
   useRegisterOverlay('quick-open')
   const { columns, rows } = useTerminalSize()
-  // Chrome (title + search + hints + pane border + gaps) eats ~14 rows.
-  // Shrink the list on short terminals so the dialog doesn't clip.
+  // Chrome（标题 + 搜索 + 提示 + 窗格边框 + 间隙）占用约 14 行。
+  // 在短终端上缩小列表以避免对话框被裁剪。
   const visibleResults = Math.min(VISIBLE_RESULTS, Math.max(4, rows - 14))
 
   const [results, setResults] = useState<string[]>([])

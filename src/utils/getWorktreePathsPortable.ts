@@ -4,10 +4,10 @@ import { promisify } from 'util'
 const execFileAsync = promisify(execFileCb)
 
 /**
- * Portable worktree detection using only child_process — no analytics,
- * no bootstrap deps, no execa. Used by listSessionsImpl.ts (SDK) and
- * anywhere that needs worktree paths without pulling in the CLI
- * dependency chain (execa → cross-spawn → which).
+ * 使用纯 child_process 的可移植 worktree 检测 — 无 analytics、
+ * 无 bootstrap 依赖、无 execa。由 listSessionsImpl.ts（SDK）和
+ * 任何需要 worktree 路径但不引入 CLI 依赖链的地方使用
+ *（execa → cross-spawn → which）。
  */
 export async function getWorktreePathsPortable(cwd: string): Promise<string[]> {
   try {

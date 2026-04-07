@@ -10,10 +10,10 @@ import { getMessagesAfterCompactBoundary } from '../../utils/messages.js'
 import { renderToAnsiString } from '../../utils/staticRender.js'
 
 /**
- * Apply the same context transforms query.ts does before the API call, so
- * /context shows what the model actually sees rather than the REPL's raw
- * history. Without projectView the token count overcounts by however much
- * was collapsed — user sees "180k, 3 spans collapsed" when the API sees 120k.
+ * 应用与 query.ts 在 API 调用前相同的上下文转换，
+ * 以便 /context 显示模型实际看到的内容，而不是 REPL 的原始
+ * 历史记录。如果没有 projectView，token 计数会多计算被折叠的量
+ * — 用户看到"180k，3 个 span 被折叠"，而 API 实际看到 120k。
  */
 function toApiView(messages: Message[]): Message[] {
   let view = getMessagesAfterCompactBoundary(messages)
@@ -39,16 +39,16 @@ export async function call(
 
   const apiView = toApiView(messages)
 
-  // Apply microcompact to get accurate representation of messages sent to API
+  // 应用 microcompact 以获得发送到 API 的消息的准确表示
   const { messages: compactedMessages } = await microcompactMessages(apiView)
 
-  // Get terminal width for responsive sizing
+  // 获取终端宽度以进行响应式调整
   const terminalWidth = process.stdout.columns || 80
 
   const appState = getAppState()
 
-  // Analyze context with compacted messages
-  // Pass original messages as last parameter for accurate API usage extraction
+  // 使用压缩后的消息分析上下文
+  // 传递原始消息作为最后一个参数以准确提取 API 使用量
   const data = await analyzeContextUsage(
     compactedMessages,
     mainLoopModel,
@@ -56,12 +56,12 @@ export async function call(
     tools,
     appState.agentDefinitions,
     terminalWidth,
-    context, // Pass full context for system prompt calculation
+    context, // 传递完整上下文以计算系统提示
     undefined, // mainThreadAgentDefinition
-    apiView, // Original messages for API usage extraction
+    apiView, // 用于 API 使用量提取的原始消息
   )
 
-  // Render to ANSI string to preserve colors and pass to onDone like local commands do
+  // 渲染为 ANSI 字符串以保留颜色，并像本地命令一样传递给 onDone
   const output = await renderToAnsiString(<ContextVisualization data={data} />)
   onDone(output)
   return null

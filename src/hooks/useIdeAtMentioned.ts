@@ -27,8 +27,8 @@ const AtMentionedSchema = lazySchema(() =>
 )
 
 /**
- * A hook that tracks IDE at-mention notifications by directly registering
- * with MCP client notification handlers,
+ * 通过直接注册到 MCP 客户端通知处理器来跟踪
+ * IDE @提及通知的 Hook。
  */
 export function useIdeAtMentioned(
   mcpClients: MCPServerConnection[],

@@ -1,9 +1,8 @@
 /**
- * YAML parsing wrapper.
+ * YAML 解析包装器。
  *
- * Uses Bun.YAML (built-in, zero-cost) when running under Bun, otherwise falls
- * back to the `yaml` npm package. The package is lazy-required inside the
- * non-Bun branch so native Bun builds never load the ~270KB yaml parser.
+ * 在 Bun 环境下使用 Bun.YAML（内置，零成本），否则回退到 `yaml` npm 包。
+ * 该包在非 Bun 分支中懒加载，以便原生 Bun 构建永远不会加载约 270KB 的 yaml 解析器。
  */
 
 export function parseYaml(input: string): unknown {

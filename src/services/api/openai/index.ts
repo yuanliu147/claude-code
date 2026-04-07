@@ -103,7 +103,7 @@ export async function* queryModelOpenAI(
 
     // Accumulate content blocks and usage, same as the Anthropic path in claude.ts
     const contentBlocks: Record<number, any> = {}
-    let partialMessage: any = undefined
+    let partialMessage: any 
     let usage = {
       input_tokens: 0,
       output_tokens: 0,

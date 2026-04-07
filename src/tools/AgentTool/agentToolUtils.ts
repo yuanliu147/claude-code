@@ -79,12 +79,12 @@ export function filterToolsForAgent({
   permissionMode?: PermissionMode
 }): Tools {
   return tools.filter(tool => {
-    // Allow MCP tools for all agents
+    // 允许所有代理使用 MCP 工具
     if (tool.name.startsWith('mcp__')) {
       return true
     }
-    // Allow ExitPlanMode for agents in plan mode (e.g., in-process teammates)
-    // This bypasses both the ALL_AGENT_DISALLOWED_TOOLS and async tool filters
+    // 允许计划模式下的代理使用 ExitPlanMode（例如，进程内队友）
+    // 这绕过了 ALL_AGENT_DISALLOWED_TOOLS 和异步工具过滤器
     if (
       toolMatchesName(tool, EXIT_PLAN_MODE_V2_TOOL_NAME) &&
       permissionMode === 'plan'
@@ -99,12 +99,12 @@ export function filterToolsForAgent({
     }
     if (isAsync && !ASYNC_AGENT_ALLOWED_TOOLS.has(tool.name)) {
       if (isAgentSwarmsEnabled() && isInProcessTeammate()) {
-        // Allow AgentTool for in-process teammates to spawn sync subagents.
-        // Validation in AgentTool.call() prevents background agents and teammate spawning.
+        // 允许进程内队友使用 AgentTool 生成同步子代理。
+        // AgentTool.call() 中的验证阻止后台代理和队友生成。
         if (toolMatchesName(tool, AGENT_TOOL_NAME)) {
           return true
         }
-        // Allow task tools for in-process teammates to coordinate via shared task list
+        // 允许进程内队友使用任务工具通过共享任务列表进行协调
         if (IN_PROCESS_TEAMMATE_ALLOWED_TOOLS.has(tool.name)) {
           return true
         }
@@ -116,8 +116,8 @@ export function filterToolsForAgent({
 }
 
 /**
- * Resolves and validates agent tools against available tools
- * Handles wildcard expansion and validation in one place
+ * 解析并验证代理工具与可用工具
+ * 在一个地方处理通配符展开和验证
  */
 export function resolveAgentTools(
   agentDefinition: Pick<
@@ -134,9 +134,9 @@ export function resolveAgentTools(
     source,
     permissionMode,
   } = agentDefinition
-  // When isMainThread is true, skip filterToolsForAgent entirely — the main
-  // thread's tool pool is already properly assembled by useMergedTools(), so
-  // the sub-agent disallow lists shouldn't apply.
+  // 当 isMainThread 为 true 时，完全跳过 filterToolsForAgent —— 主
+  // 线程的工具池已经由 useMergedTools() 正确组装，所以
+  // 子代理的拒绝列表不适用。
   const filteredAvailableTools = isMainThread
     ? availableTools
     : filterToolsForAgent({
@@ -146,7 +146,7 @@ export function resolveAgentTools(
         permissionMode,
       })
 
-  // Create a set of disallowed tool names for quick lookup
+  // 创建禁止工具名称集以进行快速查找
   const disallowedToolSet = new Set(
     disallowedTools?.map(toolSpec => {
       const { toolName } = permissionRuleValueFromString(toolSpec)
@@ -154,7 +154,7 @@ export function resolveAgentTools(
     }) ?? [],
   )
 
-  // Filter available tools based on disallowed list
+  // 根据禁止列表过滤可用工具
   const allowedAvailableTools = filteredAvailableTools.filter(
     tool => !disallowedToolSet.has(tool.name),
   )
@@ -184,23 +184,22 @@ export function resolveAgentTools(
   let allowedAgentTypes: string[] | undefined
 
   for (const toolSpec of agentTools) {
-    // Parse the tool spec to extract the base tool name and any permission pattern
+    // 解析工具规范以提取基本工具名称和任何权限模式
     const { toolName, ruleContent } = permissionRuleValueFromString(toolSpec)
 
-    // Special case: Agent tool carries allowedAgentTypes metadata in its spec
+    // 特殊情况：Agent 工具在其规范中携带 allowedAgentTypes 元数据
     if (toolName === AGENT_TOOL_NAME) {
       if (ruleContent) {
-        // Parse comma-separated agent types: "worker, researcher" → ["worker", "researcher"]
+        // 解析逗号分隔的代理类型："worker, researcher" → ["worker", "researcher"]
         allowedAgentTypes = ruleContent.split(',').map(s => s.trim())
       }
-      // For sub-agents, Agent is excluded by filterToolsForAgent — mark the spec
-      // valid for allowedAgentTypes tracking but skip tool resolution.
+      // 对于子代理，Agent 被 filterToolsForAgent 排除 —— 将规范标记为
+      // 对 allowedAgentTypes 跟踪有效，但跳过工具解析。
       if (!isMainThread) {
         validTools.push(toolSpec)
         continue
       }
-      // For main thread, filtering was skipped so Agent is in availableToolMap —
-      // fall through to normal resolution below.
+      // 对于主线程，过滤被跳过所以 Agent 在 availableToolMap 中 —— 继续执行下面的正常解析。
     }
 
     const tool = availableToolMap.get(toolName)
@@ -227,9 +226,8 @@ export function resolveAgentTools(
 export const agentToolResultSchema = lazySchema(() =>
   z.object({
     agentId: z.string(),
-    // Optional: older persisted sessions won't have this (resume replays
-    // results verbatim without re-validation). Used to gate the sync
-    // result trailer — one-shot built-ins skip the SendMessage hint.
+    // 可选：较旧的持久化会话不会有这个（resume 原样回放结果而不重新验证）。
+    // 用于控制同步结果尾注 —— 一次性内置代理跳过 SendMessage 提示。
     agentType: z.string().optional(),
     content: z.array(z.object({ type: z.literal('text'), text: z.string() })),
     totalToolUseCount: z.number(),
@@ -299,9 +297,9 @@ export function finalizeAgentTool(
   if (lastAssistantMessage === undefined) {
     throw new Error('No assistant messages found')
   }
-  // Extract text content from the agent's response. If the final assistant
-  // message is a pure tool_use block (loop exited mid-turn), fall back to
-  // the most recent assistant message that has text content.
+  // 从代理的响应中提取文本内容。如果最后的 assistant
+  // 消息是纯 tool_use 块（循环在轮次中途退出），则回退到
+  // 最近的有文本内容的 assistant 消息。
   let content = (lastAssistantMessage.message?.content as ContentItem[] ?? []).filter(
     _ => _.type === 'text',
   )
@@ -358,8 +356,8 @@ export function finalizeAgentTool(
 }
 
 /**
- * Returns the name of the last tool_use block in an assistant message,
- * or undefined if the message is not an assistant message with tool_use.
+ * 返回 assistant 消息中最后一个 tool_use 块的名称，
+ * 如果消息不是带有 tool_use 的 assistant 消息，则返回 undefined。
  */
 export function getLastToolUseName(message: MessageType): string | undefined {
   if (message.type !== 'assistant') return undefined
@@ -442,9 +440,9 @@ export async function classifyHandoffIfNeeded({
         subagentType as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
       toolUseCount: totalToolUseCount,
       isHandoff: true,
-      // For handoff, the relevant agent completion is the subagent's final
-      // assistant message — the last thing the classifier transcript shows
-      // before the handoff review prompt.
+      // 对于移交，相关的代理完成是子代理的最终
+      // assistant 消息 —— 分类器转录本在
+      // 移交审查提示之前显示的最后一个内容。
       agentMsgId: getLastAssistantMessage(agentMessages)?.message
         .id as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
       classifierStage:
@@ -503,8 +501,8 @@ export function extractPartialResult(
 type SetAppState = (f: (prev: AppState) => AppState) => void
 
 /**
- * Drives a background agent from spawn to terminal notification.
- * Shared between AgentTool's async-from-start path and resumeAgentBackground.
+ * 从生成到最终通知驱动后台代理。
+ * 在 AgentTool 的 async-from-start 路径和 resumeAgentBackground 之间共享。
  */
 export async function runAsyncAgentLifecycle({
   taskId,
@@ -639,10 +637,10 @@ export async function runAsyncAgentLifecycle({
   } catch (error) {
     stopSummarization?.()
     if (error instanceof AbortError) {
-      // killAsyncAgent is a no-op if TaskStop already set status='killed' —
-      // but only this catch handler has agentMessages, so the notification
-      // must fire unconditionally. Transition status BEFORE worktree cleanup
-      // so TaskOutput unblocks even if git hangs (gh-20236).
+      // 如果 TaskStop 已经设置了 status='killed'，killAsyncAgent 是一个 no-op ——
+      // 但只有这个 catch 处理器有 agentMessages，所以通知
+      // 必须无条件触发。在 worktree 清理之前转换状态，
+      // 以便 TaskOutput 即使 git 挂起也能解除阻塞（gh-20236）。
       killAsyncAgent(taskId, rootSetAppState)
       logEvent('tengu_agent_tool_terminated', {
         agent_type:

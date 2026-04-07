@@ -1,12 +1,12 @@
 /**
- * Component that registers keybinding handlers for command bindings.
+ * 注册命令绑定键绑定处理器的组件。
  *
- * Must be rendered inside KeybindingSetup to have access to the keybinding context.
- * Reads "command:*" actions from the current keybinding configuration and registers
- * handlers that invoke the corresponding slash command via onSubmit.
+ * 必须在 KeybindingSetup 内部渲染才能访问键绑定上下文。
+ * 从当前键绑定配置中读取 "command:*" 操作并注册
+ * 通过 onSubmit 调用相应斜杠命令的处理程序。
  *
- * Commands triggered via keybinding are treated as "immediate" - they execute right
- * away and preserve the user's existing input text (the prompt is not cleared).
+ * 通过键绑定触发的命令被视为"即时"执行 - 它们立即
+ * 执行并保留用户现有的输入文本（提示不会被清除）。
  */
 import { useMemo } from 'react'
 import { useIsModalOverlayActive } from '../context/overlayContext.js'

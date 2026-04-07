@@ -1,9 +1,9 @@
 /**
- * Global registry for cleanup functions that should run during graceful shutdown.
- * This module is separate from gracefulShutdown.ts to avoid circular dependencies.
+ * 用于在优雅关闭期间运行的清理函数的全局注册表。
+ * 此模块与 gracefulShutdown.ts 分开以避免循环依赖。
  */
 
-// Global registry for cleanup functions
+// 清理函数的全局注册表
 const cleanupFunctions = new Set<() => Promise<void>>()
 
 /**
@@ -17,8 +17,8 @@ export function registerCleanup(cleanupFn: () => Promise<void>): () => void {
 }
 
 /**
- * Run all registered cleanup functions.
- * Used internally by gracefulShutdown.
+ * 运行所有已注册的清理函数。
+ * 由 gracefulShutdown 内部使用。
  */
 export async function runCleanupFunctions(): Promise<void> {
   await Promise.all(Array.from(cleanupFunctions).map(fn => fn()))

@@ -5,12 +5,12 @@ const uuidRegex =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /**
- * Validate uuid
- * @param maybeUUID The value to be checked if it is a uuid
- * @returns string as UUID or null if it is not valid
+ * 验证 uuid
+ * @param maybeUUID 要检查是否为 uuid 的值
+ * @returns 如果有效则返回 string as UUID，否则返回 null
  */
 export function validateUuid(maybeUuid: unknown): UUID | null {
-  // UUID format: 8-4-4-4-12 hex digits
+  // UUID 格式：8-4-4-4-12 十六进制数字
   if (typeof maybeUuid !== 'string') return null
 
   return uuidRegex.test(maybeUuid) ? (maybeUuid as UUID) : null

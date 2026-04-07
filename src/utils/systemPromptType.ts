@@ -1,8 +1,7 @@
 /**
- * Branded type for system prompt arrays.
+ * 系统提示数组的品牌类型。
  *
- * This module is intentionally dependency-free so it can be imported
- * from anywhere without risking circular initialization issues.
+ * 此模块故意保持零依赖，以便可以从任何地方导入而不必担心循环初始化问题。
  */
 
 export type SystemPrompt = readonly string[] & {

@@ -93,7 +93,7 @@ export function keystrokeToString(ks: ParsedKeystroke): string {
   if (ks.shift) parts.push('shift')
   if (ks.meta) parts.push('meta')
   if (ks.super) parts.push('cmd')
-  // Use readable names for display
+  // 使用可读名称显示
   const displayKey = keyToDisplayName(ks.key)
   parts.push(displayKey)
   return parts.join('+')

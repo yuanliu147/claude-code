@@ -16,12 +16,11 @@ import { TEAM_CREATE_TOOL_NAME } from '../tools/TeamCreateTool/constants.js'
 import { TEAM_DELETE_TOOL_NAME } from '../tools/TeamDeleteTool/constants.js'
 import { isEnvTruthy } from '../utils/envUtils.js'
 
-// Checks the same gate as isScratchpadEnabled() in
-// utils/permissions/filesystem.ts. Duplicated here because importing
-// filesystem.ts creates a circular dependency (filesystem -> permissions
-// -> ... -> coordinatorMode). The actual scratchpad path is passed in via
-// getCoordinatorUserContext's scratchpadDir parameter (dependency injection
-// from QueryEngine.ts, which lives higher in the dep graph).
+// 检查与 utils/permissions/filesystem.ts 中 isScratchpadEnabled() 相同的门控。
+// 这里复制是因为导入 filesystem.ts 会产生循环依赖（filesystem -> permissions
+// -> ... -> coordinatorMode）。实际的 scratchpad 路径通过
+// getCoordinatorUserContext 的 scratchpadDir 参数传入（来自 QueryEngine.ts 的依赖注入，
+// 它在依赖图的更高位置）。
 function isScratchpadGateEnabled(): boolean {
   return checkStatsigFeatureGate_CACHED_MAY_BE_STALE('tengu_scratch')
 }
@@ -41,40 +40,39 @@ export function isCoordinatorMode(): boolean {
 }
 
 /**
- * Checks if the current coordinator mode matches the session's stored mode.
- * If mismatched, flips the environment variable so isCoordinatorMode() returns
- * the correct value for the resumed session. Returns a warning message if
- * the mode was switched, or undefined if no switch was needed.
+ * 检查当前协调者模式是否与会话的存储模式匹配。
+ * 如果不匹配，翻转环境变量以便 isCoordinatorMode() 为恢复的会话返回正确的值。
+ * 如果模式被切换则返回警告消息，如果不需要切换则返回 undefined。
  */
 export function matchSessionMode(
   sessionMode: 'coordinator' | 'normal' | undefined,
 ): string | undefined {
-  // No stored mode (old session before mode tracking) — do nothing
-  if (!sessionMode) {
-    return undefined
-  }
+	// 无存储模式（旧会话在模式跟踪之前）——什么都不做
+	if (!sessionMode) {
+		return undefined;
+	}
 
-  const currentIsCoordinator = isCoordinatorMode()
-  const sessionIsCoordinator = sessionMode === 'coordinator'
+	const currentIsCoordinator = isCoordinatorMode();
+	const sessionIsCoordinator = sessionMode === "coordinator";
 
-  if (currentIsCoordinator === sessionIsCoordinator) {
-    return undefined
-  }
+	if (currentIsCoordinator === sessionIsCoordinator) {
+		return undefined;
+	}
 
-  // Flip the env var — isCoordinatorMode() reads it live, no caching
-  if (sessionIsCoordinator) {
-    process.env.CLAUDE_CODE_COORDINATOR_MODE = '1'
-  } else {
-    delete process.env.CLAUDE_CODE_COORDINATOR_MODE
-  }
+	// 翻转环境变量——isCoordinatorMode() 实时读取它，没有缓存
+	if (sessionIsCoordinator) {
+		process.env.CLAUDE_CODE_COORDINATOR_MODE = "1";
+	} else {
+		delete process.env.CLAUDE_CODE_COORDINATOR_MODE;
+	}
 
-  logEvent('tengu_coordinator_mode_switched', {
-    to: sessionMode as unknown as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-  })
+	logEvent("tengu_coordinator_mode_switched", {
+		to: sessionMode as unknown as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+	});
 
-  return sessionIsCoordinator
-    ? 'Entered coordinator mode to match resumed session.'
-    : 'Exited coordinator mode to match resumed session.'
+	return sessionIsCoordinator
+		? "Entered coordinator mode to match resumed session."
+		: "Exited coordinator mode to match resumed session.";
 }
 
 export function getCoordinatorUserContext(
@@ -355,7 +353,7 @@ User:
   </task-notification>
 
 You:
-  Found the bug — null pointer in validate.ts:42. 
+  Found the bug — null pointer in validate.ts:42.
 
   ${SEND_MESSAGE_TOOL_NAME}({ to: "agent-a1b", message: "Fix the null pointer in src/auth/validate.ts:42. Add a null check before accessing user.id — if null, ... Commit and report the hash." })
 

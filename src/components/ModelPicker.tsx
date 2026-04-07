@@ -47,13 +47,13 @@ export type Props = {
   onCancel?: () => void
   isStandaloneCommand?: boolean
   showFastModeNotice?: boolean
-  /** Overrides the dim header line below "Select model". */
+  /** 覆盖 "Select model" 下方的暗淡标题行。*/
   headerText?: string
   /**
-   * When true, skip writing effortLevel to userSettings on selection.
-   * Used by the assistant installer wizard where the model choice is
-   * project-scoped (written to the assistant's .claude/settings.json via
-   * install.ts) and should not leak to the user's global ~/.claude/settings.
+   * 当为 true 时，跳过在选择时写入 effortLevel 到 userSettings。
+   * 由助手安装程序向导使用，其中模型选择是
+   * 项目范围的（通过 install.ts 写入助手的 .claude/settings.json）
+   * 不应泄露到用户的全局 ~/.claude/settings。
    */
   skipSettingsWrite?: boolean
 }
@@ -91,15 +91,15 @@ export function ModelPicker({
       : undefined,
   )
 
-  // Memoize all derived values to prevent re-renders
+  // 记忆化所有派生值以防止重新渲染
   const modelOptions = useMemo(
     () => getModelOptions(isFastMode ?? false),
     [isFastMode],
   )
 
-  // Ensure the initial value is in the options list
-  // This handles edge cases where the user's current model (e.g., 'haiku' for 3P users)
-  // is not in the base options but should still be selectable and shown as selected
+  // 确保初始值在选项列表中
+  // 这处理了边缘情况，即用户当前的模型（例如 3P 用户的 'haiku'）
+  // 不在基础选项中但仍应是可选择的并显示为已选择
   const optionsWithInitial = useMemo(() => {
     if (initial !== null && !modelOptions.some(opt => opt.value === initial)) {
       return [
@@ -158,7 +158,7 @@ export function ModelPicker({
     [hasToggledEffort, effortValue],
   )
 
-  // Effort level cycling keybindings
+  // 精力级别循环键绑定
   const handleCycleEffort = useCallback(
     (direction: 'left' | 'right') => {
       if (!focusedSupportsEffort) return
@@ -346,8 +346,8 @@ function cycleEffortLevel(
   const levels: EffortLevel[] = includeMax
     ? ['low', 'medium', 'high', 'max']
     : ['low', 'medium', 'high']
-  // If the current level isn't in the cycle (e.g. 'max' after switching to a
-  // non-Opus model), clamp to 'high'.
+  // 如果当前级别不在循环中（例如切换到非 Opus 模型后的 'max'），
+  // 箝位到 'high'。
   const idx = levels.indexOf(current)
   const currentIndex = idx !== -1 ? idx : levels.indexOf('high')
   if (direction === 'right') {

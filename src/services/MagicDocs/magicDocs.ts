@@ -1,9 +1,9 @@
 /**
- * Magic Docs automatically maintains markdown documentation files marked with special headers.
- * When a file with "# MAGIC DOC: [title]" is read, it runs periodically in the background
- * using a forked subagent to update the document with new learnings from the conversation.
+ * Magic Docs 自动维护带有特殊头部的 markdown 文档文件。
+ * 当读取带有 "# MAGIC DOC: [title]" 的文件时，它会在后台周期性运行，
+ * 使用分叉的子代理来根据对话中的新学习内容更新文档。
  *
- * See docs/magic-docs.md for more information.
+ * 更多信息请参阅 docs/magic-docs.md。
  */
 
 import type { Tool, ToolUseContext } from '../../Tool.js'
@@ -28,13 +28,13 @@ import {
 import { sequential } from '../../utils/sequential.js'
 import { buildMagicDocsUpdatePrompt } from './prompts.js'
 
-// Magic Doc header pattern: # MAGIC DOC: [title]
-// Matches at the start of the file (first line)
+// Magic Doc 头部模式: # MAGIC DOC: [title]
+// 匹配文件开头（第一行）
 const MAGIC_DOC_HEADER_PATTERN = /^#\s*MAGIC\s+DOC:\s*(.+)$/im
-// Pattern to match italics on the line immediately after the header
+// 匹配头部正下方一行的斜体
 const ITALICS_PATTERN = /^[_*](.+?)[_*]\s*$/m
 
-// Track magic docs
+// 跟踪 magic docs
 type MagicDocInfo = {
   path: string
 }
@@ -46,8 +46,8 @@ export function clearTrackedMagicDocs(): void {
 }
 
 /**
- * Detect if a file content contains a Magic Doc header
- * Returns an object with title and optional instructions, or null if not a magic doc
+ * 检测文件内容是否包含 Magic Doc 头部
+ * 返回包含标题和可选指令的对象，如果不是 magic doc 则返回 null
  */
 export function detectMagicDocHeader(
   content: string,
@@ -59,10 +59,10 @@ export function detectMagicDocHeader(
 
   const title = match[1].trim()
 
-  // Look for italics on the next line after the header (allow one optional blank line)
+  // 查找头部下一行的斜体（允许一个可选的空白行）
   const headerEndIndex = match.index! + match[0].length
   const afterHeader = content.slice(headerEndIndex)
-  // Match: newline, optional blank line, then content line
+  // 匹配: 换行、可选空白行、然后是内容行
   const nextLineMatch = afterHeader.match(/^\s*\n(?:\s*\n)?(.+?)(?:\n|$)/)
 
   if (nextLineMatch && nextLineMatch[1]) {
@@ -81,11 +81,11 @@ export function detectMagicDocHeader(
 }
 
 /**
- * Register a file as a Magic Doc when it's read
- * Only registers once per file path - the hook always reads latest content
+ * 当文件被读取时将其注册为 Magic Doc
+ * 每个文件路径只注册一次 — hook 始终读取最新内容
  */
 export function registerMagicDoc(filePath: string): void {
-  // Only register if not already tracked
+  // 仅在尚未被跟踪时注册
   if (!trackedMagicDocs.has(filePath)) {
     trackedMagicDocs.set(filePath, {
       path: filePath,
@@ -94,22 +94,22 @@ export function registerMagicDoc(filePath: string): void {
 }
 
 /**
- * Create Magic Docs agent definition
+ * 创建 Magic Docs 代理定义
  */
 function getMagicDocsAgent(): BuiltInAgentDefinition {
   return {
     agentType: 'magic-docs',
     whenToUse: 'Update Magic Docs',
-    tools: [FILE_EDIT_TOOL_NAME], // Only allow Edit
+    tools: [FILE_EDIT_TOOL_NAME], // 只允许 Edit
     model: 'sonnet',
     source: 'built-in',
     baseDir: 'built-in',
-    getSystemPrompt: () => '', // Will use override systemPrompt
+    getSystemPrompt: () => '', // 将使用 override systemPrompt
   }
 }
 
 /**
- * Update a single Magic Doc
+ * 更新单个 Magic Doc
  */
 async function updateMagicDoc(
   docInfo: MagicDocInfo,
@@ -118,9 +118,9 @@ async function updateMagicDoc(
   const { messages, systemPrompt, userContext, systemContext, toolUseContext } =
     context
 
-  // Clone the FileStateCache to isolate Magic Docs operations. Delete this
-  // doc's entry so FileReadTool's dedup doesn't return a file_unchanged
-  // stub — we need the actual content to re-detect the header.
+  // 克隆 FileStateCache 以隔离 Magic Docs 操作。删除此
+  // doc 的条目以避免 FileReadTool 的去重返回 file_unchanged
+  // stub — 我们需要实际内容来重新检测头部。
   const clonedReadFileState = cloneFileStateCache(toolUseContext.readFileState)
   clonedReadFileState.delete(docInfo.path)
   const clonedToolUseContext: ToolUseContext = {
@@ -128,7 +128,7 @@ async function updateMagicDoc(
     readFileState: clonedReadFileState,
   }
 
-  // Read the document; if deleted or unreadable, remove from tracking
+  // 读取文档；如果已删除或不可读，从跟踪中移除
   let currentDoc = ''
   try {
     const result = await FileReadTool.call(
@@ -140,8 +140,8 @@ async function updateMagicDoc(
       currentDoc = output.file.content
     }
   } catch (e: unknown) {
-    // FileReadTool wraps ENOENT in a plain Error("File does not exist...") with
-    // no .code, so check the message in addition to isFsInaccessible (EACCES/EPERM).
+    // FileReadTool 将 ENOENT 包装在普通的 Error("File does not exist...") 中，
+    // 没有 .code，所以除了 isFsInaccessible (EACCES/EPERM) 外还要检查消息。
     if (
       isFsInaccessible(e) ||
       (e instanceof Error && e.message.startsWith('File does not exist'))
@@ -152,15 +152,15 @@ async function updateMagicDoc(
     throw e
   }
 
-  // Re-detect title and instructions from latest file content
+  // 从最新文件内容重新检测标题和指令
   const detected = detectMagicDocHeader(currentDoc)
   if (!detected) {
-    // File no longer has magic doc header, remove from tracking
+    // 文件不再有 magic doc 头部，从跟踪中移除
     trackedMagicDocs.delete(docInfo.path)
     return
   }
 
-  // Build update prompt with latest title and instructions
+  // 使用最新标题和指令构建更新提示
   const userPrompt = await buildMagicDocsUpdatePrompt(
     currentDoc,
     docInfo.path,
@@ -168,7 +168,7 @@ async function updateMagicDoc(
     detected.instructions,
   )
 
-  // Create a custom canUseTool that only allows Edit for magic doc files
+  // 创建自定义 canUseTool，只允许对 magic doc 文件使用 Edit
   const canUseTool = async (tool: Tool, input: unknown) => {
     if (
       tool.name === FILE_EDIT_TOOL_NAME &&
@@ -191,7 +191,7 @@ async function updateMagicDoc(
     }
   }
 
-  // Run Magic Docs update using runAgent with forked context
+  // 使用分叉上下文运行 Magic Docs 更新
   for await (const _message of runAgent({
     agentDefinition: getMagicDocsAgent(),
     promptMessages: [createUserMessage({ content: userPrompt })],
@@ -207,12 +207,12 @@ async function updateMagicDoc(
     },
     availableTools: clonedToolUseContext.options.tools,
   })) {
-    // Just consume - let it run to completion
+    // 仅消费 — 让它运行到完成
   }
 }
 
 /**
- * Magic Docs post-sampling hook that updates all tracked Magic Docs
+ * 更新所有被跟踪 Magic Docs 的 Magic Docs post-sampling hook
  */
 const updateMagicDocs = sequential(async function (
   context: REPLHookContext,
@@ -223,7 +223,7 @@ const updateMagicDocs = sequential(async function (
     return
   }
 
-  // Only update when conversation is idle (no tool calls in last turn)
+  // 仅在对话空闲时更新（上一轮没有工具调用）
   const hasToolCalls = hasToolCallsInLastAssistantTurn(messages)
   if (hasToolCalls) {
     return
@@ -241,7 +241,7 @@ const updateMagicDocs = sequential(async function (
 
 export async function initMagicDocs(): Promise<void> {
   if (process.env.USER_TYPE === 'ant') {
-    // Register listener to detect magic docs when files are read
+    // 注册监听器以在文件被读取时检测 magic docs
     registerFileReadListener((filePath: string, content: string) => {
       const result = detectMagicDocHeader(content)
       if (result) {

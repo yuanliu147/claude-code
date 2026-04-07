@@ -159,8 +159,8 @@ export function onChangeAppState({
       clearAwsCredentialsCache()
       clearGcpCredentialsCache()
 
-      // Re-apply environment variables when settings.env changes
-      // This is additive-only: new vars are added, existing may be overwritten, nothing is deleted
+      // 当 settings.env 更改时重新应用环境变量
+      // 这是纯追加的：新变量被添加，现有变量可能被覆盖，不会删除任何内容
       if (newState.settings.env !== oldState.settings.env) {
         applyConfigEnvironmentVariables()
       }

@@ -7,23 +7,23 @@ import { useShortcutDisplay } from '../keybindings/useShortcutDisplay.js'
 import { KeyboardShortcutHint } from '@anthropic/ink'
 
 type Props = {
-  /** The keybinding action (e.g., 'app:toggleTranscript') */
-  action: KeybindingAction
-  /** The keybinding context (e.g., 'Global') */
-  context: KeybindingContextName
-  /** Default shortcut if keybinding not configured */
-  fallback: string
-  /** The action description text (e.g., 'expand') */
-  description: string
-  /** Whether to wrap in parentheses */
-  parens?: boolean
-  /** Whether to show in bold */
-  bold?: boolean
-}
+	/** 键绑定动作（例如 'app:toggleTranscript'） */
+	action: KeybindingAction;
+	/** 键绑定上下文（例如 'Global'） */
+	context: KeybindingContextName;
+	/** 如果键绑定未配置则使用默认快捷键 */
+	fallback: string;
+	/** 操作描述文本（例如 'expand'） */
+	description: string;
+	/** 是否用括号包裹 */
+	parens?: boolean;
+	/** 是否显示粗体 */
+	bold?: boolean;
+};
 
 /**
- * KeyboardShortcutHint that displays the user-configured shortcut.
- * Falls back to default if keybinding context is not available.
+ * KeyboardShortcutHint，显示用户配置的快捷键。
+ * 如果键绑定上下文不可用，则回退到默认值。
  *
  * @example
  * <ConfigurableShortcutHint

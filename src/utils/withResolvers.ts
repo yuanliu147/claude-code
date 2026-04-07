@@ -1,6 +1,6 @@
 /**
- * Polyfill for Promise.withResolvers() (ES2024, Node 22+).
- * package.json declares "engines": { "node": ">=18.0.0" } so we can't use the native one.
+ * Promise.withResolvers() 的 polyfill（ES2024, Node 22+）。
+ * package.json 声明了 "engines": { "node": ">=18.0.0" }，所以我们不能使用原生实现。
  */
 export function withResolvers<T>(): PromiseWithResolvers<T> {
   let resolve!: (value: T | PromiseLike<T>) => void

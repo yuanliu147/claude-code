@@ -235,7 +235,7 @@ export function resolveKeyWithChordState(
     return { type: 'match', action: exactMatch.action }
   }
 
-  // No match and no potential longer chords
+  // 没有匹配且没有可能的更长和弦
   if (pending !== null) {
     return { type: 'chord_cancelled' }
   }

@@ -9,7 +9,7 @@ import { getCwd } from '../../utils/cwd.js'
 import { findCanonicalGitRoot } from '../../utils/git.js'
 import { sanitizePath } from '../../utils/path.js'
 
-// Persistent agent memory scope: 'user' (~/.claude/agent-memory/), 'project' (.claude/agent-memory/), or 'local' (.claude/agent-memory-local/)
+// 持久化代理内存作用域：'user' (~/.claude/agent-memory/)、'project' (.claude/agent-memory/) 或 'local' (.claude/agent-memory-local/)
 export type AgentMemoryScope = 'user' | 'project' | 'local'
 
 /**
@@ -22,9 +22,9 @@ function sanitizeAgentTypeForPath(agentType: string): string {
 }
 
 /**
- * Returns the local agent memory directory, which is project-specific and not checked into VCS.
- * When CLAUDE_CODE_REMOTE_MEMORY_DIR is set, persists to the mount with project namespacing.
- * Otherwise, uses <cwd>/.claude/agent-memory-local/<agentType>/.
+ * 返回本地代理内存目录，它是项目特定的，不签入 VCS。
+ * 当设置了 CLAUDE_CODE_REMOTE_MEMORY_DIR 时，持久化到挂载点并带有项目命名空间。
+ * 否则使用 <cwd>/.claude/agent-memory-local/<agentType>/。
  */
 function getLocalAgentMemoryDir(dirName: string): string {
   if (process.env.CLAUDE_CODE_REMOTE_MEMORY_DIR) {
@@ -64,9 +64,9 @@ export function getAgentMemoryDir(
   }
 }
 
-// Check if file is within an agent memory directory (any scope).
+// 检查文件是否在代理内存目录内（任何作用域）。
 export function isAgentMemoryPath(absolutePath: string): boolean {
-  // SECURITY: Normalize to prevent path traversal bypasses via .. segments
+  // 安全：规范化以防止通过 .. 段进行路径遍历绕过
   const normalizedPath = normalize(absolutePath)
   const memoryBase = getMemoryBaseDir()
 
@@ -75,7 +75,7 @@ export function isAgentMemoryPath(absolutePath: string): boolean {
     return true
   }
 
-  // Project scope: always cwd-based (not redirected)
+  // 项目作用域：始终基于 cwd（不重定向）
   if (
     normalizedPath.startsWith(join(getCwd(), '.claude', 'agent-memory') + sep)
   ) {
@@ -104,7 +104,7 @@ export function isAgentMemoryPath(absolutePath: string): boolean {
 }
 
 /**
- * Returns the agent memory file path for a given agent type and scope.
+ * 返回给定代理类型和作用域的代理内存文件路径。
  */
 export function getAgentMemoryEntrypoint(
   agentType: string,
@@ -157,11 +157,11 @@ export function loadAgentMemoryPrompt(
 
   const memoryDir = getAgentMemoryDir(agentType, scope)
 
-  // Fire-and-forget: this runs at agent-spawn time inside a sync
-  // getSystemPrompt() callback (called from React render in AgentDetail.tsx,
-  // so it cannot be async). The spawned agent won't try to Write until after
-  // a full API round-trip, by which time mkdir will have completed. Even if
-  // it hasn't, FileWriteTool does its own mkdir of the parent directory.
+  // Fire-and-forget：这在代理生成时在同步的
+  // getSystemPrompt() 回调内运行（从 AgentDetail.tsx 中的 React 渲染调用，
+  // 所以它不能是 async）。生成的代理在完整 API 往返之后才会尝试 Write，
+  // 到那时 mkdir 将已经完成。即使没有，
+  // FileWriteTool 也会对自己的父目录执行 mkdir。
   void ensureMemoryDirExists(memoryDir)
 
   const coworkExtraGuidelines =

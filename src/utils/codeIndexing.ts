@@ -1,13 +1,13 @@
 /**
- * Utility functions for detecting code indexing tool usage.
+ * 用于检测代码索引工具使用的工具函数。
  *
- * Tracks usage of common code indexing solutions like Sourcegraph, Cody, etc.
- * both via CLI commands and MCP server integrations.
+ * 跟踪常见代码索引解决方案的使用情况，如 Sourcegraph、Cody 等。
+ * 包括通过 CLI 命令和 MCP 服务器集成。
  */
 
 /**
- * Known code indexing tool identifiers.
- * These are the normalized names used in analytics events.
+ * 已知的代码索引工具标识符。
+ * 这些是用于 analytics 事件的标准名称。
  */
 export type CodeIndexingTool =
   // Code search engines
@@ -41,8 +41,8 @@ export type CodeIndexingTool =
   | 'openctx'
 
 /**
- * Mapping of CLI command prefixes to code indexing tools.
- * The key is the command name (first word of the command).
+ * CLI 命令前缀到代码索引工具的映射。
+ * 键是命令名称（命令的第一个词）。
  */
 const CLI_COMMAND_MAPPING: Record<string, CodeIndexingTool> = {
   // Sourcegraph ecosystem

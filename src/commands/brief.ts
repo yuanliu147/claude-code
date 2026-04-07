@@ -16,9 +16,8 @@ import type {
 } from '../types/command.js'
 import { lazySchema } from '../utils/lazySchema.js'
 
-// Zod guards against fat-fingered GB pushes (same pattern as pollConfig.ts /
-// cronScheduler.ts). A malformed config falls back to DEFAULT_BRIEF_CONFIG
-// entirely rather than being partially trusted.
+// Zod 防止误触 GB 推送（与 pollConfig.ts / cronScheduler.ts 相同的模式）。
+// 格式错误的配置完全回退到 DEFAULT_BRIEF_CONFIG，而不是部分信任。
 const briefConfigSchema = lazySchema(() =>
   z.object({
     enable_slash_command: z.boolean(),
@@ -64,8 +63,8 @@ const brief = {
         const current = context.getAppState().isBriefOnly
         const newState = !current
 
-        // Entitlement check only gates the on-transition — off is always
-        // allowed so a user whose GB gate flipped mid-session isn't stuck.
+        // 权限检查只门控转换状态 — 关闭始终允许，
+        // 这样 GB 门控在会话中途翻转的用户不会被卡住。
         if (newState && !isBriefEntitled()) {
           logEvent('tengu_brief_mode_toggled', {
             enabled: false,
@@ -98,16 +97,16 @@ const brief = {
             'slash_command' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
         })
 
-        // The tool list change alone isn't a strong enough signal mid-session
-        // (model may keep emitting plain text from inertia, or keep calling a
-        // tool that just vanished). Inject an explicit reminder into the next
-        // turn's context so the transition is unambiguous.
-        // Skip when Kairos is active: isBriefEnabled() short-circuits on
-        // getKairosActive() so the tool never actually leaves the list, and
-        // the Kairos system prompt already mandates SendUserMessage.
-        // Inline <system-reminder> wrap — importing wrapInSystemReminder from
-        // utils/messages.ts pulls constants/xml.ts into the bridge SDK bundle
-        // via this module's import chain, tripping the excluded-strings check.
+        // 仅工具列表更改不足以成为会话中期的强信号
+        // （模型可能继续因惯性发出纯文本，或继续调用刚消失的工具）。
+        // 在下一个回合的上下文中注入明确的提醒，以便转换无歧义。
+        // 当 Kairos 激活时跳过：isBriefEnabled() 在
+        // getKairosActive() 上短路，所以工具实际上不会离开列表，
+        // Kairos 系统提示已经强制要求 SendUserMessage。
+        // 内联 <system-reminder> 包装 — 从
+        // utils/messages.ts 导入 wrapInSystemReminder 会通过
+        // 此模块的导入链将 constants/xml.ts 拉入 bridge SDK bundle，
+        // 触发 excluded-strings 检查。
         const metaMessages = getKairosActive()
           ? undefined
           : [

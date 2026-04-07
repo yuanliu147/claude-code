@@ -23,20 +23,20 @@ export type ApiKeyVerificationResult = {
 
 export function useApiKeyVerification(): ApiKeyVerificationResult {
   const [status, setStatus] = useState<VerificationStatus>(() => {
-    if (!isAnthropicAuthEnabled() || isClaudeAISubscriber()) {
-      return 'valid'
-    }
-    // Use skipRetrievingKeyFromApiKeyHelper to avoid executing apiKeyHelper
-    // before trust dialog is shown (security: prevents RCE via settings.json)
-    const { key, source } = getAnthropicApiKeyWithSource({
-      skipRetrievingKeyFromApiKeyHelper: true,
-    })
-    // If apiKeyHelper is configured, we have a key source even though we
-    // haven't executed it yet - return 'loading' to indicate we'll verify later
-    if (key || source === 'apiKeyHelper') {
-      return 'loading'
-    }
-    return 'missing'
+		if (!isAnthropicAuthEnabled() || isClaudeAISubscriber()) {
+			return "valid";
+		}
+		// 使用 skipRetrievingKeyFromApiKeyHelper 来避免在信任对话框显示之前执行 apiKeyHelper
+		// （安全性：防止通过 settings.json 进行 RCE 攻击）
+		const { key, source } = getAnthropicApiKeyWithSource({
+			skipRetrievingKeyFromApiKeyHelper: true,
+		});
+		// 如果 apiKeyHelper 已配置，即使尚未执行我们也有一个 key source
+		// 返回 'loading' 表示稍后会进行验证
+		if (key || source === "apiKeyHelper") {
+			return "loading";
+		}
+		return "missing";
   })
   const [error, setError] = useState<Error | null>(null)
 

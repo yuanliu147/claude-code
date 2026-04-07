@@ -168,8 +168,8 @@ export function ResumeConversation({
     void enrichLogs(ref.allStatLogs, ref.nextIndex, count).then(result => {
       ref.nextIndex = result.nextIndex
       if (result.logs.length > 0) {
-        // enrichLogs returns fresh unshared objects — safe to mutate in place.
-        // Offset comes from logCountRef so the setLogs updater stays pure.
+        // enrichLogs 返回新鲜的未共享对象——可以安全地原地修改。
+        // Offset 来自 logCountRef，所以 setLogs 更新器保持纯函数。
         const offset = logCountRef.current
         result.logs.forEach((log, i) => {
           log.value = offset + i

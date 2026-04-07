@@ -6,7 +6,7 @@ import {
 } from '../components/PromptInput/inputModes.js'
 import { makeHistoryReader } from '../history.js'
 import { KeyboardEvent, useInput } from '@anthropic/ink'
-// backward-compat bridge until consumers wire handleKeyDown to <Box onKeyDown>
+// 在消费者将 handleKeyDown 连接到 <Box onKeyDown> 之前的向后兼容桥接
 import { useKeybinding, useKeybindings } from '../keybindings/useKeybinding.js'
 import type { PromptInputMode } from '../types/textInputTypes.js'
 import type { HistoryEntry } from '../utils/config.js'
