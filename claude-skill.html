@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code Skill 机制深度分析</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2333;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --accent2: #7ee787;
+    --accent3: #d2a8ff;
+    --accent4: #ffa657;
+    --danger: #f85149;
+    --code-bg: #0d1117;
+    --highlight: rgba(88,166,255,0.08);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 0;
+  }
+  .header {
+    background: linear-gradient(135deg, #0d1117 0%, #161b22 50%, #1a1f2e 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 60px 40px 50px;
+    text-align: center;
+  }
+  .header h1 {
+    font-size: 2.4em;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--accent3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 12px;
+  }
+  .header .subtitle {
+    color: var(--text-muted);
+    font-size: 1.1em;
+  }
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 30px;
+  }
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px 32px;
+    margin-bottom: 48px;
+  }
+  .toc h2 {
+    font-size: 1.2em;
+    color: var(--accent);
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .toc ol {
+    padding-left: 24px;
+  }
+  .toc li {
+    margin-bottom: 6px;
+    color: var(--text-muted);
+  }
+  .toc a {
+    color: var(--accent);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .toc a:hover {
+    color: var(--accent3);
+    text-decoration: underline;
+  }
+
+  section {
+    margin-bottom: 56px;
+  }
+  h2 {
+    font-size: 1.6em;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border);
+  }
+  h3 {
+    font-size: 1.25em;
+    font-weight: 600;
+    color: var(--accent3);
+    margin: 28px 0 14px;
+  }
+  h4 {
+    font-size: 1.05em;
+    font-weight: 600;
+    color: var(--accent4);
+    margin: 20px 0 10px;
+  }
+  p { margin-bottom: 14px; }
+  ul, ol {
+    padding-left: 24px;
+    margin-bottom: 14px;
+  }
+  li { margin-bottom: 6px; }
+
+  code {
+    font-family: "JetBrains Mono", "Fira Code", "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.88em;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--accent4);
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 24px;
+    overflow-x: auto;
+    margin: 16px 0 20px;
+    line-height: 1.55;
+  }
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 0.85em;
+    color: var(--text);
+  }
+  .comment { color: var(--text-muted); }
+  .keyword { color: var(--accent3); }
+  .string { color: var(--accent2); }
+  .fn { color: var(--accent); }
+  .type { color: var(--accent4); }
+  .number { color: #79c0ff; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 24px;
+    font-size: 0.92em;
+  }
+  th {
+    background: var(--surface2);
+    color: var(--accent);
+    font-weight: 600;
+    text-align: left;
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+  }
+  td {
+    padding: 10px 16px;
+    border: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:nth-child(even) td {
+    background: var(--highlight);
+  }
+
+  .callout {
+    background: var(--surface);
+    border-left: 4px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 18px 22px;
+    margin: 18px 0 22px;
+  }
+  .callout.warning {
+    border-left-color: var(--accent4);
+  }
+  .callout.danger {
+    border-left-color: var(--danger);
+  }
+  .callout.success {
+    border-left-color: var(--accent2);
+  }
+  .callout-title {
+    font-weight: 700;
+    margin-bottom: 6px;
+    font-size: 0.95em;
+  }
+  .callout.warning .callout-title { color: var(--accent4); }
+  .callout.danger .callout-title { color: var(--danger); }
+  .callout.success .callout-title { color: var(--accent2); }
+
+  .flow-diagram {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px;
+    margin: 20px 0;
+    overflow-x: auto;
+  }
+  .flow-diagram pre {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+  .flow-diagram code {
+    font-size: 0.82em;
+    color: var(--text);
+  }
+
+  .badge {
+    display: inline-block;
+    font-size: 0.75em;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 12px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .badge-blue { background: rgba(88,166,255,0.15); color: var(--accent); }
+  .badge-green { background: rgba(126,231,135,0.15); color: var(--accent2); }
+  .badge-purple { background: rgba(210,168,255,0.15); color: var(--accent3); }
+  .badge-orange { background: rgba(255,166,87,0.15); color: var(--accent4); }
+
+  .source-ref {
+    font-size: 0.82em;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  .phase-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    margin: 18px 0;
+  }
+  .phase-card h4 {
+    margin-top: 0;
+  }
+  .phase-num {
+    display: inline-block;
+    width: 28px;
+    height: 28px;
+    line-height: 28px;
+    text-align: center;
+    background: var(--accent);
+    color: var(--bg);
+    font-weight: 700;
+    font-size: 0.85em;
+    border-radius: 50%;
+    margin-right: 8px;
+  }
+
+  .separator {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 48px 0;
+  }
+
+  footer {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85em;
+    padding: 40px 0 30px;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Claude Code Skill 机制深度分析</h1>
+  <div class="subtitle">源码级解析 Skill 的发现、加载、注册、调用与内容处理全链路</div>
+</div>
+
+<div class="container">
+
+<!-- Table of Contents -->
+<nav class="toc">
+  <h2>目录</h2>
+  <ol>
+    <li><a href="#overview">总览：Skill 系统的定位</a></li>
+    <li><a href="#discovery">发现阶段：五层来源并行加载</a></li>
+    <li><a href="#loading">加载阶段：SKILL.md 解析</a></li>
+    <li><a href="#registration">注册阶段：统一的 Command 对象</a></li>
+    <li><a href="#listing">列举阶段：展示给模型的 Skill 列表</a></li>
+    <li><a href="#invocation">调用阶段：Inline vs Fork 两种执行模式</a></li>
+    <li><a href="#content-processing">内容处理阶段：Skill 正文的变量替换与 Shell 执行</a></li>
+    <li><a href="#file-references">其他文件的引用机制（核心）</a></li>
+    <li><a href="#gitnexus">GitNexus Skill 的引用方式分析</a></li>
+    <li><a href="#dataflow">完整数据流图</a></li>
+    <li><a href="#key-files">关键源文件索引</a></li>
+  </ol>
+</nav>
+
+<!-- Section 1 -->
+<section id="overview">
+  <h2>1. 总览：Skill 系统的定位</h2>
+  <p>Skill 是 Claude Code 中一种<strong>可插拔的 prompt 注入机制</strong>。它将结构化的 markdown 文档（<code>SKILL.md</code>）在运行时注入到对话上下文中，赋予模型额外的领域知识和行为指引。</p>
+  <p>从架构角度看，Skill 位于 <strong>"用户输入 → 模型推理"</strong> 这条链路的中间层：</p>
+  <ul>
+    <li>用户可以通过 <code>/skill-name</code> 手动触发</li>
+    <li>模型可以通过 <code>SkillTool</code> 自动触发（基于 <code>when_to_use</code> 描述判断）</li>
+    <li>Skill 内容被处理后作为 <code>UserMessage</code> 注入对话，模型据此执行</li>
+  </ul>
+  <div class="callout">
+    <div class="callout-title">核心设计理念</div>
+    <p>Skill 本质上是一种<strong>延迟加载的 prompt</strong>：平时只以摘要形式列在 system-reminder 中（节省 token），只在被调用时才加载完整内容注入上下文。这避免了所有 skill 内容同时占用宝贵的上下文窗口。</p>
+  </div>
+</section>
+
+<!-- Section 2 -->
+<section id="discovery">
+  <h2>2. 发现阶段：五层来源并行加载</h2>
+  <p class="source-ref">源文件：<code>src/skills/loadSkillsDir.ts:638</code> — <code>getSkillDirCommands()</code></p>
+
+  <p>Skill 从五个层级并行发现，优先级从上到下递减：</p>
+
+  <table>
+    <tr>
+      <th>来源</th>
+      <th>路径</th>
+      <th>说明</th>
+    </tr>
+    <tr>
+      <td><strong>Managed</strong></td>
+      <td><code>~/.config/anthropic/.claude/skills</code></td>
+      <td>企业策略管控的 skill，由管理员部署</td>
+    </tr>
+    <tr>
+      <td><strong>User</strong></td>
+      <td><code>~/.claude/skills</code></td>
+      <td>用户全局 skill，所有项目共享</td>
+    </tr>
+    <tr>
+      <td><strong>Project</strong></td>
+      <td><code>.claude/skills</code>（向上遍历到 $HOME）</td>
+      <td>项目级 skill，可提交到 git</td>
+    </tr>
+    <tr>
+      <td><strong>Additional</strong></td>
+      <td><code>--add-dir</code> 指定目录下的 <code>.claude/skills</code></td>
+      <td>CLI 参数指定的额外目录</td>
+    </tr>
+    <tr>
+      <td><strong>Legacy</strong></td>
+      <td><code>.claude/commands/</code></td>
+      <td>旧格式兼容，支持单文件和目录两种格式</td>
+    </tr>
+  </table>
+
+  <h3>2.1 动态发现（运行时）</h3>
+  <p class="source-ref">源文件：<code>loadSkillsDir.ts:861</code> — <code>discoverSkillDirsForPaths()</code></p>
+  <p>当模型执行 Read/Edit/Write 操作时，系统会沿文件路径向上查找嵌套的 <code>.claude/skills/</code> 目录，动态加载新 skill。触发点位于三个文件工具中：</p>
+  <pre><code><span class="comment">// FileReadTool.ts:579</span>
+<span class="keyword">const</span> newSkillDirs = <span class="keyword">await</span> <span class="fn">discoverSkillDirsForPaths</span>([fullFilePath], cwd)
+<span class="fn">addSkillDirectories</span>(newSkillDirs).<span class="keyword">catch</span>(() => {})
+
+<span class="comment">// FileEditTool.ts:408 和 FileWriteTool.ts:234 中完全相同的模式</span></code></pre>
+
+  <h4>具体例子：Monorepo 子项目自带 Skill</h4>
+  <p>假设项目结构如下：</p>
+  <pre><code>/home/user/my-project/                  <span class="comment">← cwd（启动 Claude Code 的目录）</span>
+├── .claude/
+│   └── skills/
+│       └── review-pr/SKILL.md          <span class="comment">← 启动时已加载（cwd 级别）</span>
+├── src/
+│   └── main.ts
+└── packages/
+    └── payment-service/                <span class="comment">← 子项目自带自己的 .claude/skills</span>
+        ├── .claude/
+        │   └── skills/
+        │       └── deploy-payment/
+        │           └── SKILL.md        <span class="comment">← 启动时不会被发现！</span>
+        └── src/
+            └── checkout.ts</code></pre>
+
+  <p>启动时 <code>getSkillDirCommands()</code> 从 cwd 向上遍历到 <code>$HOME</code>，它找到了 <code>review-pr</code>，但看不到 <code>deploy-payment</code>——因为 <code>deploy-payment</code> 在 cwd 的<strong>子目录</strong>里，向上遍历覆盖不到。</p>
+
+  <p><strong>运行时</strong>，当模型读取 <code>packages/payment-service/src/checkout.ts</code>：</p>
+  <pre><code><span class="fn">discoverSkillDirsForPaths</span>([<span class="string">"packages/payment-service/src/checkout.ts"</span>], cwd)
+
+① 从文件的 <strong>父目录</strong> 开始往上走：
+   packages/payment-service/src/.claude/skills/  → <span class="comment">不存在</span>
+
+② 再往上一层：
+   packages/payment-service/.claude/skills/      → <span class="comment">存在！✅</span>
+   → newDirs.push(<span class="string">"packages/payment-service/.claude/skills"</span>)
+
+③ 继续往上：
+   packages/.claude/skills/                     → <span class="comment">不存在</span>
+
+④ 到达 my-project/ (= cwd) → <span class="comment">停止（不含 cwd 本身）</span></code></pre>
+
+  <p>随后 <code>addSkillDirectories()</code> 加载 <code>deploy-payment/SKILL.md</code>，该 skill 现在可用了。</p>
+
+  <h4>安全保护</h4>
+  <table>
+    <tr><th>机制</th><th>说明</th></tr>
+    <tr>
+      <td><strong>cwd 是上界</strong></td>
+      <td>只向上走到 cwd（不含），cwd 级别的 skill 已在启动时加载，避免重复</td>
+    </tr>
+    <tr>
+      <td><strong>gitignore 检查</strong></td>
+      <td>被 gitignore 的目录无条件跳过，防止 <code>node_modules/some-pkg/.claude/skills/</code> 被偷偷加载</td>
+    </tr>
+    <tr>
+      <td><strong>去重缓存</strong></td>
+      <td><code>dynamicSkillDirs</code>（Set）记录已检查过的目录，同一目录只检查一次</td>
+    </tr>
+    <tr>
+      <td><strong>深度优先覆盖</strong></td>
+      <td>路径更深的 skill 优先，靠近文件的 skill 覆盖上层同名 skill</td>
+    </tr>
+  </table>
+
+  <div class="callout success">
+    <div class="callout-title">设计意图</div>
+    <p>这个机制让 Monorepo 的子包可以携带自己的 skill，只有当模型真正接触到那个子包的代码时 skill 才被激活——避免了启动时加载整个代码库所有子目录的 skill。</p>
+  </div>
+
+  <h3>2.2 条件激活</h3>
+  <p class="source-ref">源文件：<code>loadSkillsDir.ts:997</code> — <code>activateConditionalSkillsForPaths()</code></p>
+
+  <div class="callout warning">
+    <div class="callout-title">与 2.1 动态发现的区别</div>
+    <p><strong>动态发现 (2.1)</strong>：在运行时找到新的 <code>.claude/skills/</code> <em>目录</em>并加载。<br/>
+    <strong>条件激活 (2.2)</strong>：skill 已在启动时<em>加载</em>（目录在 cwd 或被向上遍历到），但处于<strong>休眠态</strong>，只有模型触及匹配文件时才<em>激活</em>（展示给模型）。</p>
+  </div>
+
+  <h4>工作流程</h4>
+  <p>带 <code>paths:</code> frontmatter 的 skill 在启动时被解析，但<strong>不会被立即返回</strong>给模型。它们被存入 <code>conditionalSkills</code> Map：</p>
+  <pre><code><span class="comment">// loadSkillsDir.ts:771-800（getSkillDirCommands 中）</span>
+<span class="keyword">for</span> (<span class="keyword">const</span> skill <span class="keyword">of</span> deduplicatedSkills) {
+  <span class="keyword">if</span> (skill.paths && skill.paths.length > <span class="number">0</span> && !activatedConditionalSkillNames.has(skill.name)) {
+    newConditionalSkills.push(skill)   <span class="comment">// → 存入休眠池</span>
+  } <span class="keyword">else</span> {
+    unconditionalSkills.push(skill)    <span class="comment">// → 直接返回给模型</span>
+  }
+}
+<span class="comment">// 休眠池：conditionalSkills.set(skill.name, skill)</span>
+<span class="keyword">return</span> unconditionalSkills  <span class="comment">// 模型暂时看不到条件 skill</span></code></pre>
+
+  <p>当模型通过 Read/Edit/Write 触及文件时，系统检查路径是否匹配：</p>
+  <pre><code><span class="comment">// activateConditionalSkillsForPaths() 的核心逻辑</span>
+<span class="keyword">for</span> (<span class="keyword">const</span> [name, skill] <span class="keyword">of</span> conditionalSkills) {
+  <span class="keyword">const</span> skillIgnore = <span class="fn">ignore</span>().<span class="fn">add</span>(skill.paths)
+  <span class="keyword">for</span> (<span class="keyword">const</span> filePath <span class="keyword">of</span> filePaths) {
+    <span class="keyword">if</span> (skillIgnore.<span class="fn">ignores</span>(relativePath)) {
+      dynamicSkills.<span class="fn">set</span>(name, skill)     <span class="comment">// → 激活！</span>
+      conditionalSkills.<span class="fn">delete</span>(name)      <span class="comment">// → 移出休眠池</span>
+      activatedConditionalSkillNames.<span class="fn">add</span>(name)
+      <span class="keyword">break</span>
+    }
+  }
+}</code></pre>
+
+  <h4>具体例子</h4>
+  <p>假设有一个 <code>database-migration</code> skill：</p>
+  <pre><code><span class="comment"># .claude/skills/database-migration/SKILL.md</span>
+<span class="keyword">---</span>
+<span class="keyword">name:</span> database-migration
+<span class="keyword">description:</span> <span class="string">"Database migration helper - generate, review, and run migrations"</span>
+<span class="keyword">paths:</span> <span class="string">"migrations/**, db/schema/**"</span>
+<span class="keyword">---</span>
+
+# Database Migration Skill
+...</code></pre>
+
+  <table>
+    <tr><th>场景</th><th>行为</th></tr>
+    <tr>
+      <td>启动时</td>
+      <td>skill 被加载解析，但<strong>不展示</strong>给模型（进入 <code>conditionalSkills</code> 休眠池）</td>
+    </tr>
+    <tr>
+      <td>模型 Read <code>src/utils/helper.ts</code></td>
+      <td><strong>不激活</strong> — 路径不匹配 <code>migrations/**</code> 或 <code>db/schema/**</code></td>
+    </tr>
+    <tr>
+      <td>模型 Edit <code>migrations/2026_add_users.sql</code></td>
+      <td><strong>激活！✅</strong> — 匹配 <code>migrations/**</code>，skill 立刻变为可用</td>
+    </tr>
+    <tr>
+      <td>模型 Write <code>db/schema/users.ts</code></td>
+      <td><strong>激活！✅</strong> — 匹配 <code>db/schema/**</code></td>
+    </tr>
+  </table>
+
+  <h4>匹配规则</h4>
+  <ul>
+    <li>使用 <code>ignore</code> 库，完整 gitignore 语义（<code>*</code>、<code>**</code>、<code>!</code> 取反等）</li>
+    <li><code>paths</code> 接受逗号分隔字符串或 YAML 数组</li>
+    <li>支持花括号展开：<code>paths: "src/*.{ts,tsx}"</code> → <code>src/*.ts</code> + <code>src/*.tsx</code></li>
+    <li>所有模式都是 <code>**</code> 时视为无条件（不进入休眠池）</li>
+    <li>匹配基于文件相对于 cwd 的路径，绝对路径自动转换</li>
+    <li>激活后该 skill 名称记录到 <code>activatedConditionalSkillNames</code>，即使缓存清空也不会再休眠</li>
+  </ul>
+
+  <h3>2.3 去重</h3>
+  <p>通过 <code>realpath()</code> 解析符号链接，确保同一个物理文件只被加载一次（line 118-124）。先加载的优先。</p>
+
+  <h3>2.4 其他来源</h3>
+  <ul>
+    <li><strong>Bundled Skills</strong> — 编译进 CLI 的内置 skill，<code>initBundledSkills()</code> 在启动时注册（<code>main.tsx:2812</code>）</li>
+    <li><strong>Plugin Skills</strong> — 从已安装插件加载</li>
+    <li><strong>MCP Skills</strong> — 来自 MCP server 的 skill（<code>loadedFrom === 'mcp'</code>）</li>
+    <li><strong>Remote Skills</strong> — feature-gated（<code>EXPERIMENTAL_SKILL_SEARCH</code>），从 AKI/GCS 远程加载</li>
+  </ul>
+</section>
+
+<!-- Section 3 -->
+<section id="loading">
+  <h2>3. 加载阶段：SKILL.md 解析</h2>
+  <p class="source-ref">源文件：<code>loadSkillsDir.ts:407</code> — <code>loadSkillsFromSkillsDir()</code></p>
+
+  <h3>3.1 文件格式要求</h3>
+  <p>每个 skill 必须以<strong>目录形式</strong>存在：</p>
+  <pre><code>.claude/skills/
+  my-skill/
+    SKILL.md        <span class="comment">← 必须存在</span>
+    references/     <span class="comment">← 可选的参考文件</span>
+    examples/       <span class="comment">← 可选的示例文件</span></code></pre>
+  <p>单独的 <code>.md</code> 文件在 <code>/skills/</code> 目录下<strong>不被支持</strong>（但在旧格式 <code>/commands/</code> 中支持）。</p>
+
+  <h3>3.2 Frontmatter 解析</h3>
+  <p class="source-ref">源文件：<code>src/utils/frontmatterParser.ts</code></p>
+  <p>使用正则 <code>/^---\s*\n([\s\S]*?)---\s*\n?/</code> 提取 YAML frontmatter，然后通过 <code>parseYaml()</code> 解析。包含特殊字符的值会被自动引号处理。</p>
+
+  <h3>3.3 支持的 Frontmatter 字段</h3>
+  <table>
+    <tr><th>字段</th><th>类型</th><th>作用</th></tr>
+    <tr><td><code>name</code></td><td>string</td><td>显示名称</td></tr>
+    <tr><td><code>description</code></td><td>string</td><td>一行描述</td></tr>
+    <tr><td><code>when_to_use</code></td><td>string</td><td>模型何时应该调用（展示在 skill listing 中）</td></tr>
+    <tr><td><code>allowed-tools</code></td><td>string | string[]</td><td>授权工具列表，调用时自动添加到权限白名单</td></tr>
+    <tr><td><code>context</code></td><td><code>'inline'</code> | <code>'fork'</code></td><td>执行模式：内联注入或隔离子 agent</td></tr>
+    <tr><td><code>agent</code></td><td>string</td><td>fork 模式下使用的 agent 类型（默认 general-purpose）</td></tr>
+    <tr><td><code>model</code></td><td>string</td><td>模型覆盖（haiku/sonnet/opus/inherit）</td></tr>
+    <tr><td><code>effort</code></td><td>string</td><td>思维深度级别（low/medium/high/max）</td></tr>
+    <tr><td><code>hooks</code></td><td>HooksSettings</td><td>注册 session 级 hook（PreToolUse/PostToolUse/Stop 等）</td></tr>
+    <tr><td><code>paths</code></td><td>string | string[]</td><td>条件激活的 gitignore 路径模式</td></tr>
+    <tr><td><code>shell</code></td><td><code>'bash'</code> | <code>'powershell'</code></td><td>内联 shell 命令使用的 shell 类型</td></tr>
+    <tr><td><code>user-invocable</code></td><td>boolean</td><td>用户能否通过 /name 手动调用</td></tr>
+    <tr><td><code>disable-model-invocation</code></td><td>boolean</td><td>禁止模型通过 SkillTool 调用</td></tr>
+    <tr><td><code>arguments</code></td><td>string | string[]</td><td>命名参数列表（$ARG_NAME 替换）</td></tr>
+    <tr><td><code>argument-hint</code></td><td>string</td><td>参数提示文本</td></tr>
+    <tr><td><code>version</code></td><td>string</td><td>版本字符串</td></tr>
+  </table>
+
+  <h3>3.4 解析流程</h3>
+  <pre><code><span class="fn">loadSkillsFromSkillsDir</span>(basePath, source)
+  │
+  ├── readdir(basePath)                    <span class="comment">// 列出所有目录条目</span>
+  │
+  ├── 对每个目录条目:
+  │   ├── 读取 <span class="string">{dir}/SKILL.md</span>
+  │   ├── <span class="fn">parseFrontmatter</span>(content)         <span class="comment">// 提取 YAML + 正文</span>
+  │   ├── <span class="fn">parseSkillFrontmatterFields</span>(...)  <span class="comment">// 解析所有字段</span>
+  │   └── <span class="fn">createSkillCommand</span>(parsed)        <span class="comment">// 构建 Command 对象</span>
+  │
+  └── 返回 SkillWithPath[]                <span class="comment">// (Command + filePath)</span></code></pre>
+</section>
+
+<!-- Section 4 -->
+<section id="registration">
+  <h2>4. 注册阶段：统一的 Command 对象</h2>
+  <p class="source-ref">源文件：<code>loadSkillsDir.ts:270</code> — <code>createSkillCommand()</code></p>
+
+  <p>所有来源的 skill 最终被构造为统一的 <code>Command</code> 对象（<code>type: 'prompt'</code>），其核心是一个<strong>闭包函数</strong> <code>getPromptForCommand(args, context)</code>：</p>
+
+  <pre><code><span class="keyword">async</span> <span class="fn">getPromptForCommand</span>(args, toolUseContext) {
+  <span class="comment">// Step 1: 添加 Base Directory 前缀</span>
+  <span class="keyword">let</span> finalContent = baseDir
+    ? <span class="string">`Base directory for this skill: ${baseDir}\n\n${markdownContent}`</span>
+    : markdownContent
+
+  <span class="comment">// Step 2: 参数替换 $ARG_NAME → 实际值</span>
+  finalContent = <span class="fn">substituteArguments</span>(finalContent, args, <span class="number">true</span>, argumentNames)
+
+  <span class="comment">// Step 3: 变量替换 ${CLAUDE_SKILL_DIR} → skill 目录路径</span>
+  <span class="keyword">if</span> (baseDir) {
+    finalContent = finalContent.<span class="fn">replace</span>(<span class="string">/\$\{CLAUDE_SKILL_DIR\}/g</span>, skillDir)
+  }
+
+  <span class="comment">// Step 4: 变量替换 ${CLAUDE_SESSION_ID} → 当前会话 ID</span>
+  finalContent = finalContent.<span class="fn">replace</span>(<span class="string">/\$\{CLAUDE_SESSION_ID\}/g</span>, <span class="fn">getSessionId</span>())
+
+  <span class="comment">// Step 5: 内联 shell 命令执行 !`cmd` 和 ```! cmd ```</span>
+  <span class="keyword">if</span> (loadedFrom !== <span class="string">'mcp'</span>) {  <span class="comment">// MCP skill 出于安全考虑不执行</span>
+    finalContent = <span class="keyword">await</span> <span class="fn">executeShellCommandsInPrompt</span>(finalContent, ...)
+  }
+
+  <span class="keyword">return</span> [{ <span class="type">type</span>: <span class="string">'text'</span>, <span class="type">text</span>: finalContent }]
+}</code></pre>
+
+  <div class="callout success">
+    <div class="callout-title">关键设计：延迟内容加载</div>
+    <p><code>getPromptForCommand</code> 是一个闭包，捕获了 <code>markdownContent</code>、<code>baseDir</code>、<code>argumentNames</code> 等变量。完整内容只在 skill 被调用时才处理，而不是在加载阶段。这实现了<strong>按需加载</strong>。</p>
+  </div>
+
+  <h3>4.1 Bundled Skill 的特殊注册</h3>
+  <p class="source-ref">源文件：<code>src/skills/bundledSkills.ts</code></p>
+  <p>Bundled skill 使用 <code>registerBundledSkill(definition)</code> 注册，支持额外的 <code>files:</code> 属性，将参考文件提取到磁盘：</p>
+  <pre><code><span class="fn">registerBundledSkill</span>({
+  <span class="type">name</span>: <span class="string">'verify'</span>,
+  <span class="type">files</span>: { <span class="string">'examples/cli.md'</span>: cliMdContent, <span class="string">'examples/server.md'</span>: serverMdContent },
+  <span class="fn">getPromptForCommand</span>(args, ctx) { ... }
+})</code></pre>
+  <p>文件被提取到 <code>$TMP/.claude/bundled-skills/&lt;skillName&gt;/</code>，安全写入（0o600, O_NOFOLLOW）。</p>
+</section>
+
+<!-- Section 5 -->
+<section id="listing">
+  <h2>5. 列举阶段：展示给模型的 Skill 列表</h2>
+  <p class="source-ref">源文件：<code>loadSkillsDir.ts:70</code> — <code>formatCommandsWithinBudget()</code></p>
+
+  <p>所有可用 skill 以摘要形式注入到对话的 <code>system-reminder</code> 中，告诉模型有哪些 skill 可用：</p>
+
+  <h3>5.1 Token 预算控制</h3>
+  <ul>
+    <li>总预算 = 上下文窗口的 <strong>1%</strong>（约 8000 字符 / 200k 窗口）</li>
+    <li>每条描述硬上限 <strong>250 字符</strong>（<code>MAX_LISTING_DESC_CHARS</code>）</li>
+    <li>Bundled skill 的描述<strong>永不截断</strong></li>
+    <li>超预算时：先等比截断非 bundled 描述，极端情况下只显示名称</li>
+  </ul>
+
+  <h3>5.2 展示格式</h3>
+  <pre><code><span class="comment"># 在 system-reminder 中展示：</span>
+- gitnexus-exploring: Use when the user asks how code works... - "How does X work?", "What calls this function?"
+- gitnexus-impact-analysis: Use when the user wants to know what will break... - "Is it safe to change X?"
+- teach-me: Personalized 1-on-1 AI tutor... - Use when user wants to learn/study/understand a topic</code></pre>
+
+  <h3>5.3 SkillTool Prompt</h3>
+  <p class="source-ref">源文件：<code>loadSkillsDir.ts:173</code> — <code>getPrompt()</code></p>
+  <p>SkillTool 自身的 prompt 告诉模型如何调用 skill：</p>
+  <pre><code><span class="comment">Execute a skill within the main conversation
+
+When users ask you to perform tasks, check if any available skills match.
+Use this tool with the skill name and optional arguments:
+  skill: "pdf"
+  skill: "commit", args: "-m 'Fix bug'"
+
+Important:
+- Available skills are listed in system-reminder messages
+- When a skill matches, invoke BEFORE generating any other response
+- If you see a &lt;command-name&gt; tag, the skill has ALREADY been loaded</span></code></pre>
+</section>
+
+<!-- Section 6 -->
+<section id="invocation">
+  <h2>6. 调用阶段：Inline vs Fork 两种执行模式</h2>
+
+  <h3>6.1 Inline 模式（默认）<span class="badge badge-blue">context: inline</span></h3>
+  <p>Skill 内容<strong>直接注入</strong>到当前对话上下文，模型在当前上下文中继续处理。</p>
+
+  <div class="flow-diagram">
+    <pre><code>用户输入 /skill-name  或  模型调用 SkillTool
+        │
+        ▼
+  processPromptSlashCommand()              <span class="comment">← processSlashCommand.tsx:1089</span>
+        │
+        ▼
+  getMessagesForPromptSlashCommand()       <span class="comment">← processSlashCommand.tsx:1114</span>
+        │
+        ├── command.getPromptForCommand()  <span class="comment">← 执行闭包，变量替换+shell执行</span>
+        │
+        ├── registerSkillHooks()           <span class="comment">← 注册 frontmatter 中的 hooks</span>
+        │
+        ├── addInvokedSkill()              <span class="comment">← 注册到 compact-preservation 状态</span>
+        │
+        ├── getAttachmentMessages()        <span class="comment">← 解析 @-mention 附件</span>
+        │
+        └── 返回消息数组:
+             ├── metadata message          <span class="comment">← &lt;command-message&gt; 标记</span>
+             ├── main content (isMeta)     <span class="comment">← skill 处理后的正文</span>
+             ├── attachment messages       <span class="comment">← @引用的文件内容</span>
+             └── permissions attachment    <span class="comment">← allowedTools + model</span></code></pre>
+  </div>
+
+  <div class="callout">
+    <div class="callout-title">contextModifier — 运行时上下文修改</div>
+    <p>SkillTool 的 <code>call()</code> 返回一个 <code>contextModifier</code> 函数，可以在 skill 执行后修改当前上下文：</p>
+    <ul>
+      <li>将 <code>allowed-tools</code> 添加到权限白名单</li>
+      <li>覆盖模型选择（<code>model: opus</code>）</li>
+      <li>覆盖思维深度（<code>effort: high</code>）</li>
+    </ul>
+  </div>
+
+  <h3>6.2 Fork 模式 <span class="badge badge-purple">context: fork</span></h3>
+  <p>Skill 在<strong>隔离子 agent</strong> 中运行，有独立上下文和 token 预算。</p>
+
+  <div class="flow-diagram">
+    <pre><code>SkillTool.call() / 用户 /skill-name
+        │
+        ▼
+  executeForkedSkill()                     <span class="comment">← SkillTool.ts:122</span>
+        │
+        ▼
+  prepareForkedCommandContext()            <span class="comment">← forkedAgent.ts:191</span>
+        │
+        ├── command.getPromptForCommand()  <span class="comment">← 获取处理后的 skill 内容</span>
+        ├── parseToolListFromCLI()         <span class="comment">← 解析 allowedTools</span>
+        ├── createGetAppStateWithAllowedTools() <span class="comment">← 注入权限</span>
+        └── 返回: skillContent + baseAgent + promptMessages
+        │
+        ▼
+  runAgent({                               <span class="comment">← AgentTool/runAgent.ts</span>
+    agentDefinition,                       <span class="comment">← general-purpose 或指定 agent</span>
+    promptMessages: [skillContent],        <span class="comment">← skill 内容作为初始 prompt</span>
+    toolUseContext: isolated,              <span class="comment">← createSubagentContext() 隔离</span>
+  })
+        │
+        ▼ (子 agent 独立循环)
+        │
+  extractResultText()                      <span class="comment">← 提取最后一条 assistant 消息</span>
+        │
+        ▼
+  返回结果给父对话</code></pre>
+  </div>
+
+  <h3>6.3 两种模式对比</h3>
+  <table>
+    <tr><th>特性</th><th>Inline</th><th>Fork</th></tr>
+    <tr><td>执行位置</td><td>当前对话上下文</td><td>隔离子 agent</td></tr>
+    <tr><td>Token 预算</td><td>共享主对话</td><td>独立预算</td></tr>
+    <tr><td>消息注入</td><td>作为 UserMessage 直接注入</td><td>作为子 agent 的初始 prompt</td></tr>
+    <tr><td>工具权限</td><td>通过 contextModifier 修改</td><td>通过 createSubagentContext 注入</td></tr>
+    <tr><td>Prompt Cache</td><td>自然共享</td><td>通过 CacheSafeParams 共享</td></tr>
+    <tr><td>结果返回</td><td>模型直接看到注入内容</td><td>提取最终文本返回给父对话</td></tr>
+    <tr><td>适用场景</td><td>简单 prompt 注入</td><td>需要多步工具调用的复杂任务</td></tr>
+  </table>
+
+  <h3>6.4 权限控制</h3>
+  <p class="source-ref">源文件：<code>SkillTool.ts:433</code> — <code>checkPermissions()</code></p>
+  <ul>
+    <li>支持 <code>allow</code> / <code>deny</code> 规则（精确匹配和前缀匹配 <code>review:*</code>）</li>
+    <li>只有安全属性的 skill（无 <code>allowed-tools</code> 等）自动放行</li>
+    <li>其他 skill 弹出权限提示让用户确认</li>
+  </ul>
+</section>
+
+<!-- Section 7 -->
+<section id="content-processing">
+  <h2>7. 内容处理阶段：Skill 正文的变量替换与 Shell 执行</h2>
+
+  <p>当 skill 被调用时，<code>getPromptForCommand</code> 闭包对 SKILL.md 正文执行以下处理链：</p>
+
+  <div class="flow-diagram">
+    <pre><code>原始 markdownContent
+    │
+    ▼
+① 添加 Base Directory 前缀
+    │  "Base directory for this skill: /path/to/skill-dir\n\n"
+    ▼
+② 参数替换
+    │  $ARGUMENTS → args
+    │  $ARG_NAME  → named arguments
+    ▼
+③ 变量替换
+    │  ${CLAUDE_SKILL_DIR}   → skill 目录绝对路径
+    │  ${CLAUDE_SESSION_ID}  → 当前会话 ID
+    ▼
+④ 内联 Shell 命令执行 (仅非 MCP skill)
+    │  !`git branch --show-current`  → "main"
+    │  ```! tree -L 2 ```           → 目录树输出
+    ▼
+最终文本 [{ type: 'text', text: finalContent }]</code></pre>
+  </div>
+
+  <h3>7.1 内联 Shell 执行细节</h3>
+  <p class="source-ref">源文件：<code>src/utils/promptShellExecution.ts</code></p>
+
+  <p>支持两种语法：</p>
+  <table>
+    <tr><th>语法</th><th>示例</th><th>说明</th></tr>
+    <tr>
+      <td>内联</td>
+      <td><code>!`git branch --show-current`</code></td>
+      <td>适合简短命令，输出替换到原位置</td>
+    </tr>
+    <tr>
+      <td>代码块</td>
+      <td><code>```! tree -L 2 ```</code></td>
+      <td>适合多行命令，支持管道</td>
+    </tr>
+  </table>
+
+  <p>执行过程：</p>
+  <ol>
+    <li>正则匹配 <code>BLOCK_PATTERN</code> 和 <code>INLINE_PATTERN</code></li>
+    <li>通过 BashTool 的权限检查流程</li>
+    <li>调用 <code>BashTool.call({ command })</code> 实际执行</li>
+    <li>将输出替换回原位置（<code>String.replace</code> 使用函数 replacer 防止特殊字符破坏）</li>
+  </ol>
+
+  <div class="callout warning">
+    <div class="callout-title">安全限制</div>
+    <p>MCP 来源的 skill（<code>loadedFrom === 'mcp'</code>）<strong>不会执行</strong>内联 shell 命令。MCP skill 被视为远程且不受信任的内容。</p>
+  </div>
+
+  <h3>7.2 Shell 类型选择</h3>
+  <p>通过 frontmatter <code>shell:</code> 字段指定：</p>
+  <ul>
+    <li><code>bash</code>（默认）→ 使用 BashTool</li>
+    <li><code>powershell</code> → 使用 PowerShellTool（仅在启用时可用，惰性加载）</li>
+  </ul>
+</section>
+
+<!-- Section 8 -->
+<section id="file-references">
+  <h2>8. 其他文件的引用机制（核心）</h2>
+
+  <p>这是 skill 系统中最关键的设计之一——skill 正文中如何引用和使用其他文件。共有<strong>五种机制</strong>：</p>
+
+  <h3>机制 1：${CLAUDE_SKILL_DIR} 路径变量 <span class="badge badge-blue">最常用</span></h3>
+  <p>SKILL.md 正文中使用 <code>${CLAUDE_SKILL_DIR}</code> 变量引用 skill 目录下的文件：</p>
+  <pre><code><span class="comment"># SKILL.md 中写道：</span>
+Read <span class="string">${CLAUDE_SKILL_DIR}/references/pedagogy.md</span> for teaching methodology.
+See <span class="string">${CLAUDE_SKILL_DIR}/examples/advanced.md</span> for advanced examples.</code></pre>
+  <p>在 <code>getPromptForCommand</code> 闭包中，<code>${CLAUDE_SKILL_DIR}</code> 被替换为 skill 目录的绝对路径。</p>
+
+  <div class="callout">
+    <div class="callout-title">重要：这不是自动包含</div>
+    <p><code>${CLAUDE_SKILL_DIR}</code> 只是路径替换，<strong>不会</strong>自动读取文件内容。它告诉模型文件在哪里，模型自己决定是否使用 Read 工具去读取。这是一种<strong>间接引用</strong>。</p>
+  </div>
+
+  <h3>机制 2：@-mention 文件附件自动加载 <span class="badge badge-green">自动包含</span></h3>
+  <p class="source-ref">源文件：<code>processSlashCommand.tsx:1222</code></p>
+  <p>如果 SKILL.md 内容中包含 <code>@filename</code> 的引用，<code>getAttachmentMessages()</code> 会自动解析并将文件内容作为 attachment message 注入到对话中。</p>
+  <pre><code><span class="comment"># SKILL.md 中写道：</span>
+参考 @config.json 了解配置结构。</code></pre>
+  <p>处理过程：</p>
+  <pre><code><span class="keyword">const</span> attachmentMessages = <span class="keyword">await</span> <span class="fn">toArray</span>(
+  <span class="fn">getAttachmentMessages</span>(
+    result.filter(b => b.type === <span class="string">'text'</span>).map(b => b.text).join(<span class="string">' '</span>),
+    context, <span class="number">null</span>, [], context.messages, <span class="string">'repl_main_thread'</span>,
+    { <span class="type">skipSkillDiscovery</span>: <span class="number">true</span> },  <span class="comment">// 防止大文件触发 AKI 查询</span>
+  ),
+)</code></pre>
+
+  <div class="callout success">
+    <div class="callout-title">唯一的"自动包含"机制</div>
+    <p>@-mention 是唯一一种文件内容会被<strong>自动读取并注入</strong>到上下文中的机制。其他机制都只是提供路径，由模型自行决定读取。</p>
+  </div>
+
+  <h3>机制 3：内联 Shell 命令（动态内容生成）<span class="badge badge-orange">动态</span></h3>
+  <p>通过 <code>!`cmd`</code> 语法在加载时动态执行命令，将输出注入到 skill 内容中：</p>
+  <pre><code><span class="comment"># SKILL.md 中写道：</span>
+当前工作目录的 git 分支是 <span class="string">!`git branch --show-current`</span>
+项目结构：
+<span class="string">```!
+tree -L 2 src/
+```</span></code></pre>
+  <p>命令输出会<strong>替换</strong>原始语法，适合注入运行时动态信息。</p>
+
+  <h3>机制 4：Bundled Skill 的 files: 磁盘提取 <span class="badge badge-purple">仅 Bundled</span></h3>
+  <p class="source-ref">源文件：<code>bundledSkills.ts:131</code></p>
+  <p>Bundled skill 通过 <code>files:</code> 字段将参考文件提取到磁盘临时目录，模型可以按需 Read：</p>
+  <pre><code><span class="fn">registerBundledSkill</span>({
+  <span class="type">name</span>: <span class="string">'verify'</span>,
+  <span class="type">files</span>: {
+    <span class="string">'examples/cli.md'</span>: cliMdContent,
+    <span class="string">'examples/server.md'</span>: serverMdContent
+  },
+  <span class="fn">getPromptForCommand</span>(args) { ... }
+})</code></pre>
+  <p>安全措施：</p>
+  <ul>
+    <li>写入路径包含 per-process nonce，防止预创建攻击</li>
+    <li>文件权限 0o600，目录权限 0o700</li>
+    <li>使用 O_NOFOLLOW + O_EXCL 防止符号链接攻击</li>
+    <li>路径遍历检查（禁止 <code>..</code>）</li>
+  </ul>
+
+  <h3>机制 5：Compaction 持久化 <span class="badge badge-blue">所有 Skill 通用</span></h3>
+  <p class="source-ref">源文件：<code>processSlashCommand.tsx:1198</code></p>
+  <p>skill 处理后的完整内容通过 <code>addInvokedSkill()</code> 注册到 session 状态中，确保对话 compact（压缩）后 skill 内容能被正确恢复：</p>
+  <pre><code><span class="fn">addInvokedSkill</span>(
+  command.name,
+  skillPath,           <span class="comment">// e.g. "projectSettings:gitnexus-exploring"</span>
+  skillContent,        <span class="comment">// 处理后的完整文本</span>
+  getAgentContext()?.agentId ?? <span class="number">null</span>,  <span class="comment">// 按 agent 隔离</span>
+)</code></pre>
+
+  <h3>五种机制对比</h3>
+  <table>
+    <tr>
+      <th>机制</th>
+      <th>自动包含？</th>
+      <th>时机</th>
+      <th>适用范围</th>
+      <th>安全限制</th>
+    </tr>
+    <tr>
+      <td><code>${CLAUDE_SKILL_DIR}</code></td>
+      <td>否（路径替换）</td>
+      <td>skill 调用时</td>
+      <td>所有本地 skill</td>
+      <td>无</td>
+    </tr>
+    <tr>
+      <td><code>@-mention</code></td>
+      <td><strong>是</strong></td>
+      <td>skill 调用时</td>
+      <td>所有本地 skill</td>
+      <td>skipSkillDiscovery 防止 AKI</td>
+    </tr>
+    <tr>
+      <td><code>!`cmd`</code> 内联 shell</td>
+      <td>是（输出替换）</td>
+      <td>skill 调用时</td>
+      <td>本地 skill（非 MCP）</td>
+      <td>权限检查 + MCP 禁用</td>
+    </tr>
+    <tr>
+      <td><code>files:</code> 磁盘提取</td>
+      <td>否（提取到磁盘）</td>
+      <td>首次调用时</td>
+      <td>仅 bundled skill</td>
+      <td>路径遍历检查 + 安全写入</td>
+    </tr>
+    <tr>
+      <td><code>addInvokedSkill</code></td>
+      <td>N/A（持久化）</td>
+      <td>调用后注册</td>
+      <td>所有 skill</td>
+      <td>按 agentId 隔离</td>
+    </tr>
+  </table>
+</section>
+
+<!-- Section 9 -->
+<section id="gitnexus">
+  <h2>9. GitNexus Skill 的引用方式分析</h2>
+
+  <p>当前仓库中有 6 个 GitNexus skill：</p>
+  <pre><code>.claude/skills/gitnexus/
+├── gitnexus-cli/SKILL.md
+├── gitnexus-debugging/SKILL.md
+├── gitnexus-exploring/SKILL.md
+├── gitnexus-guide/SKILL.md
+├── gitnexus-impact-analysis/SKILL.md
+└── gitnexus-refactoring/SKILL.md</code></pre>
+
+  <h3>9.1 内容特征</h3>
+  <p>GitNexus 的所有 skill 都是<strong>纯指导性文档</strong>——描述如何使用 GitNexus MCP 工具的最佳实践。经过分析：</p>
+  <table>
+    <tr><th>引用机制</th><th>是否使用</th></tr>
+    <tr><td><code>${CLAUDE_SKILL_DIR}</code></td><td>否</td></tr>
+    <tr><td><code>@-mention</code> 文件引用</td><td>否</td></tr>
+    <tr><td><code>!`cmd`</code> 内联 shell</td><td>否</td></tr>
+    <tr><td><code>allowed-tools</code></td><td>否</td></tr>
+    <tr><td><code>hooks</code></td><td>否</td></tr>
+    <tr><td><code>paths</code></td><td>否</td></tr>
+    <tr><td><code>context: fork</code></td><td>否</td></tr>
+  </table>
+
+  <h3>9.2 引用方式</h3>
+  <p>GitNexus skill 的引用完全依赖 <strong>CLAUDE.md 的间接引导</strong>：</p>
+  <pre><code><span class="comment"># CLAUDE.md 中的相关段落：</span>
+## Always Do
+- MUST run impact analysis before editing any symbol.
+  Run `gitnexus_impact(...)`
+
+## CLI
+| Task | Read this skill file |
+|------|---------------------|
+| "How does X work?" | `.claude/skills/gitnexus/gitnexus-exploring/SKILL.md` |
+| "What breaks if I change X?" | `.claude/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |</code></pre>
+
+  <p>工作流：</p>
+  <ol>
+    <li>CLAUDE.md 作为上下文注入到 system prompt</li>
+    <li>CLAUDE.md 中的表格指向具体的 skill 文件路径</li>
+    <li>模型看到后，主动使用 Read 工具读取对应的 <code>SKILL.md</code></li>
+    <li>读取到的 skill 内容指导模型使用 GitNexus MCP 工具</li>
+  </ol>
+
+  <div class="callout">
+    <div class="callout-title">为什么不使用 Skill 系统的标准引用机制？</div>
+    <p>GitNexus skill 的设计选择了最简单的方式——纯 markdown 指南文档。它们不需要引用其他文件（没有 references/ 子目录），不需要动态内容（没有 shell 命令），也不授权额外工具。这种设计是合理的：skill 本身就是 MCP 工具的使用手册。</p>
+  </div>
+
+  <h3>9.3 与 teach-me Skill 的对比</h3>
+  <table>
+    <tr><th>特征</th><th>GitNexus Skills</th><th>teach-me Skill</th></tr>
+    <tr><td>内容类型</td><td>工具使用指南</td><td>完整的教学系统</td></tr>
+    <tr><td>外部文件</td><td>无</td><td><code>references/pedagogy.md</code></td></tr>
+    <tr><td>文件引用方式</td><td>通过 CLAUDE.md 间接引导</td><td>自然语言路径指引（<code>.claude/skills/teach-me/records/</code>）</td></tr>
+    <tr><td>运行时交互</td><td>调用 MCP 工具</td><td>读写文件 + AskUserQuestion</td></tr>
+    <tr><td>状态管理</td><td>无状态</td><td>session.md + learner-profile.md</td></tr>
+    <tr><td>Frontmatter 复杂度</td><td>仅 name + description</td><td>name + description（无高级字段）</td></tr>
+  </table>
+</section>
+
+<!-- Section 10 -->
+<section id="dataflow">
+  <h2>10. 完整数据流图</h2>
+
+  <div class="flow-diagram">
+    <pre><code>                        ┌─────────────────────────────────┐
+                        │        Skill 发现与加载          │
+                        └──────────────┬──────────────────┘
+                                       │
+          ┌────────────────────────────┼────────────────────────────┐
+          │                            │                            │
+    ┌─────▼─────┐             ┌───────▼────────┐          ┌───────▼────────┐
+    │ Managed    │             │ User           │          │ Project        │
+    │ ~/.config/ │             │ ~/.claude/     │          │ .claude/       │
+    │ skills/    │             │ skills/        │          │ skills/        │
+    └─────┬─────┘             └───────┬────────┘          └───────┬────────┘
+          │                            │                            │
+          └────────────────────────────┼────────────────────────────┘
+                                       │
+                                       ▼
+                            ┌─────────────────────┐
+                            │ loadSkillsFromSkills │
+                            │ Dir()                │
+                            │                     │
+                            │ 1. readdir          │
+                            │ 2. 读取 SKILL.md     │
+                            │ 3. parseFrontmatter │
+                            │ 4. parseFields      │
+                            │ 5. createCommand    │
+                            └──────────┬──────────┘
+                                       │
+                  ┌────────────────────┼────────────────────┐
+                  │                    │                    │
+          ┌───────▼──────┐    ┌───────▼──────┐    ┌───────▼──────┐
+          │ Bundled      │    │ Plugin       │    │ MCP          │
+          │ Skills       │    │ Skills       │    │ Skills       │
+          └───────┬──────┘    └───────┬──────┘    └───────┬──────┘
+                  │                    │                    │
+                  └────────────────────┼────────────────────┘
+                                       │
+                                       ▼
+                            ┌─────────────────────┐
+                            │    getCommands()     │
+                            │  (合并 + 去重 + 过滤) │
+                            └──────────┬──────────┘
+                                       │
+                          ┌────────────┼────────────┐
+                          │                         │
+                          ▼                         ▼
+               ┌─────────────────┐      ┌────────────────────┐
+               │ system-reminder │      │ SkillTool.validate  │
+               │ (skill listing) │      │ (调用时验证)         │
+               │ 摘要注入对话     │      └──────────┬─────────┘
+               └─────────────────┘                 │
+                                       ┌───────────┼───────────┐
+                                       │                       │
+                                       ▼                       ▼
+                              ┌──────────────┐       ┌──────────────────┐
+                              │ Inline 模式   │       │ Fork 模式         │
+                              │              │       │                  │
+                              │ getPrompt    │       │ prepareForked    │
+                              │ ForCommand() │       │ CommandContext() │
+                              │              │       │                  │
+                              │ → 变量替换    │       │ → runAgent()     │
+                              │ → Shell 执行  │       │ → 隔离子 agent   │
+                              │ → @附件解析   │       │ → extractResult  │
+                              └──────┬───────┘       └────────┬─────────┘
+                                     │                        │
+                                     ▼                        ▼
+                          ┌──────────────────┐    ┌───────────────────┐
+                          │ UserMessage      │    │ ToolResult        │
+                          │ (注入当前对话)    │    │ (返回结果文本)     │
+                          └──────────────────┘    └───────────────────┘</code></pre>
+  </div>
+
+  <h3>10.1 Skill 内容处理链</h3>
+  <div class="flow-diagram">
+    <pre><code>原始 SKILL.md 内容
+    │
+    ▼
+┌─────────────────────────────────────────────┐
+│ ① parseFrontmatter()                        │
+│    提取 YAML frontmatter + markdown 正文     │
+└──────────────────┬──────────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────────┐
+│ ② parseSkillFrontmatterFields()             │
+│    解析 name, description, allowed-tools,    │
+│    context, model, hooks, paths, shell 等    │
+└──────────────────┬──────────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────────┐
+│ ③ createSkillCommand()                      │
+│    构建 Command 对象 + getPromptForCommand   │
+│    闭包 (捕获 markdownContent, baseDir 等)   │
+└──────────────────┬──────────────────────────┘
+                   │
+                   │ (skill 被调用时)
+                   ▼
+┌─────────────────────────────────────────────┐
+│ ④ getPromptForCommand(args, context)        │
+│    a. 添加 "Base directory: ..." 前缀        │
+│    b. substituteArguments() $ARG 替换       │
+│    c. ${CLAUDE_SKILL_DIR} → 绝对路径        │
+│    d. ${CLAUDE_SESSION_ID} → 会话 ID        │
+│    e. executeShellCommandsInPrompt()        │
+│       !`cmd` 和 ```! cmd ``` → 命令输出     │
+└──────────────────┬──────────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────────┐
+│ ⑤ 后处理                                    │
+│    a. registerSkillHooks() — 注册 hooks      │
+│    b. addInvokedSkill() — compact 持久化     │
+│    c. getAttachmentMessages() — @附件解析    │
+│    d. contextModifier() — 权限/模型/effort   │
+└──────────────────┬──────────────────────────┘
+                   │
+                   ▼
+          注入对话 / 返回结果</code></pre>
+  </div>
+</section>
+
+<!-- Section 11 -->
+<section id="key-files">
+  <h2>11. 关键源文件索引</h2>
+
+  <table>
+    <tr><th>文件路径</th><th>职责</th></tr>
+    <tr><td><code>src/skills/loadSkillsDir.ts</code> <em>(1087 行)</em></td><td>核心：skill 发现、解析、加载、Command 对象构建、动态发现、条件激活</td></tr>
+    <tr><td><code>src/tools/SkillTool/SkillTool.ts</code> <em>(1110 行)</em></td><td>SkillTool 实现：验证、权限、调用（inline/fork/remote）</td></tr>
+    <tr><td><code>src/tools/SkillTool/prompt.ts</code> <em>(242 行)</em></td><td>skill listing prompt 生成、预算控制、截断策略</td></tr>
+    <tr><td><code>src/skills/bundledSkills.ts</code> <em>(221 行)</em></td><td>Bundled skill 注册、files 提取、安全写入</td></tr>
+    <tr><td><code>src/utils/frontmatterParser.ts</code> <em>(371 行)</em></td><td>YAML frontmatter 解析、类型定义</td></tr>
+    <tr><td><code>src/utils/promptShellExecution.ts</code> <em>(184 行)</em></td><td>内联 shell 命令 <code>!`cmd`</code> 解析和执行</td></tr>
+    <tr><td><code>src/utils/processUserInput/processSlashCommand.tsx</code> <em>(1263 行)</em></td><td>斜杠命令处理：inline/fork 分发、消息构建、hooks 注册</td></tr>
+    <tr><td><code>src/utils/forkedAgent.ts</code> <em>(690 行)</em></td><td>Fork 模式基础设施：CacheSafeParams、子 agent 上下文隔离</td></tr>
+    <tr><td><code>src/utils/hooks/registerSkillHooks.ts</code> <em>(65 行)</em></td><td>Skill frontmatter hooks 注册为 session hooks</td></tr>
+    <tr><td><code>src/commands.ts</code></td><td>命令聚合：合并所有来源（bundled + skill + plugin + builtin）</td></tr>
+    <tr><td><code>src/utils/skills/skillChangeDetector.ts</code></td><td>Chokidar 文件监听，skill 变更时热重载</td></tr>
+    <tr><td><code>src/skills/bundled/index.ts</code></td><td>Bundled skill 注册入口（<code>initBundledSkills()</code>）</td></tr>
+  </table>
+</section>
+
+</div>
+
+<footer>
+  <p>Claude Code Skill 机制深度分析 — 基于 claude-code v2.1.888 源码</p>
+  <p>Generated 2026-06-04</p>
+</footer>
+
+</body>
+</html>

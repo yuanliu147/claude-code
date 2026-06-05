@@ -1,30 +1,29 @@
 /**
- * Early Input Capture
+ * 早期输入捕获
  *
- * This module captures terminal input that is typed before the REPL is fully
- * initialized. Users often type `claude` and immediately start typing their
- * prompt, but those early keystrokes would otherwise be lost during startup.
+ * 此模块用于捕获在 REPL 完全初始化之前输入的终端内容。用户经常在输入 `claude` 后
+ * 立即开始输入指令，但这些早期按键在启动过程中可能会丢失。
  *
- * Usage:
- * 1. Call startCapturingEarlyInput() as early as possible in cli.tsx
- * 2. When REPL is ready, call consumeEarlyInput() to get any buffered text
- * 3. stopCapturingEarlyInput() is called automatically when input is consumed
+ * 使用方法：
+ * 1. 在 cli.tsx 中尽早调用 startCapturingEarlyInput()
+ * 2. 当 REPL 就绪时，调用 consumeEarlyInput() 获取缓冲的文本
+ * 3. stopCapturingEarlyInput() 在输入被消费时自动调用
  */
 
 import { lastGrapheme } from './intl.js'
 
-// Buffer for early input characters
+// 早期输入字符的缓冲区
 let earlyInputBuffer = ''
-// Flag to track if we're currently capturing
+// 标志位，用于跟踪当前是否正在捕获
 let isCapturing = false
-// Reference to the readable handler so we can remove it later
+// 可读事件处理器的引用，以便后续移除
 let readableHandler: (() => void) | null = null
 
 /**
- * Start capturing stdin data early, before the REPL is initialized.
- * Should be called as early as possible in the startup sequence.
+ * 在 REPL 初始化之前尽早开始捕获 stdin 数据。
+ * 应在启动序列中尽可能早地调用。
  *
- * Only captures if stdin is a TTY (interactive terminal).
+ * 仅在 stdin 为 TTY（交互式终端）时捕获。
  */
 export function startCapturingEarlyInput(): void {
   // Only capture in interactive mode: stdin must be a TTY, and we must not
@@ -42,8 +41,8 @@ export function startCapturingEarlyInput(): void {
   isCapturing = true
   earlyInputBuffer = ''
 
-  // Set stdin to raw mode and use 'readable' event like Ink does
-  // This ensures compatibility with how the REPL will handle stdin later
+  // 将 stdin 设置为原始模式，并像 Ink 一样使用 'readable' 事件
+  // 这确保了与 REPL 后续处理 stdin 方式的兼容性
   try {
     process.stdin.setEncoding('utf8')
     process.stdin.setRawMode(true)
@@ -61,13 +60,13 @@ export function startCapturingEarlyInput(): void {
 
     process.stdin.on('readable', readableHandler)
   } catch {
-    // If we can't set raw mode, just silently continue without early capture
+    // 如果无法设置原始模式，则静默继续，不进行早期捕获
     isCapturing = false
   }
 }
 
 /**
- * Process a chunk of input data
+ * 处理一段输入数据
  */
 function processChunk(str: string): void {
   let i = 0
@@ -75,9 +74,9 @@ function processChunk(str: string): void {
     const char = str[i]!
     const code = char.charCodeAt(0)
 
-    // Ctrl+C (code 3) - stop capturing and exit immediately.
-    // We use process.exit here instead of gracefulShutdown because at this
-    // early stage of startup, the shutdown machinery isn't initialized yet.
+    // Ctrl+C (code 3) - 停止捕获并立即退出。
+    // 此处使用 process.exit 而不是 gracefulShutdown，因为在启动早期阶段，
+    // 关闭机制尚未初始化。
     if (code === 3) {
       stopCapturingEarlyInput()
       // eslint-disable-next-line custom-rules/no-process-exit
@@ -85,13 +84,13 @@ function processChunk(str: string): void {
       return
     }
 
-    // Ctrl+D (code 4) - EOF, stop capturing
+    // Ctrl+D (code 4) - EOF，停止捕获
     if (code === 4) {
       stopCapturingEarlyInput()
       return
     }
 
-    // Backspace (code 127 or 8) - remove last grapheme cluster
+    // 退格 (code 127 或 8) - 删除最后一个字素簇
     if (code === 127 || code === 8) {
       if (earlyInputBuffer.length > 0) {
         const last = lastGrapheme(earlyInputBuffer)
@@ -101,8 +100,8 @@ function processChunk(str: string): void {
       continue
     }
 
-    // Skip escape sequences (arrow keys, function keys, focus events, etc.)
-    // All escape sequences start with ESC (0x1B) and end with a byte in 0x40-0x7E
+    // 跳过转义序列（方向键、功能键、焦点事件等）
+    // 所有转义序列都以 ESC (0x1B) 开头，以 0x40-0x7E 范围内的字节结尾
     if (code === 27) {
       i++ // Skip the ESC character
       // Skip until the terminating byte (@ to ~) or end of string
@@ -116,28 +115,28 @@ function processChunk(str: string): void {
       continue
     }
 
-    // Skip other control characters (except tab and newline)
+    // 跳过其他控制字符（制表符和换行符除外）
     if (code < 32 && code !== 9 && code !== 10 && code !== 13) {
       i++
       continue
     }
 
-    // Convert carriage return to newline
+    // 将回车符转换为换行符
     if (code === 13) {
       earlyInputBuffer += '\n'
       i++
       continue
     }
 
-    // Add printable characters and allowed control chars to buffer
+    // 将可打印字符和允许的控制字符添加到缓冲区
     earlyInputBuffer += char
     i++
   }
 }
 
 /**
- * Stop capturing early input.
- * Called automatically when input is consumed, or can be called manually.
+ * 停止捕获早期输入。
+ * 在输入被消费时自动调用，也可手动调用。
  */
 export function stopCapturingEarlyInput(): void {
   if (!isCapturing) {
@@ -151,15 +150,15 @@ export function stopCapturingEarlyInput(): void {
     readableHandler = null
   }
 
-  // Don't reset stdin state - the REPL's Ink App will manage stdin state.
-  // If we call setRawMode(false) here, it can interfere with the REPL's
-  // own stdin setup which happens around the same time.
+  // 不要重置 stdin 状态 — REPL 的 Ink App 会管理 stdin 状态。
+  // 如果在此处调用 setRawMode(false)，可能会干扰 REPL 在同一时间段
+  // 自己进行的 stdin 设置。
 }
 
 /**
- * Consume any early input that was captured.
- * Returns the captured input and clears the buffer.
- * Automatically stops capturing when called.
+ * 消费任何已捕获的早期输入。
+ * 返回捕获的输入并清除缓冲区。
+ * 调用时自动停止捕获。
  */
 export function consumeEarlyInput(): string {
   stopCapturingEarlyInput()
@@ -169,22 +168,22 @@ export function consumeEarlyInput(): string {
 }
 
 /**
- * Check if there is any early input available without consuming it.
+ * 检查是否有可用的早期输入，但不消费它。
  */
 export function hasEarlyInput(): boolean {
   return earlyInputBuffer.trim().length > 0
 }
 
 /**
- * Seed the early input buffer with text that will appear pre-filled
- * in the prompt input when the REPL renders. Does not auto-submit.
+ * 用指定文本填充早期输入缓冲区，该文本在 REPL 渲染时会预填充在
+ * 提示符输入框中。不会自动提交。
  */
 export function seedEarlyInput(text: string): void {
   earlyInputBuffer = text
 }
 
 /**
- * Check if early input capture is currently active.
+ * 检查早期输入捕获是否当前处于活动状态。
  */
 export function isCapturingEarlyInput(): boolean {
   return isCapturing

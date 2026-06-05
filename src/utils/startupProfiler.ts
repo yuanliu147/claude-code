@@ -1,12 +1,11 @@
 /**
- * Startup profiling utility for measuring and reporting time spent in various
- * initialization phases.
+ * 启动性能分析工具，用于测量和报告各个初始化阶段所花费的时间。
  *
- * Two modes:
- * 1. Sampled logging: 100% of ant users, 0.1% of external users - logs phases to Statsig
- * 2. Detailed profiling: CLAUDE_CODE_PROFILE_STARTUP=1 - full report with memory snapshots
+ * 两种模式：
+ * 1. 采样日志：ant 用户 100%，外部用户 0.1% - 将阶段数据记录到 Statsig
+ * 2. 详细分析：CLAUDE_CODE_PROFILE_STARTUP=1 - 包含内存快照的完整报告
  *
- * Uses Node.js built-in performance hooks API for standard timing measurement.
+ * 使用 Node.js 内置的性能钩子 API 进行标准时间测量。
  */
 
 import { dirname, join } from 'path'
@@ -21,31 +20,30 @@ import { getFsImplementation } from './fsOperations.js'
 import { formatMs, formatTimelineLine, getPerformance } from './profilerBase.js'
 import { writeFileSync_DEPRECATED } from './slowOperations.js'
 
-// Module-level state - decided once at module load
+// 模块级状态 - 在模块加载时确定一次
 // eslint-disable-next-line custom-rules/no-process-env-top-level
 const DETAILED_PROFILING = isEnvTruthy(process.env.CLAUDE_CODE_PROFILE_STARTUP)
 
-// Sampling for Statsig logging: 100% ant, 0.5% external
-// Decision made once at startup - non-sampled users pay no profiling cost
+// Statsig 日志采样：ant 用户 100%，外部用户 0.5%
+// 在启动时确定一次 - 未被采样的用户无需承担性能分析开销
 const STATSIG_SAMPLE_RATE = 0.005
 // eslint-disable-next-line custom-rules/no-process-env-top-level
 const STATSIG_LOGGING_SAMPLED =
   process.env.USER_TYPE === 'ant' || Math.random() < STATSIG_SAMPLE_RATE
 
-// Enable profiling if either detailed mode OR sampled for Statsig
+// 如果启用了详细模式或被 Statsig 采样，则启用性能分析
 const SHOULD_PROFILE = DETAILED_PROFILING || STATSIG_LOGGING_SAMPLED
 
-// Track memory snapshots separately (perf_hooks doesn't track memory).
-// Only used when DETAILED_PROFILING is enabled.
-// Stored as an array that appends in the same order as perf.mark() calls, so
-// memorySnapshots[i] corresponds to getEntriesByType('mark')[i]. Using a Map
-// keyed by checkpoint name is wrong because some checkpoints fire more than
-// once (e.g. loadSettingsFromDisk_start fires during init and again after
-// plugins reset the settings cache), and the second call would overwrite the
-// first's memory snapshot.
+// 单独跟踪内存快照（perf_hooks 不跟踪内存）。
+// 仅在 DETAILED_PROFILING 启用时使用。
+// 存储为数组，按与 perf.mark() 调用相同的顺序追加，
+// 因此 memorySnapshots[i] 对应 getEntriesByType('mark')[i]。
+// 使用 Map 以 checkpoint 名称为 key 是错误的，因为某些 checkpoint
+// 会触发多次（例如 loadSettingsFromDisk_start 在初始化时触发一次，
+// 在插件重置设置缓存后会再次触发），第二次调用会覆盖第一次的内存快照。
 const memorySnapshots: NodeJS.MemoryUsage[] = []
 
-// Phase definitions for Statsig logging: [startCheckpoint, endCheckpoint]
+// Statsig 日志的阶段定义：[startCheckpoint, endCheckpoint]
 const PHASE_DEFINITIONS = {
   import_time: ['cli_entry', 'main_tsx_imports_loaded'],
   init_time: ['init_function_start', 'init_function_end'],
@@ -53,14 +51,14 @@ const PHASE_DEFINITIONS = {
   total_time: ['cli_entry', 'main_after_run'],
 } as const
 
-// Record initial checkpoint if profiling is enabled
+// 如果启用了性能分析，则记录初始 checkpoint
 if (SHOULD_PROFILE) {
   // eslint-disable-next-line custom-rules/no-top-level-side-effects
   profileCheckpoint('profiler_initialized')
 }
 
 /**
- * Record a checkpoint with the given name
+ * 使用给定名称记录一个 checkpoint
  */
 export function profileCheckpoint(name: string): void {
   if (!SHOULD_PROFILE) return
@@ -68,30 +66,30 @@ export function profileCheckpoint(name: string): void {
   const perf = getPerformance()
   perf.mark(name)
 
-  // Only capture memory when detailed profiling enabled (env var)
+  // 仅在启用详细性能分析（环境变量）时捕获内存
   if (DETAILED_PROFILING) {
     memorySnapshots.push(process.memoryUsage())
   }
 }
 
 /**
- * Get a formatted report of all checkpoints
- * Only available when DETAILED_PROFILING is enabled
+ * 获取所有 checkpoints 的格式化报告
+ * 仅在 DETAILED_PROFILING 启用时可用
  */
 function getReport(): string {
   if (!DETAILED_PROFILING) {
-    return 'Startup profiling not enabled'
+    return '启动性能分析未启用'
   }
 
   const perf = getPerformance()
   const marks = perf.getEntriesByType('mark')
   if (marks.length === 0) {
-    return 'No profiling checkpoints recorded'
+    return '没有记录性能分析 checkpoints'
   }
 
   const lines: string[] = []
   lines.push('='.repeat(80))
-  lines.push('STARTUP PROFILING REPORT')
+  lines.push('启动性能分析报告')
   lines.push('='.repeat(80))
   lines.push('')
 
@@ -112,7 +110,7 @@ function getReport(): string {
 
   const lastMark = marks[marks.length - 1]
   lines.push('')
-  lines.push(`Total startup time: ${formatMs(lastMark?.startTime ?? 0)}ms`)
+  lines.push(`总启动时间：${formatMs(lastMark?.startTime ?? 0)}ms`)
   lines.push('='.repeat(80))
 
   return lines.join('\n')
@@ -124,12 +122,12 @@ export function profileReport(): void {
   if (reported) return
   reported = true
 
-  // Log to Statsig (sampled: 100% ant, 0.1% external)
+  // 记录到 Statsig（采样：ant 用户 100%，外部用户 0.1%）
   logStartupPerf()
 
-  // Output detailed report if CLAUDE_CODE_PROFILE_STARTUP=1
+  // 如果 CLAUDE_CODE_PROFILE_STARTUP=1 则输出详细报告
   if (DETAILED_PROFILING) {
-    // Write to file
+    // 写入文件
     const path = getStartupPerfLogPath()
     const dir = dirname(path)
     const fs = getFsImplementation()
@@ -139,7 +137,7 @@ export function profileReport(): void {
       flush: true,
     })
 
-    logForDebugging('Startup profiling report:')
+    logForDebugging('启动性能分析报告：')
     logForDebugging(getReport())
   }
 }
@@ -153,24 +151,24 @@ export function getStartupPerfLogPath(): string {
 }
 
 /**
- * Log startup performance phases to Statsig.
- * Only logs if this session was sampled at startup.
+ * 将启动性能阶段记录到 Statsig。
+ * 仅在该会话在启动时被采样时才记录。
  */
 export function logStartupPerf(): void {
-  // Only log if we were sampled (decision made at module load)
+  // 仅在我们被采样时才记录（在模块加载时确定的决策）
   if (!STATSIG_LOGGING_SAMPLED) return
 
   const perf = getPerformance()
   const marks = perf.getEntriesByType('mark')
   if (marks.length === 0) return
 
-  // Build checkpoint lookup
+  // 构建 checkpoint 查找表
   const checkpointTimes = new Map<string, number>()
   for (const mark of marks) {
     checkpointTimes.set(mark.name, mark.startTime)
   }
 
-  // Compute phase durations
+  // 计算阶段持续时间
   const metadata: Record<string, number | undefined> = {}
 
   for (const [phaseName, [startCheckpoint, endCheckpoint]] of Object.entries(
@@ -184,7 +182,7 @@ export function logStartupPerf(): void {
     }
   }
 
-  // Add checkpoint count for debugging
+  // 添加 checkpoint 数量用于调试
   metadata.checkpoint_count = marks.length
 
   logEvent(
