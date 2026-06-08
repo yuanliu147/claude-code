@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code 记忆系统 FAQ 附录</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2333;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --accent2: #3fb950;
+    --accent3: #d2a8ff;
+    --accent4: #f0883e;
+    --red: #f85149;
+    --code-bg: #0d1117;
+    --highlight: #1f2937;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 15px;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code {
+    font-family: 'SFMono-Regular', Consolas, Menlo, monospace;
+    font-size: 0.9em;
+    background: #1f6feb18;
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: var(--accent3);
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    overflow-x: auto;
+    margin: 14px 0;
+    font-size: 0.88em;
+    line-height: 1.55;
+  }
+  pre code { background: none; padding: 0; color: var(--text); }
+
+  /* 视觉块（与 claude-memory.html 风格一致） */
+  .note {
+    background: #1f6feb12;
+    border-left: 3px solid var(--accent);
+    padding: 12px 16px;
+    margin: 16px 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .warn {
+    background: #9e6a0318;
+    border-left: 3px solid var(--accent4);
+    padding: 12px 16px;
+    margin: 16px 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .tip {
+    background: #1a3a1a;
+    border-left: 3px solid var(--accent2);
+    padding: 12px 16px;
+    margin: 16px 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .pin {
+    background: #2a1f3a;
+    border-left: 3px solid var(--accent3);
+    padding: 12px 16px;
+    margin: 16px 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 22px;
+    margin: 16px 0;
+  }
+  .card-title {
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 8px;
+    font-size: 0.98em;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.92em;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 9px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--surface2); color: var(--accent); font-weight: 600; }
+  tr:hover { background: var(--surface); }
+
+  ul, ol { padding-left: 24px; margin: 8px 0; }
+  li { margin: 4px 0; }
+
+  /* 双列布局：左侧 sticky TOC */
+  .layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  @media (max-width: 960px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { display: none; }
+  }
+  aside {
+    background: var(--bg);
+    border-right: 1px solid var(--border);
+    padding: 32px 20px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  aside h2 {
+    color: var(--accent);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  aside .toc-meta {
+    color: var(--text-muted);
+    font-size: 11px;
+    line-height: 1.5;
+    margin-bottom: 12px;
+  }
+  aside .toc ol { list-style: none; padding: 0; }
+  aside .toc li { margin: 2px 0; }
+  aside .toc a {
+    display: block;
+    padding: 5px 10px;
+    color: var(--text-muted);
+    font-size: 13px;
+    border-radius: 6px;
+    border-left: 2px solid transparent;
+    transition: all 0.15s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  aside .toc a:hover {
+    color: var(--text);
+    background: var(--surface);
+    border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  main {
+    padding: 40px 56px 80px;
+    max-width: 1100px;
+  }
+  @media (max-width: 720px) { main { padding: 24px 16px 40px; } }
+  h1 { font-size: 2em; margin-bottom: 8px; color: var(--accent); }
+  .subtitle { color: var(--text-muted); font-size: 1.05em; margin-bottom: 32px; }
+  h2 { font-size: 1.5em; margin: 48px 0 14px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  h3 { font-size: 1.18em; margin: 28px 0 10px; color: var(--accent3); }
+  p { margin: 10px 0; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+  .tag {
+    display: inline-block;
+    font-size: 0.78em;
+    padding: 1px 7px;
+    border-radius: 4px;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+  .tag-scope-user { background: #1f6feb33; color: var(--accent); }
+  .tag-scope-team { background: #8957e5aa; color: #fff; }
+  .tag-type-feedback { background: #238636aa; color: #fff; }
+  .tag-type-project { background: #8957e5aa; color: #fff; }
+  .tag-type-reference { background: #9e6a03aa; color: #fff; }
+  .tag-type-user { background: #1f6feb33; color: var(--accent); }
+  .file-ref {
+    font-family: 'SFMono-Regular', Consolas, Menlo, monospace;
+    font-size: 0.85em;
+    color: var(--accent);
+    background: #1f6feb12;
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 8px 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .step-num {
+    flex-shrink: 0;
+    background: var(--accent);
+    color: #0d1117;
+    font-weight: 700;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85em;
+  }
+  .step-body { flex: 1; }
+</style>
+</head>
+<body>
+<div class="layout">
+<aside>
+<h2>目录</h2>
+<div class="toc-meta">Claude Code 记忆系统 FAQ 附录<br>补充主报告未讲透的 8 个问题<br>面向"不懂源码"的产品视角</div>
+<ol>
+<li><a href="#write">1. AI 怎么自己写记忆？</a></li>
+<li><a href="#recall">2. AI 怎么挑出相关记忆？</a></li>
+<li><a href="#subagent">3. 子代理有独立记忆吗？</a></li>
+<li><a href="#dream">4. 夜间 /dream 做了什么？</a></li>
+<li><a href="#security">5. 安全机制在防什么？</a></li>
+<li><a href="#disable">6. 怎么关掉记忆系统？</a></li>
+<li><a href="#full">7. 记忆满了会怎样？</a></li>
+<li><a href="#sync">8. 误删能恢复吗？跨机器同步吗？</a></li>
+</ol>
+</aside>
+<main>
+
+<h1>📖 Claude Code 记忆系统 FAQ 附录</h1>
+<p class="subtitle">补充主报告（<code>claude-memory.html</code> + <code>claude-memory-file.html</code>）未讲透的 8 个常见问题 · 面向"不懂源码"的产品视角</p>
+
+<div class="note">
+<b>这份附录是为谁写的？</b><br>
+如果你读完两份主报告后还有"等等，那这个到底是怎么工作的？"的疑问，这篇就是答案。8 个章节每章独立，可以跳着读。每章结尾有一个"实操建议"小节——告诉你"作为用户该怎么用"。
+</div>
+
+<hr>
+
+<!-- ============================================ -->
+<h2 id="write">1. AI 怎么自己写记忆？</h2>
+
+<p>主报告说"agent 学到东西就自动写"，但<b>没说具体什么时候、怎么写、谁批准</b>。这是记忆系统的"主动脉"——不讲透就不知道什么时候该信任 MEMORY.md 里的内容。</p>
+
+<h3>1.1 触发时机：每个对话轮次结束（不是 session 结束）</h3>
+
+<p>很多人以为"会话结束才整理记忆"——其实不是。每次你发完一条消息、agent 回复完（最后一轮没有工具调用），<b>就会触发一次自动提取</b>。具体由 <code>stopHooks.ts:141-153</code> 监听，调用 <code>extractMemories</code> 模块。</p>
+
+<p>这个调用是 <b>fire-and-forget（异步不阻塞）</b>——你看不到等待，agent 已经把回复渲染给你看了，记忆提取在后台跑。</p>
+
+<div class="warn">
+<b>它只为主代理跑，不为子代理跑。</b> <code>extractMemories.ts:531-534</code> 检查 <code>toolUseContext.agentId</code>，如果有值（说明是子代理在跑）就跳过。这是为了避免"子代理的小决策污染主代理的长期记忆"。
+</div>
+
+<h3>1.2 写哪些内容：四种类型 + 五类排除</h3>
+
+<p>提取出来的内容会被归类成四种之一（每种都有明确的"什么时候写"指南）：</p>
+
+<table>
+<thead>
+<tr><th>类型</th><th>什么时候写</th><th>典型例子</th></tr>
+</thead>
+<tbody>
+<tr><td><span class="tag tag-type-user">user</span></td><td>用户透露角色 / 知识背景 / 偏好</td><td>"我是前端工程师，主要用 React"</td></tr>
+<tr><td><span class="tag tag-type-feedback">feedback</span></td><td>用户纠正或确认 agent 的做法</td><td>"不要每次都加日志" / "对，就这样"</td></tr>
+<tr><td><span class="tag tag-type-project">project</span></td><td>项目动态、谁在做什么、为什么</td><td>"Q1 移动端发版，所以合主要冻结"</td></tr>
+<tr><td><span class="tag tag-type-reference">reference</span></td><td>外部系统指针</td><td>"bug 在 Linear INGEST 项目里"</td></tr>
+</tbody>
+</table>
+
+<p>同时有<b>五类明确禁止保存</b>的内容：</p>
+<ul>
+<li>代码模式、架构、文件路径（可从当前代码状态推导）</li>
+<li>Git 历史（<code>git log</code> 才是权威）</li>
+<li>调试 fix 方案（fix 在代码里，commit message 有上下文）</li>
+<li>CLAUDE.md 里已有的内容（重复维护会导致不一致）</li>
+<li>临时任务细节、当前对话上下文（用 Plan / Tasks 即可）</li>
+</ul>
+
+<h3>1.3 写到哪里：分散的 .md 文件 + 索引</h3>
+
+<p>记忆不是"塞进 MEMORY.md"——而是：</p>
+
+<div class="step">
+<span class="step-num">1</span>
+<span class="step-body">每个记忆写成独立 <code>.md</code> 文件，如 <code>user_role.md</code>、<code>feedback_testing.md</code>，带 frontmatter（name、description、type）</span>
+</div>
+<div class="step">
+<span class="step-num">2</span>
+<span class="step-body">在 <code>MEMORY.md</code>（入口索引）里加一行指针：<code>- [Title](file.md) — one-line hook</code></span>
+</div>
+
+<p>这样做的好处：每次启动只加载 <code>MEMORY.md</code>（小、200 行 / 25KB 上限），具体记忆按需展开。</p>
+
+<h3>1.4 软上限和"互斥"机制</h3>
+
+<p>虽然<b>没有</b>"单次写多少"的硬限制，但有几个软约束：</p>
+
+<ul>
+<li>提取用的子代理最多 <b>5 轮</b>（<code>extractMemories.ts:426</code>），防止它在记忆系统里转圈</li>
+<li>扫描现有记忆时最多看最新的 <b>200 个</b>（<code>memoryScan.ts:21</code>）</li>
+<li>有<b>节流阀</b>：默认每 1 个 eligible 轮次跑一次，可配（<code>extractMemories.ts:374-385</code>）</li>
+</ul>
+
+<p>还有一个很聪明的设计：<b>主代理和后台提取互斥</b>。如果主代理在本轮自己写了记忆（通过 system prompt 里的 save 指令），后台提取会跳过（<code>extractMemories.ts:345-360</code>）。这样你可以说"记住这个"——主代理立刻写，后台不会重复写。</p>
+
+<h3>1.5 写错了怎么办？</h3>
+
+<div class="warn">
+<b>没有自动 undo / rollback 机制。</b> 记忆文件就是普通 <code>.md</code> 文件，写错只能手动编辑或删除。
+</div>
+
+<p>但有以下审计/可见性：</p>
+<ul>
+<li><code>extractMemories.ts:473</code> 等几个 telemetry 事件记录"提取了多少条、用了多少 token、耗时多少"——但只发到 analytics，不存 Git，无法通过 <code>git revert</code> 撤回</li>
+<li>用户可以用 <code>/memory</code> 命令浏览所有记忆文件，<b>手动改</b></li>
+</ul>
+
+<div class="tip">
+<b>实操建议</b>：每 1-2 个月打开 <code>~/.claude/projects/&lt;你的项目&gt;/memory/</code> 看一眼 MEMORY.md 和主题文件。删掉过时的、合并重复的。这是"记忆系统卫生"。
+</div>
+
+<hr>
+
+<!-- ============================================ -->
+<h2 id="recall">2. AI 怎么从一堆记忆里挑出对当下有用的？</h2>
+
+<p>主报告说"AI 召回相关记忆"，但<b>没说召回的精妙设计</b>。这背后有个很有意思的"小 AI 选 → 大 AI 用"两阶段架构——不讲透会以为"记忆系统 = 简单检索"。</p>
+
+<h3>2.1 三步流程（白话版）</h3>
+
+<div class="step">
+<span class="step-num">1</span>
+<span class="step-body"><b>扫描：</b><code>scanMemoryFiles()</code> 读 memory 目录下所有 <code>.md</code>，按修改时间倒排，最多 200 个，提取每个文件的 frontmatter（前 30 行）作为清单</span>
+</div>
+<div class="step">
+<span class="step-num">2</span>
+<span class="step-body"><b>格式化：</b>把清单格式化成一段文本，类似：<br><code>- [user] user_role.md (2026-06-01): 前端工程师，...</code><br><code>- [project] deploy.md (2026-06-02): 部署流程，...</code></span>
+</div>
+<div class="step">
+<span class="step-num">3</span>
+<span class="step-body"><b>选 top-5：</b>用<b>另一个小模型</b>（Sonnet 级别）看这个清单 + 你的问题，挑出最相关的 5 个文件名。强制 JSON schema 输出 <code>{ selected_memories: string[] }</code></span>
+</div>
+
+<p>为什么不让大模型（你正在对话的那个）直接看所有记忆？因为记忆可能很多，全塞进 context 太贵。用小模型先"过滤"是个聪明的工程权衡——<b>用便宜的小模型做筛选，让贵的大模型只读相关的</b>。</p>
+
+<h3>2.2 选了但不相关、漏了但相关，怎么办？</h3>
+
+<p>这是召回机制的<b>固有缺陷</b>。选错的代价：</p>
+<ul>
+<li>选了 5 个但其实你问的是第 6 个 → 大模型看到的是不相关的记忆 → 回复质量下降</li>
+<li>漏选 → 大模型"不知道"有这条记忆 → 你以为它没记住</li>
+</ul>
+
+<div class="note">
+<b>实际上"漏选"是常态。</b> 小模型用清单（文件名 + 一句话描述）做选择，描述越准越好。MEMORY.md 里那条"one-line hook"写得越具体，越容易被选上——所以 <b>好的 MEMORY.md 不是简单的"指向"，而是"精准描述"</b>。
+</div>
+
+<h3>2.3 还有一个防重机制</h3>
+
+<p>同一轮对话中，已经被选过的记忆文件不会再次被选——<code>alreadySurfaced</code> 集合过滤（<code>findRelevantMemories.ts:46-48</code>）。这避免 agent 在同一次回复里反复引用同一记忆。</p>
+
+<h3>2.4 失败时怎么办？</h3>
+
+<p>selector 失败（Sonnet 报错、超时、JSON 解析失败）会<b>静默返回空数组</b>——不阻塞主流程（<code>findRelevantMemories.ts:131-140</code>）。主代理的回复还是会给出来，只是没有"记忆辅助"。</p>
+
+<div class="tip">
+<b>实操建议</b>：如果你发现"我明明让 agent 记住 X 了，它怎么又问我同样的问题？"——大概率是 X 的描述太宽泛，没被 Sonnet selector 选中。把 X 的"description"字段写得更具体（如"用户在 2026-06-06 决定：每周五下午固定做 code review"），selector 选中率会高很多。
+</div>
+
+<hr>
+
+<!-- ============================================ -->
+<h2 id="subagent">3. 子代理（Task）有自己的记忆吗？</h2>
+
+<p>主报告提到"subagents can also maintain their own auto memory"——但<b>没说怎么用、什么时候有、什么时候没有</b>。这是很多用户踩坑的地方：明明用了 <code>Task</code> 工具让子代理做调研，子代理写进自己记忆的东西主代理"看不到"。</p>
+
+<h3>3.1 简短答案：大部分子代理没有，只有显式启用的才有</h3>
+
+<p><b>built-in 子代理（general-purpose、Explore、Plan 等）默认都没有独立记忆。</b> 它们不挂载任何持久记忆——每次启动从零开始。</p>
+
+<p>如果你用<b>自定义 agent</b>（自己写的 <code>.md</code> 文件或 JSON 配置），在 frontmatter 里加一行：</p>
+
+<pre><code>---
+name: my-researcher
+description: 调研类任务的代理
+memory: user  # 或 project / local
+---</code></pre>
+
+<p>这样这个 agent 才会有自己的记忆。解析发生在 <code>loadAgentsDir.ts:593-605</code>，然后 <code>getSystemPrompt()</code> 会把它的 <code>MEMORY.md</code> 内容拼进 system prompt（<code>loadAgentsDir.ts:726-732</code>）。</p>
+
+<h3>3.2 子代理的记忆存哪里？</h3>
+
+<p>跟主代理<b>完全分开</b>，有三种 scope：</p>
+
+<table>
+<thead>
+<tr><th>Scope</th><th>路径</th><th>跨项目？</th><th>进 Git？</th></tr>
+</thead>
+<tbody>
+<tr><td><span class="tag tag-scope-user">user</span></td><td><code>~/.claude/agent-memory/&lt;agentType&gt;/MEMORY.md</code></td><td>✅</td><td>❌</td></tr>
+<tr><td><span class="tag tag-scope-team">project</span></td><td><code>&lt;cwd&gt;/.claude/agent-memory/&lt;agentType&gt;/MEMORY.md</code></td><td>❌</td><td>✅</td></tr>
+<tr><td><span class="tag tag-scope-team">local</span></td><td><code>&lt;cwd&gt;/.claude/agent-memory-local/&lt;agentType&gt;/MEMORY.md</code></td><td>❌</td><td>❌（gitignored）</td></tr>
+</tbody>
+</table>
+
+<p>主代理的自动记忆在 <code>~/.claude/projects/&lt;项目&gt;/memory/</code>，跟子代理<b>完全独立</b>，不共享同一文件。</p>
+
+<h3>3.3 主代理能读子代理记忆吗？</h3>
+
+<p>理论上能——子代理记忆本质是磁盘上的 <code>MEMORY.md</code> 文件，主代理只要有 <code>Read</code> 工具就能读。但<b>这不是内置行为</b>，没有代码会自动把子代理记忆注入主代理 context。</p>
+
+<p>反过来：<b>子代理不能读主代理记忆</b>。子代理启动时 context 为空（除非是 fork 子代理），它只拿到 <code>prompt</code> 参数里的任务描述。主代理的 <code>memory/</code> 目录不会自动进入子代理视线。</p>
+
+<h3>3.4 多个子代理之间呢？</h3>
+
+<p>默认<b>不共享</b>。每个子代理的 <code>agentType</code> 是独立目录名（<code>agentMemory.ts:56</code>）。</p>
+
+<p><b>唯一共享路径是 team memory</b>：<code>&lt;autoMemPath&gt;/team/</code>。但这是 <code>TEAMMEM</code> feature 开启时的特殊机制，普通子代理用不到。</p>
+
+<h3>3.5 子代理的记忆满了怎么办？</h3>
+
+<p>限制跟主代理<b>完全一样</b>：200 行 / 25KB（<code>memdir.ts:35-38</code>）。子代理和主代理共用同一套 truncation 逻辑（<code>truncateEntrypointContent</code>）。</p>
+
+<h3>3.6 子代理的 extractMemories 跑吗？</h3>
+
+<p><b>不跑</b>。<code>extractMemories.ts:531-534</code> 明确检查 <code>toolUseContext.agentId</code>，如果有值（说明是子代理）就跳过。</p>
+
+<p>这意味着：<b>子代理的"自动记忆"其实是"半自动"</b>——它需要自己通过 <code>FileWriteTool</code> 手动写 <code>MEMORY.md</code>，后台提取不会自动填充。这是产品设计上的取舍：避免子代理的临时决策污染长期记忆。</p>
+
+<div class="tip">
+<b>实操建议</b>：如果你想让某个子代理积累知识，<b>在它的 prompt 里明确告诉它"完成任务后把要点写到 MEMORY.md"</b>。否则它的"记忆"永远是空的。
+</div>
+
+<hr>
+
+<!-- ============================================ -->
+<h2 id="dream">4. 夜间 /dream 做了什么？</h2>
+
+<p>主报告说"夜间整理"，但<b>没说具体什么时间触发、怎么整理、错了怎么办</b>。这是"白天的便签怎么变成团队知识库"的关键转换。</p>
+
+<h3>4.1 两套机制并存：手动 + 自动</h3>
+
+<ul>
+<li><b>手动 /dream</b>：你输入 <code>/dream</code>，立即跑（<code>dream.ts:25</code> 标记为 <code>userInvocable: true</code>）</li>
+<li><b>自动 autoDream</b>：后台以子代理形式触发，限制 Bash 只读（<code>autoDream.ts:2-3</code>）</li>
+</ul>
+
+<h3>4.2 自动版的三道门（由便宜到贵）</h3>
+
+<table>
+<thead>
+<tr><th>门</th><th>条件</th><th>默认值</th></tr>
+</thead>
+<tbody>
+<tr><td>时间门</td><td>距上次合并 ≥ 多少小时</td><td>24 小时</td></tr>
+<tr><td>会话门</td><td>自上次合并以来新会话数 ≥ 多少</td><td>5 个</td></tr>
+<tr><td>锁门</td><td>没有其他进程正在合并</td><td>—</td></tr>
+</tbody>
+</table>
+
+<p>三道门都通过才会启动子代理执行（<code>autoDream.ts:141-190</code>）。</p>
+
+<h3>4.3 /dream 怎么工作？4 阶段</h3>
+
+<div class="step">
+<span class="step-num">1</span>
+<span class="step-body"><b>Orient（定位）</b>：先 <code>ls</code> memory 目录，读 <code>MEMORY.md</code>（索引），扫已有的主题文件</span>
+</div>
+<div class="step">
+<span class="step-num">2</span>
+<span class="step-body"><b>Gather（收集）</b>：优先读 <code>logs/YYYY/MM/YYYY-MM-DD.md</code>（每天的 append-only 日志），其次扫现有记忆中与代码矛盾的事实，需要具体上下文才去 grep transcripts（jsonl）</span>
+</div>
+<div class="step">
+<span class="step-num">3</span>
+<span class="step-body"><b>Consolidate（整合）</b>：合并进已有主题文件（不创建近邻新文件），删除被证伪的记忆，把相对日期转成绝对日期</span>
+</div>
+<div class="step">
+<span class="step-num">4</span>
+<span class="step-body"><b>Prune（剪枝）</b>：保持 <code>MEMORY.md</code> ≤ 200 行 / 25KB，每条目 ≤ 150 字符，详情移入主题文件</span>
+</div>
+
+<h3>4.5 怎么决定"哪些合并、哪些删除"？</h3>
+
+<p><b>全权交给 LLM 判断</b>。prompt 里没有精确算法——没有 embedding 相似度、没有 TF-IDF。LLM 自己读、自己判断（<code>consolidationPrompt.ts:49-51</code>）。</p>
+
+<p>这意味着：<b>/dream 的"整理质量"取决于 LLM 本身</b>。同一个内容不同 LLM 整理结果可能差很多。</p>
+
+<h3>4.6 出错了怎么办？</h3>
+
+<div class="warn">
+<b>有锁机制作为安全网，但没有版本备份。</b> 流程是：
+</div>
+
+<ol>
+<li>子代理执行前先获取锁（PID 写入 lock 文件）</li>
+<li>出错时 catch 块回滚锁的 mtime（<code>consolidationLock.ts:91-108</code>）</li>
+<li>时间门再次通过，下次自动重跑</li>
+</ol>
+
+<p><b>但</b>：子代理<b>已经写过的部分内容不会被回滚</b>。锁回滚只影响"下次触发时间"，不恢复已写的文件。没有 git-based undo。</p>
+
+<h3>4.7 能手动撤销吗？</h3>
+
+<p>用户可以在 Shift+Down 对话框中止正在跑的 dream 任务（<code>DreamTask.ts:136-156</code>），但这<b>只中止子代理 + 回滚锁 mtime</b>，<b>不撤销已写的文件</b>。</p>
+
+<div class="tip">
+<b>实操建议</b>：
+<ul>
+<li>想立刻整理：<code>/dream</code></li>
+<li>不放心自动整理：把 <code>memory/</code> 目录加进 Git，每次 /dream 之后 <code>git diff</code> 一下</li>
+<li>发现 /dream 写错了：手动编辑对应 <code>.md</code> 文件（<code>~/.claude/projects/&lt;项目&gt;/memory/&lt;主题&gt;.md</code>）</li>
+</ul>
+</div>
+
+<hr>
+
+<!-- ============================================ -->
+<h2 id="security">5. 安全机制到底在防什么？</h2>
+
+<p>主报告提到"path validation"，但<b>没说清楚具体在防什么攻击、怎么防</b>。这是把记忆系统部署到团队时最敏感的问题——不讲透团队不会敢用。</p>
+
+<h3>5.1 防三类攻击</h3>
+
+<div class="card">
+<div class="card-title">A. 路径越界（path traversal）</div>
+<p><b>攻击</b>：让 agent 写入 <code>../../etc/passwd</code>、<code>~/.ssh/</code> 等敏感位置</p>
+<p><b>防御</b>：<code>validateMemoryPath</code>（<code>paths.ts:109-150</code>）<b>五重检查</b>：</p>
+<ul>
+<li>拒绝相对路径（<code>../foo</code>）</li>
+<li>拒绝根目录和接近根的路径（<code>/</code>、<code>/a</code>）</li>
+<li>拒绝 Windows 盘符根（<code>C:\</code>）</li>
+<li>拒绝 UNC 路径（<code>\\server\share</code>）</li>
+<li>拒绝 null byte（<code>\0</code>）</li>
+</ul>
+</div>
+
+<div class="card">
+<div class="card-title">B. 符号链接逃逸（symlink escape）</div>
+<p><b>攻击</b>：在团队记忆目录里建一个符号链接 <code>team/secrets → /etc/</code>，让 agent 通过这个链接写入任意文件</p>
+<p><b>防御</b>：<code>realpathDeepestExisting</code>（<code>teamMemPaths.ts:109-171</code>）从文件向上遍历，对每个祖先目录调 <code>realpath()</code> 解析真实路径，<b>再比较</b>真实路径是否仍在团队目录内。还检测悬空符号链接（<code>ELOOP</code>）。</p>
+</div>
+
+<div class="card">
+<div class="card-title">C. 注入向量（injection）</div>
+<p><b>攻击</b>：通过 <code>autoMemoryDirectory</code> 注入恶意路径</p>
+<p><b>防御</b>（<code>teamMemPaths.ts:22-64</code> <code>sanitizePathKey</code>）：</p>
+<ul>
+<li>URL 编码遍历：<code>%2e%2e%2f</code> → <code>../</code>，解码后检测 <code>..</code> 或 <code>/</code></li>
+<li>Unicode 归一化攻击：全角字符 <code>．</code> 归一化后变 <code>..</code>，检测归一化前后差异</li>
+<li>反斜杠拒绝（Windows 路径分隔符作为穿越向量）</li>
+</ul>
+</div>
+
+<div class="card">
+<div class="card-title">D. settings.json 路径注入</div>
+<p><b>攻击</b>：在项目 <code>.claude/settings.json</code>（会提交到代码库）里设 <code>autoMemoryDirectory: "~/.ssh"</code>，让所有协作者把记忆写到 <code>~/.ssh/</code></p>
+<p><b>防御</b>：<b><code>projectSettings</code> 被故意排除</b>，只从 trusted sources（policySettings / flagSettings / localSettings / userSettings）读取 <code>autoMemoryDirectory</code>。</p>
+</div>
+
+<h3>5.2 个人 vs 团队记忆的隔离</h3>
+
+<p>物理路径：</p>
+<ul>
+<li>个人：<code>~/.claude/projects/&lt;项目&gt;/memory/</code></li>
+<li>团队：<code>~/.claude/projects/&lt;项目&gt;/memory/team/</code></li>
+</ul>
+
+<p>隔离机制是<b>文件系统级</b>：写入时做两遍检查（fast 字符串 + realpath 解析），读取时只检查字符串前缀（读取不涉及符号链接逃逸风险）。</p>
+
+<div class="warn">
+<b>team memory 明确禁止保存敏感数据</b>（<code>teamMemPrompts.ts</code>）。规则里写明：never save API keys or user credentials。
+</div>
+
+<div class="tip">
+<b>实操建议</b>：
+<ul>
+<li>把 API key、个人 token 等敏感信息<b>只写进个人记忆或环境变量</b>，绝不写团队记忆</li>
+<li>团队记忆里只放"团队所有人都该知道"的项目规约、外部系统指针、共享的决策</li>
+<li>定期 <code>git diff .claude/agent-memory/</code> 看看队友有没有意外提交了敏感信息</li>
+</ul>
+</div>
+
+<hr>
+
+<!-- ============================================ -->
+<h2 id="disable">6. 怎么关掉记忆系统？</h2>
+
+<p>主报告没专门讲"开 / 关"。不是每个人都想要 agent 自动学习——给用户选择权是基本产品设计。</p>
+
+<h3>6.1 三档控制</h3>
+
+<table>
+<thead>
+<tr><th>档位</th><th>触发方式</th><th>效果</th></tr>
+</thead>
+<tbody>
+<tr>
+<td><b>全关</b></td>
+<td><code>CLAUDE_CODE_DISABLE_AUTO_MEMORY=1</code></td>
+<td>整个记忆系统关闭：extractMemories、autoDream、/remember、/dream、team sync 全部停用</td>
+</tr>
+<tr>
+<td><b>bare 模式</b></td>
+<td><code>--bare</code>（设置 <code>CLAUDE_CODE_SIMPLE=1</code>）</td>
+<td>同全关，且 CLI 界面极度精简（无 ASCII art、无 TUI 装饰）</td>
+</tr>
+<tr>
+<td><b>只关 auto memory，保留 CLAUDE.md</b></td>
+<td><code>settings.json: { "autoMemoryEnabled": false }</code></td>
+<td>仅关闭 auto memory（MEMORY.md 系统），CLAUDE.md 规则系统不受影响</td>
+</tr>
+</tbody>
+</table>
+
+<p>优先级（<code>paths.ts:30-55</code>）：<b>env var &gt; bare &gt; remote 检测 &gt; settings.json &gt; 默认开启</b></p>
+
+<div class="note">
+<b>关闭 auto memory 不等于关闭 CLAUDE.md</b>。两者是<b>独立</b>的系统。CLAUDE.md 由 <code>claudemd.ts</code> 的 <code>getMemoryFiles()</code> 管理，不受 <code>isAutoMemoryEnabled()</code> 控制。
+</div>
+
+<h3>6.2 关闭后会失去什么？</h3>
+
+<table>
+<thead>
+<tr><th>组件</th><th>关闭时行为</th></tr>
+</thead>
+<tbody>
+<tr><td><code>loadMemoryPrompt()</code></td><td>返回 null，系统提示词中不注入任何记忆指令</td></tr>
+<tr><td><code>getMemoryFiles()</code></td><td>跳过 AutoMem/TeamMem entrypoint 的读取</td></tr>
+<tr><td><code>isExtractModeActive()</code></td><td>返回 false，背景提取不跑</td></tr>
+<tr><td><code>/remember</code> 技能</td><td>不可用</td></tr>
+<tr><td><code>/dream</code> 技能</td><td>不可用</td></tr>
+<tr><td>team memory</td><td><code>isTeamMemoryEnabled()</code> 返回 false</td></tr>
+</tbody>
+</table>
+
+<p><b>CLAUDE.md 系统完全不受影响</b>——你仍然能写项目级规则、加载路径作用域规则。</p>
+
+<div class="tip">
+<b>实操建议</b>：
+<ul>
+<li>新项目先用 1-2 周记忆系统收集经验，再决定保留还是关</li>
+<li>对噪音敏感（不想被 auto memory 干扰）→ 选"只关 auto memory，保留 CLAUDE.md"</li>
+<li>完全不用 AI 记忆概念（极简主义）→ 选"全关"</li>
+</ul>
+</div>
+
+<hr>
+
+<!-- ============================================ -->
+<h2 id="full">7. 记忆满了会怎样？</h2>
+
+<p>主报告提到"200 行 / 25KB 双 cap"，但<b>没说截断后被丢的部分会丢吗、用户能主动清理吗</b>。用了 6 个月后 MEMORY.md 会膨胀——你得知道"我得手动管"还是"系统会帮我管"。</p>
+
+<h3>7.1 MEMORY.md 是索引，不是存储</h3>
+
+<p>系统<b>不把记忆内容直接写进 MEMORY.md</b>。它是这样的：</p>
+<ul>
+<li>每个记忆是一个独立的 <code>.md</code> 文件（<code>user_role.md</code>、<code>feedback_testing.md</code> 等）</li>
+<li>MEMORY.md 只含指针索引：<code>- [Title](file.md) — one-line hook</code></li>
+</ul>
+
+<p>所以"满"是指<b>索引文件本身</b>满了，不是记忆内容满了。</p>
+
+<h3>7.2 满了的硬限制</h3>
+
+<ul>
+<li>最多 <b>200 行</b>（<code>MAX_ENTRYPOINT_LINES</code>，<code>memdir.ts:35</code>）</li>
+<li>最多 <b>25,000 字节</b>（<code>MAX_ENTRYPOINT_BYTES</code>，<code>memdir.ts:38</code>）</li>
+</ul>
+
+<h3>7.3 超限后会发生什么？</h3>
+
+<div class="step">
+<span class="step-num">1</span>
+<span class="step-body"><b>按行截断</b>：从第 200 行处切断（<code>truncateEntrypointContent</code>，<code>memdir.ts:57-103</code>）</span>
+</div>
+<div class="step">
+<span class="step-num">2</span>
+<span class="step-body"><b>再按字节截断</b>：截断后若还超 25KB，在最后一个换行符处切断（避免切断 mid-line）</span>
+</div>
+<div class="step">
+<span class="step-num">3</span>
+<span class="step-body"><b>追加警告</b>：<br><code>&gt; WARNING: MEMORY.md is X lines (limit: 200). Only part of it was loaded.</code></span>
+</div>
+
+<h3>7.4 被截掉的部分丢了吗？</h3>
+
+<div class="tip">
+<b>没有！</b> MEMORY.md 只是索引——<b>被截掉的行是指向记忆文件的指针</b>，对应的 <code>.md</code> 主题文件还在 <code>~/.claude/projects/&lt;项目&gt;/memory/</code> 目录里。
+</div>
+
+<p>截断只影响<b>本次对话的上下文加载</b>，不影响磁盘文件本身。所以你下次看到 MEMORY.md 满了，<b>不要去删主题文件</b>——你删的是内容，不是索引。</p>
+
+<h3>7.5 有自动清理吗？</h3>
+
+<div class="warn">
+<b>目前没有自动 prune 机制。</b> 系统不会自动合并、删除、归档记忆。
+</div>
+
+<p>用户需要手动管理 <code>memory/</code> 目录：</p>
+<ul>
+<li>每 1-2 个月打开看一眼</li>
+<li>删除过时的（如"我们用 enzyme"——早就迁到 RTL 了）</li>
+<li>合并重复的（如两个反馈都说"不要加 emoji"）</li>
+<li>缩短过长的 hook 描述（保持 <code>~150 字符</code>）</li>
+</ul>
+
+<div class="tip">
+<b>实操建议</b>：把 <code>~/.claude/projects/&lt;项目&gt;/memory/</code> 目录加进 Git，每月一次 <code>git log --oneline memory/</code> 看变化（只读，不提交），发现问题就手动改。
+</div>
+
+<hr>
+
+<!-- ============================================ -->
+<h2 id="sync">8. 误删能恢复吗？跨机器同步吗？</h2>
+
+<p>主报告没提。这是"产品边界"问题——记忆是本机的还是云端的？误删能不能 undo？换电脑了记忆会不会丢？</p>
+
+<h3>8.1 跨机器同步吗？</h3>
+
+<div class="card">
+<div class="card-title">简短答案：<b>不跨机器同步。</b></div>
+<p>记忆存在<b>本地文件系统</b>：<code>~/.claude/</code>（<code>getMemoryBaseDir()</code> 默认返回 <code>getClaudeConfigHomeDir()</code>）。没有内置的云端同步或网络同步机制。</p>
+</div>
+
+<p>实际表现：</p>
+<ul>
+<li>在 A 机器写的记忆，换到 B 机器后<b>不存在</b></li>
+<li>除非手动迁移 <code>~/.claude/</code> 目录</li>
+<li>Cowork（CCR 远程模式）通过 <code>CLAUDE_CODE_REMOTE_MEMORY_DIR</code> 环境变量把记忆目录重定向到远程挂载点——这是<b>通过文件系统挂载实现的同步</b>，不是应用层同步</li>
+</ul>
+
+<h3>8.2 误删能恢复吗？</h3>
+
+<div class="warn">
+<b>没有内置 undo 机制。</b>
+</div>
+
+<p>具体场景：</p>
+
+<ul>
+<li><b>删除了某个记忆 .md 文件</b>：没有自动恢复。如果你启用了系统级 Time Machine / iCloud Drive / 文件历史，<b>可以</b>从那里恢复——但这不在 Claude Code 代码里</li>
+<li><b>删除了 MEMORY.md 索引</b>：对应的 <code>.md</code> 文件还在磁盘上，只是索引空了。下次系统会创建新的（空的）MEMORY.md，<b>丢失的只是索引指针</b>，但内容可以靠子目录里的文件重建</li>
+</ul>
+
+<p>恢复手段都在<b>代码库外部</b>：</p>
+<ul>
+<li>版本控制（如果你把 <code>memory/</code> 加进 Git）</li>
+<li>系统备份（Time Machine / Windows File History）</li>
+<li>云盘同步（如果你把 <code>~/.claude/</code> 放 iCloud Drive / OneDrive 同步目录）</li>
+</ul>
+
+<h3>8.3 团队记忆怎么协作？</h3>
+
+<p>团队记忆（<code>memory/team/</code>）通过 <code>TEAMMEM</code> feature 在用户间同步——但具体同步机制是 Cowork/CCR 的应用层同步（不在 Claude Code 核心代码里）。</p>
+
+<p>对于不开 <code>TEAMMEM</code> 的团队，<b>可以</b>把 <code>.claude/agent-memory/</code>（project scope 的子代理记忆）commit 进 git，让所有协作者共享——这是 <b>推荐做法</b>，主报告 §3.3 提过。</p>
+
+<h3>8.4 时区、编码、文件权限问题？</h3>
+
+<p>记忆文件是普通 UTF-8 markdown，所以：</p>
+<ul>
+<li>中文内容：✅ 支持（frontmatter 用 <code>name: 中文名</code> 即可）</li>
+<li>时区：日期时间戳是 ISO 8601（<code>YYYY-MM-DDTHH:MM:SSZ</code>），用 UTC。显示时按本地时区</li>
+<li>权限：默认 <code>~/.claude/</code> 目录的用户权限。如果多用户共用一台电脑，<b>会互相读到对方的记忆</b>——所以 Cowork/CCR 模式下会用 <code>CLAUDE_CODE_REMOTE_MEMORY_DIR</code> 隔离</li>
+</ul>
+
+<div class="tip">
+<b>实操建议</b>：
+<ul>
+<li>新机器：<code>scp -r old:~/.claude/ new:~/.claude/</code> 迁移整个目录（关 Claude Code 时做）</li>
+<li>误删预防：把 <code>~/.claude/</code> 加进系统级 Time Machine / iCloud Drive</li>
+<li>团队协作：把 <code>&lt;项目根&gt;/.claude/agent-memory/</code> commit 进 git，所有人共享</li>
+</ul>
+</div>
+
+<hr>
+
+<div class="note">
+<b>这份附录到此结束。</b><br>
+8 个问题讲透了，每章都给了"实操建议"。<br>
+回到主报告 <a href="./claude-memory.html">claude-memory.html</a>（纵深机制） 和 <a href="./claude-memory-file.html">claude-memory-file.html</a>（横向对比） 可以查具体章节的深入分析。
+</div>
+
+<p style="margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 0.9em; text-align: center;">
+基于 Claude Code 2.1.888 源码 + 主报告两份分析 · 2026-06-08 · 8 个常见问题 FAQ 附录
+</p>
+
+</main>
+</div><!-- /.layout -->
+</body>
+</html>

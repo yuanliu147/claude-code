@@ -185,16 +185,15 @@ function logMemoryDirCounts(
 }
 
 /**
- * Build the typed-memory behavioral instructions (without MEMORY.md content).
- * Constrains memories to a closed four-type taxonomy (user / feedback / project /
- * reference) — content that is derivable from the current project state (code
- * patterns, architecture, git history) is explicitly excluded.
+ * 构建类型化记忆的行为指令（不包含 MEMORY.md 内容）。
+ * 将记忆限制为封闭的四类分类体系（user / feedback / project / reference）—
+ * 明确排除了可从当前项目状态（代码模式、架构、git 历史）中推导出的内容。
  *
- * Individual-only variant: no `## Memory scope` section, no <scope> tags
- * in type blocks, and team/private qualifiers stripped from examples.
+ * 仅限个人使用的变体：不包含 `## Memory scope` 部分，类型块中无 `<scope>` 标签，
+ * 且示例中移除了团队/私有修饰符。
  *
- * Used by both buildMemoryPrompt (agent memory, includes content) and
- * loadMemoryPrompt (system prompt, content injected via user context instead).
+ * 同时用于 `buildMemoryPrompt`（智能体记忆，包含内容）和
+ * `loadMemoryPrompt`（系统提示词，内容改为通过用户上下文注入）。
  */
 export function buildMemoryLines(
   displayName: string,

@@ -1,0 +1,2306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code Plan 机制深度分析（V1 + V2 + Ultraplan）</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg-soft: #161b22;
+    --bg-card: #1c2128;
+    --border: #30363d;
+    --fg: #c9d1d9;
+    --fg-soft: #8b949e;
+    --fg-bright: #f0f6fc;
+    --accent: #58a6ff;
+    --accent-2: #d2a8ff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --red: #f85149;
+    --yellow: #e3b341;
+    --purple: #bc8cff;
+    --code-bg: #161b22;
+    --code-fg: #c9d1d9;
+    --warn-bg: #3a2e0c;
+    --info-bg: #0c2d6b;
+    --tip-bg: #0c4a2d;
+    --pin-bg: #3c0c4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, pre {
+    font-family: "SF Mono", "JetBrains Mono", "Fira Code", "Cascadia Code",
+                 Consolas, Monaco, monospace;
+    font-size: 13px;
+  }
+  /* Layout */
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  @media (max-width: 960px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { display: none; }
+  }
+  /* Sidebar TOC */
+  aside {
+    background: var(--bg-soft);
+    border-right: 1px solid var(--border);
+    padding: 32px 20px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  aside h2 {
+    color: var(--fg-bright);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  aside ol { list-style: none; padding: 0; }
+  aside ol li { margin: 4px 0; }
+  aside ol li a {
+    display: block;
+    padding: 6px 10px;
+    color: var(--fg-soft);
+    font-size: 13px;
+    border-radius: 6px;
+    border-left: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  aside ol li a:hover {
+    color: var(--fg-bright);
+    background: var(--bg-card);
+    text-decoration: none;
+    border-left-color: var(--accent);
+  }
+  aside ol li a.sub { padding-left: 24px; font-size: 12px; }
+  /* Main */
+  main {
+    padding: 40px 64px 80px;
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  @media (max-width: 720px) { main { padding: 24px 16px 40px; } }
+  /* Hero */
+  .hero {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 32px;
+    margin-bottom: 40px;
+  }
+  .hero .tag {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 16px;
+  }
+  h1 {
+    font-size: 36px;
+    color: var(--fg-bright);
+    margin-bottom: 12px;
+    line-height: 1.2;
+  }
+  .subtitle {
+    color: var(--fg-soft);
+    font-size: 16px;
+    margin-bottom: 20px;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--fg-soft);
+  }
+  .meta span {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+    border-radius: 6px;
+  }
+  /* Sections */
+  section { margin-bottom: 56px; }
+  h2 {
+    color: var(--fg-bright);
+    font-size: 28px;
+    margin: 32px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    color: var(--fg-bright);
+    font-size: 20px;
+    margin: 24px 0 12px;
+  }
+  h4 {
+    color: var(--accent);
+    font-size: 16px;
+    margin: 20px 0 10px;
+    font-weight: 600;
+  }
+  p { margin-bottom: 12px; }
+  ul, ol { margin: 0 0 16px 24px; }
+  li { margin-bottom: 4px; }
+  /* Code */
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    margin: 12px 0 20px;
+    position: relative;
+  }
+  pre code { color: var(--code-fg); line-height: 1.55; }
+  .code-loc {
+    display: inline-block;
+    background: var(--bg-card);
+    color: var(--purple);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin: 8px 0 4px;
+    font-family: "SF Mono", Consolas, monospace;
+    border: 1px solid var(--border);
+  }
+  /* Inline */
+  code.inline {
+    background: var(--bg-card);
+    color: var(--orange);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13px;
+    border: 1px solid var(--border);
+  }
+  /* Callouts */
+  .callout {
+    border-left: 4px solid;
+    background: var(--bg-card);
+    padding: 14px 18px;
+    margin: 16px 0;
+    border-radius: 6px;
+  }
+  .callout.warn { border-color: var(--yellow); background: var(--warn-bg); }
+  .callout.info { border-color: var(--accent); background: var(--info-bg); }
+  .callout.tip  { border-color: var(--green);  background: var(--tip-bg); }
+  .callout.pin  { border-color: var(--purple); background: var(--pin-bg); }
+  .callout .icon { font-weight: 700; margin-right: 8px; }
+  /* Tables */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 14px;
+  }
+  th, td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--bg-soft);
+    color: var(--fg-bright);
+    font-weight: 600;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  /* File path pill */
+  .file {
+    background: var(--bg-card);
+    color: var(--accent-2);
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 12.5px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+  }
+  .line-ref {
+    color: var(--yellow);
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 12.5px;
+  }
+  /* Section header badge */
+  .section-num {
+    display: inline-block;
+    background: var(--bg-card);
+    color: var(--accent);
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-right: 10px;
+    font-weight: 700;
+    border: 1px solid var(--accent);
+  }
+  /* Supplementary block - distinct from main callouts */
+  .supp-block {
+    background: linear-gradient(135deg,
+      rgba(188, 140, 255, 0.10),
+      rgba(63, 185, 80, 0.06) 70%,
+      rgba(88, 166, 255, 0.06));
+    border: 1px dashed var(--purple);
+    border-radius: 10px;
+    padding: 0;
+    margin: 32px 0;
+    overflow: hidden;
+    position: relative;
+  }
+  .supp-block::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+    background: linear-gradient(180deg, var(--purple), var(--accent), var(--green));
+  }
+  .supp-block .supp-header {
+    background: rgba(188, 140, 255, 0.18);
+    color: var(--purple);
+    padding: 10px 20px 10px 24px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(188, 140, 255, 0.25);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .supp-block .supp-header .badge-tag {
+    background: var(--purple);
+    color: #fff;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+  }
+  .supp-block .supp-body {
+    padding: 18px 24px 22px;
+  }
+  .supp-block .supp-body > p:first-child { margin-top: 0; }
+  .supp-block h4 {
+    color: var(--purple);
+    margin-top: 18px;
+  }
+  .supp-block h4:first-child { margin-top: 4px; }
+  .supp-block .summary-line {
+    color: var(--fg-soft);
+    font-style: italic;
+    border-top: 1px dashed var(--border);
+    margin-top: 18px;
+    padding-top: 12px;
+    font-size: 13.5px;
+  }
+  /* Bilingual quote block - side-by-side EN / ZH */
+  .bilingual {
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--purple);
+    border-radius: 8px;
+    margin: 16px 0;
+    background: var(--bg-card);
+    overflow: hidden;
+  }
+  .bilingual-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    background: rgba(188, 140, 255, 0.10);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--purple);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .bilingual-head .tag-en {
+    color: var(--accent);
+    background: rgba(88, 166, 255, 0.12);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .bilingual-head .tag-zh {
+    color: var(--green);
+    background: rgba(63, 185, 80, 0.12);
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .bilingual-head .swap-icon {
+    color: var(--fg-soft);
+    font-size: 14px;
+    margin-left: auto;
+  }
+  .bilingual-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .bilingual-en, .bilingual-zh {
+    padding: 14px 18px;
+    font-size: 14px;
+    line-height: 1.65;
+  }
+  .bilingual-en {
+    color: var(--fg-soft);
+    background: rgba(88, 166, 255, 0.04);
+    border-right: 1px solid var(--border);
+    font-style: italic;
+  }
+  .bilingual-en code, .bilingual-zh code {
+    font-size: 12.5px;
+  }
+  .bilingual-zh {
+    color: var(--fg);
+  }
+  .bilingual-cite {
+    padding: 8px 18px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--fg-soft);
+    background: var(--bg-soft);
+  }
+  /* Inline EN string + ZH gloss */
+  .en-zh-pair {
+    display: inline-flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    vertical-align: baseline;
+  }
+  .en-zh-pair .en {
+    color: var(--fg-soft);
+    font-style: italic;
+  }
+  .en-zh-pair .zh {
+    color: var(--fg);
+  }
+  .en-zh-pair .arrow {
+    color: var(--purple);
+    font-size: 11px;
+    margin: 0 2px;
+  }
+  @media (max-width: 720px) {
+    .bilingual-body { grid-template-columns: 1fr; }
+    .bilingual-en { border-right: none; border-bottom: 1px solid var(--border); }
+  }
+  /* Lists inside text */
+  .kv { display: grid; grid-template-columns: 200px 1fr; gap: 8px 16px; margin: 12px 0; }
+  .kv dt { color: var(--accent); font-weight: 600; }
+  .kv dd { color: var(--fg); margin: 0; }
+  /* Flow diagram */
+  .flow {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    margin: 16px 0;
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.8;
+    color: var(--fg);
+    white-space: pre;
+    overflow-x: auto;
+  }
+  /* Quote */
+  blockquote {
+    border-left: 3px solid var(--purple);
+    padding: 8px 16px;
+    margin: 12px 0;
+    color: var(--fg-soft);
+    font-style: italic;
+    background: var(--bg-card);
+    border-radius: 0 6px 6px 0;
+  }
+  blockquote cite {
+    display: block;
+    margin-top: 6px;
+    color: var(--accent);
+    font-style: normal;
+    font-size: 12.5px;
+  }
+  /* Index list */
+  .file-index li {
+    list-style: none;
+    padding: 6px 0;
+    border-bottom: 1px dashed var(--border);
+  }
+  .file-index li:last-child { border-bottom: none; }
+  .file-index .role {
+    color: var(--fg-soft);
+    font-size: 13px;
+    margin-left: 8px;
+  }
+  /* Highlighted line in code */
+  .hl { background: rgba(63, 185, 80, 0.15); display: inline-block; }
+  .hl-2 { background: rgba(210, 153, 34, 0.15); display: inline-block; }
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 40px 0;
+  }
+  .footer {
+    border-top: 1px solid var(--border);
+    padding-top: 24px;
+    margin-top: 56px;
+    color: var(--fg-soft);
+    font-size: 13px;
+    text-align: center;
+  }
+  /* Source link in design section */
+  .src {
+    color: var(--fg-soft);
+    font-size: 12.5px;
+    word-break: break-all;
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<aside>
+  <h2>目录</h2>
+  <ol>
+    <li><a href="#overview">概述：Plan 是什么</a></li>
+    <li><a href="#usability">用户实测可用性速览</a></li>
+    <li><a href="#layout">仓库布局</a></li>
+    <li><a href="#slash-cmd">/plan 斜杠命令</a></li>
+    <li><a href="#enter">EnterPlanModeTool 实现</a></li>
+    <li><a href="#enter-ui">EnterPlanMode 审批 UI</a></li>
+    <li><a href="#exit">ExitPlanModeV2Tool 实现</a></li>
+    <li><a href="#exit-ui">ExitPlanMode 审批 UI</a></li>
+    <li><a href="#v1-vs-v2">V1 vs V2 行为对比</a></li>
+    <li><a href="#storage">计划存储 plans.ts</a></li>
+    <li><a href="#verify">VerifyPlanExecution 与 planAgent</a></li>
+    <li><a href="#ultraplan">Ultraplan 系统</a></li>
+    <li><a href="#state">状态机与权限 Context</a></li>
+    <li><a href="#registration">工具注册与模型可见性</a></li>
+    <li><a href="#flows">端到端调用链</a></li>
+    <li><a href="#limits">限制、边界、异常</a></li>
+    <li><a href="#design">为什么这么设计</a></li>
+    <li><a href="#issues">已知问题与未实现</a></li>
+    <li><a href="#files">关键文件清单</a></li>
+  </ol>
+</aside>
+
+<main>
+
+<header class="hero">
+  <div class="tag">Deep Code Analysis</div>
+  <h1>Claude Code Plan 机制深度分析</h1>
+  <p class="subtitle">
+    从 <code class="inline">/plan</code> 斜杠命令到 <code class="inline">ExitPlanModeV2Tool</code>、从
+    <code class="inline">plans.ts</code> 文件存储到 <code class="inline">Ultraplan</code>
+    远端会诊：完整链路 + V1/V2 差异 + 大量 <code class="inline">file:line</code> 反编译引用。
+  </p>
+  <div class="meta">
+    <span>当前仓库：<code class="inline">/Users/admin/WorkSpace/claude-code</code></span>
+    <span>版本：<code class="inline">2.1.888</code></span>
+    <span>分析日期：2026-06</span>
+    <span>Runtime：Bun</span>
+    <span>反编译 / 恢复实现</span>
+  </div>
+</header>
+
+<section id="overview">
+  <h2><span class="section-num">01</span>概述：Plan 是什么 / 不是什么 / V1 vs V2 关系</h2>
+
+  <p>
+    <strong>Plan mode（计划模式）</strong>是 Claude Code 中控制 <em>模型是否能执行修改类操作</em> 的一道权限闸门。
+    进入 plan mode 后，模型只能调用只读工具（<code class="inline">Read</code> / <code class="inline">Grep</code> /
+    <code class="inline">Glob</code> / 只读 <code class="inline">Bash</code>），
+    唯一可以写入的文件是 <strong>plan file</strong>（即 <code class="inline">${slug}.md</code>）。
+    退出 plan mode 必须由用户审批，模型在未退出前无法落地任何代码改动。
+  </p>
+
+  <h3>Plan 不是什么</h3>
+  <ul>
+    <li>不是 <em>技能/插件</em> 体系（参见 <code class="inline">claude-skill.html</code>）—— skill 是指令包，plan 是权限壳。</li>
+    <li>不是 <em>工作流编排</em> 工具（如 <code class="inline">.claude/agents/</code> 下的
+        <code class="inline">planAgent</code> 才是只读架构师 subagent）。</li>
+    <li>不是 <em>任务列表系统</em>（todo 走 <code class="inline">TodoWriteTool</code>，plan 是产物而非步骤）。</li>
+  </ul>
+
+  <h3>V1 vs V2 是什么关系</h3>
+  <p>
+    同一个工具名字 <code class="inline">ExitPlanMode</code>，但内部实现分两代：
+  </p>
+  <ul>
+    <li>
+      <strong>V1</strong>：plan 内容作为 <code class="inline">input.plan</code> 字符串随 tool_use 一起发出；
+      退出时直接以该字符串作为 plan 文本。适合 SDK/hooks 注入场景。
+    </li>
+    <li>
+      <strong>V2</strong>：plan 内容先写到磁盘（<code class="inline">plans.ts</code> 提供的
+      <code class="inline">getPlanFilePath()</code>），工具调用时 <em>不</em> 传 plan 字符串；
+      退出时再从磁盘读回。可被用户在编辑器内（Ctrl+G）或 CCR web UI 端修改。
+    </li>
+  </ul>
+
+  <p>
+    V2 是默认实现，代码注释明确写到：
+    <span class="code-loc">src/tools/ExitPlanModeTool/ExitPlanModeV2Tool.ts:286-291</span>
+  </p>
+
+  <blockquote>
+    TODO: Delete the branch after moving to V2 — Use tool name to detect V2 instead of
+    checking input.plan, because PR #10394 injects plan content into input.plan for
+    hooks/SDK, which broke the old detection (see issue #10878).
+  </blockquote>
+
+  <div class="callout pin">
+    <span class="icon">PIN</span>
+    本报告所有 <code class="inline">file:line</code> 引用都来自反编译后的 <code class="inline">2.1.888</code> 代码。
+    源码保留 <code class="inline">unknown</code> / <code class="inline">never</code> /
+    <code class="inline">_c(N)</code> 编译痕迹（React Compiler 输出的 decompiled memoization 调用）。
+  </div>
+</section>
+
+<hr>
+
+<section id="usability">
+  <h2><span class="section-num">02</span>用户实测可用性速览</h2>
+
+  <p>下表覆盖每个描述为"机制 / 工具 / 模式"的章节，标注真实可用性。
+  <strong>设计意图</strong>与 <strong>已实现</strong> 必须区分。</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>能力</th>
+        <th>状态</th>
+        <th>条件</th>
+        <th>备注</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code class="inline">/plan</code> 斜杠命令进入 plan mode</td>
+        <td>开箱即用</td>
+        <td>无 flag</td>
+        <td>无描述时仅切模式；带描述则把描述作为首条 prompt 提交</td>
+      </tr>
+      <tr>
+        <td><code class="inline">/plan open</code> 用外部编辑器编辑</td>
+        <td>开箱即用</td>
+        <td>已设置 <code class="inline">$EDITOR</code> / <code class="inline">$VISUAL</code></td>
+        <td>调用 <code class="inline">editFileInEditor</code></td>
+      </tr>
+      <tr>
+        <td>EnterPlanMode 工具（模型调用）</td>
+        <td>开箱即用</td>
+        <td>非 <code class="inline">--channels</code> 状态</td>
+        <td><code class="inline">isEnabled</code> 在 KAIROS+channels 下被关</td>
+      </tr>
+      <tr>
+        <td>ExitPlanModeV2Tool 退出审批</td>
+        <td>开箱即用</td>
+        <td>模型处于 plan mode</td>
+        <td>非 plan mode 调用会被 <code class="inline">validateInput</code> 拒绝</td>
+      </tr>
+      <tr>
+        <td>多 Phase 计划流程（Phase 1-4）</td>
+        <td>开箱即用</td>
+        <td>无 flag（ant 默认开启 interview phase）</td>
+        <td>外部用户走 GrowthBook 开关</td>
+      </tr>
+      <tr>
+        <td>Interview phase 渐进式 5 阶段</td>
+        <td>需要 flag</td>
+        <td><code class="inline">CLAUDE_CODE_PLAN_MODE_INTERVIEW_PHASE=1</code> 或 ant build</td>
+        <td>env 优先，其次 <code class="inline">tengu_plan_mode_interview_phase</code></td>
+      </tr>
+      <tr>
+        <td>Pewter Ledger plan 文件结构实验</td>
+        <td>需要 GrowthBook</td>
+        <td>外部用户服务端开关</td>
+        <td>四组：control / trim / cut / cap</td>
+      </tr>
+      <tr>
+        <td>VerifyPlanExecution 工具</td>
+        <td>占位实现</td>
+        <td><code class="inline">CLAUDE_CODE_VERIFY_PLAN=true</code></td>
+        <td>stub 返回 <code class="inline">isEnabled: () =&gt; false</code></td>
+      </tr>
+      <tr>
+        <td>Plan agent（只读架构师 subagent）</td>
+        <td>开箱即用</td>
+        <td>AgentTool 已启用</td>
+        <td>由 <code class="inline">AgentTool</code> 暴露；禁 <code class="inline">ExitPlanMode</code> 等写工具</td>
+      </tr>
+      <tr>
+        <td>Ultraplan（CCR 远端协作审批）</td>
+        <td>需要 flag</td>
+        <td><code class="inline">ULTRAPLAN</code> feature</td>
+        <td>dev 默认未启用；需运行时或构建时开</td>
+      </tr>
+      <tr>
+        <td>Teammate 计划审批走 mailbox</td>
+        <td>需要 flag</td>
+        <td><code class="inline">AGENT_TRIGGERS_REMOTE</code>（teammate 模式）</td>
+        <td>build 默认开启，dev 默关闭</td>
+      </tr>
+      <tr>
+        <td>Auto Mode 与 Plan 联动</td>
+        <td>需要 flag</td>
+        <td><code class="inline">TRANSCRIPT_CLASSIFIER</code></td>
+        <td>dev 默认开启</td>
+      </tr>
+      <tr>
+        <td>Plan 写文件路径自定义</td>
+        <td>开箱即用</td>
+        <td><code class="inline">settings.plansDirectory</code> 字段</td>
+        <td>路径必须在项目根下（防 path traversal）</td>
+      </tr>
+      <tr>
+        <td>Plan resume（恢复历史 plan）</td>
+        <td>开箱即用</td>
+        <td>resume 会话且日志含 <code class="inline">m.slug</code></td>
+        <td>从文件快照 / 消息历史 / 工具输入三处回放</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<hr>
+
+<section id="layout">
+  <h2><span class="section-num">03</span>仓库布局：V1 / V2 文件分布</h2>
+
+  <h3>核心目录</h3>
+  <ul>
+    <li><span class="file">src/tools/EnterPlanModeTool/</span> — 入口工具（V1+V2 共用 tool name）</li>
+    <li><span class="file">src/tools/ExitPlanModeTool/</span> — 出口工具（<code class="inline">ExitPlanModeV2Tool.ts</code> 是真实实现）</li>
+    <li><span class="file">src/tools/VerifyPlanExecutionTool/</span> — 占位实现（stub）</li>
+    <li><span class="file">src/tools/AgentTool/built-in/planAgent.ts</span> — 只读架构师 subagent</li>
+    <li><span class="file">src/utils/plans.ts</span> — plan 文件路径、读写、恢复</li>
+    <li><span class="file">src/utils/planModeV2.ts</span> — 5-phase / Pewter Ledger / interview phase 开关</li>
+    <li><span class="file">src/commands/plan/</span> — <code class="inline">/plan</code> 斜杠命令</li>
+    <li><span class="file">src/utils/ultraplan/</span> — Ultraplan（CCR 远端会诊）</li>
+    <li><span class="file">src/components/permissions/EnterPlanModePermissionRequest/</span> — 入口审批弹窗</li>
+    <li><span class="file">src/components/permissions/ExitPlanModePermissionRequest/</span> — 出口审批弹窗（931 行，最大组件）</li>
+  </ul>
+
+  <h3>V1 vs V2 文件层差异</h3>
+  <p>
+    V1 与 V2 共享 <code class="inline">constants.ts</code> 中的 <code class="inline">EXIT_PLAN_MODE_TOOL_NAME = 'ExitPlanMode'</code>，
+    实际实现类是 <code class="inline">ExitPlanModeV2Tool</code>（V1 已删但常量兼容保留）：
+  </p>
+
+  <span class="code-loc">src/tools/ExitPlanModeTool/constants.ts:1-2</span>
+  <pre><code>export const EXIT_PLAN_MODE_TOOL_NAME = 'ExitPlanMode'
+export const EXIT_PLAN_MODE_V2_TOOL_NAME = 'ExitPlanMode'</code></pre>
+
+  <div class="callout info">
+    <span class="icon">INFO</span>
+    <code class="inline">_sdkInputSchema</code> 在 V2 中保留 <code class="inline">plan</code> / <code class="inline">planFilePath</code> 字段
+    是 <em>SDK/hook 注入</em> 用途（<span class="line-ref">ExitPlanModeV2Tool.ts:97-108</span>），
+    内部 <code class="inline">inputSchema</code> 不暴露这些字段，由 <code class="inline">normalizeToolInput</code> 注入。
+  </div>
+</section>
+
+<hr>
+
+<section id="slash-cmd">
+  <h2><span class="section-num">04</span><code class="inline">/plan</code> 斜杠命令完整链路</h2>
+
+  <p>
+    <code class="inline">/plan</code> 是 REPL 中的本地 JSX 命令，定义在
+    <span class="file">src/commands/plan/index.ts</span>，实现于
+    <span class="file">src/commands/plan/plan.tsx</span>。
+  </p>
+
+  <h3>三态行为</h3>
+  <ol>
+    <li><strong>未在 plan mode + 无参数</strong>：切到 plan mode，无 prompt 提交
+        <span class="line-ref">plan.tsx:53-68</span></li>
+    <li><strong>未在 plan mode + 带描述</strong>：切到 plan mode 并以 <code class="inline">shouldQuery: true</code> 把描述当首条 prompt
+        <span class="line-ref">plan.tsx:62-66</span></li>
+    <li><strong>已在 plan mode</strong>：读取 <code class="inline">getPlan()</code> 渲染当前 plan；参数为 <code class="inline">open</code> 时
+        调用 <code class="inline">editFileInEditor(planPath)</code>
+        <span class="line-ref">plan.tsx:71-90</span></li>
+  </ol>
+
+  <h3>关键代码</h3>
+  <span class="code-loc">src/commands/plan/plan.tsx:53-69</span>
+  <pre><code>if (currentMode !== 'plan') {
+  handlePlanModeTransition(currentMode, 'plan')
+  setAppState(prev => ({
+    ...prev,
+    toolPermissionContext: applyPermissionUpdate(
+      prepareContextForPlanMode(prev.toolPermissionContext),
+      { type: 'setMode', mode: 'plan', destination: 'session' },
+    ),
+  }))
+  const description = args.trim()
+  if (description &amp;&amp; description !== 'open') {
+    onDone('Enabled plan mode', { shouldQuery: true })
+  } else {
+    onDone('Enabled plan mode')
+  }
+  return null
+}</code></pre>
+
+  <div class="callout tip">
+    <span class="icon">TIP</span>
+    <code class="inline">prepareContextForPlanMode</code> 内部处理 auto-mode 联动：
+    如果用户从 <code class="inline">auto</code> 进入 plan mode 且 opt-in 了 "use auto during plan"，
+    会保留 auto active 状态；否则 <code class="inline">prePlanMode</code> 字段记录以便退出时还原。
+  </div>
+</section>
+
+<hr>
+
+<section id="enter">
+  <h2><span class="section-num">05</span>EnterPlanModeTool 实现</h2>
+
+  <h3>核心 schema</h3>
+  <span class="code-loc">src/tools/EnterPlanModeTool/EnterPlanModeTool.ts:21-25</span>
+  <pre><code>const inputSchema = lazySchema(() =>
+  z.strictObject({
+    // No parameters needed
+  }),
+)</code></pre>
+
+  <p>
+    零参数。模型只需声明意图，用户决定是否放行。
+  </p>
+
+  <h3>call() 行为</h3>
+  <span class="code-loc">src/tools/EnterPlanModeTool/EnterPlanModeTool.ts:77-102</span>
+  <pre><code>async call(_input, context) {
+  if (context.agentId) {
+    throw new Error('EnterPlanMode tool cannot be used in agent contexts')
+  }
+
+  const appState = context.getAppState()
+  handlePlanModeTransition(appState.toolPermissionContext.mode, 'plan')
+
+  context.setAppState(prev => ({
+    ...prev,
+    toolPermissionContext: applyPermissionUpdate(
+      prepareContextForPlanMode(prev.toolPermissionContext),
+      { type: 'setMode', mode: 'plan', destination: 'session' },
+    ),
+  }))
+
+  return {
+    data: {
+      message:
+        'Entered plan mode. You should now focus on exploring the codebase and designing an implementation approach.',
+    },
+  }
+}</code></pre>
+
+  <h3>关键约束</h3>
+  <ul>
+    <li><strong>Subagent 禁止</strong>：<code class="inline">if (context.agentId) throw ...</code>
+        <span class="line-ref">EnterPlanModeTool.ts:78-80</span>。防止递归进入 plan mode。</li>
+    <li><strong>只读</strong>：<code class="inline">isReadOnly() { return true }</code></li>
+    <li><strong>并发安全</strong>：<code class="inline">isConcurrencySafe() { return true }</code></li>
+    <li><strong>延迟确认</strong>：<code class="inline">shouldDefer: true</code>，使工具列表 <em>始终</em> 对模型可见（即便尚未进入 plan mode）</li>
+    <li><strong>KAIROS 通道禁用</strong>：<code class="inline">isEnabled</code> 在 <code class="inline">--channels</code> 模式下返回 <code class="inline">false</code>
+        <span class="line-ref">EnterPlanModeTool.ts:56-66</span></li>
+  </ul>
+
+  <h3>返回给模型的下一步指令（mapToolResultToToolResultBlockParam）</h3>
+  <span class="code-loc">src/tools/EnterPlanModeTool/EnterPlanModeTool.ts:103-125</span>
+  <pre><code>mapToolResultToToolResultBlockParam({ message }, toolUseID) {
+  const instructions = isPlanModeInterviewPhaseEnabled()
+    ? `${message}
+
+DO NOT write or edit any files except the plan file. Detailed workflow instructions will follow.`
+    : `${message}
+
+In plan mode, you should:
+1. Thoroughly explore the codebase to understand existing patterns
+2. Identify similar features and architectural approaches
+3. Consider multiple approaches and their trade-offs
+4. Use AskUserQuestion if you need to clarify the approach
+5. Design a concrete implementation strategy
+6. When ready, use ExitPlanMode to present your plan for approval
+
+Remember: DO NOT write or edit any files yet. This is a read-only exploration and planning phase.`
+
+  return {
+    type: 'tool_result',
+    content: instructions,
+    tool_use_id: toolUseID,
+  }
+}</code></pre>
+
+  <h3>Prompt（两套：ant vs 外部）</h3>
+  <p>
+    外部版本在 <span class="line-ref">prompt.ts:16-99</span>，措辞积极：
+    "<em>Use this tool proactively when you're about to start a non-trivial implementation task</em>"。
+  </p>
+  <p>
+    ant 版本在 <span class="line-ref">prompt.ts:101-164</span>，措辞克制：
+    "<em>Plan mode is valuable when the implementation approach is genuinely unclear</em>"，
+    鼓励先用 <code class="inline">AskUserQuestion</code> 问具体问题。
+  </p>
+
+  <div class="bilingual">
+    <div class="bilingual-head">
+      <span class="tag-en">EN</span>
+      <span class="tag-zh">中文</span>
+      <span class="swap-icon">/</span>
+    </div>
+    <div class="bilingual-body">
+      <div class="bilingual-en">
+        Use this tool proactively when you're about to start a non-trivial
+        implementation task. Getting user sign-off on your approach before
+        writing code prevents wasted effort and ensures alignment.
+      </div>
+      <div class="bilingual-zh">
+        在开始非平凡的实现任务时主动使用本工具。在写代码前先获得用户对方案的签字，
+        可以避免返工浪费、确保方向一致。
+      </div>
+    </div>
+    <div class="bilingual-cite">src/tools/EnterPlanModeTool/prompt.ts:23</div>
+  </div>
+</section>
+
+<hr>
+
+<section id="enter-ui">
+  <h2><span class="section-num">06</span>EnterPlanMode 审批 UI</h2>
+
+  <p>
+    弹窗在 <span class="file">src/components/permissions/EnterPlanModePermissionRequest/EnterPlanModePermissionRequest.tsx</span>，
+    共 82 行（最简单的两个 plan 组件之一）。
+  </p>
+
+  <h3>选项</h3>
+  <span class="code-loc">EnterPlanModePermissionRequest.tsx:71-77</span>
+  <pre><code>&lt;Select
+  options={[
+    { label: 'Yes, enter plan mode', value: 'yes' as const },
+    { label: 'No, start implementing now', value: 'no' as const },
+  ]}
+  onChange={handleResponse}
+  onCancel={() => handleResponse('no')}
+/&gt;</code></pre>
+
+  <h3>Yes 分支会做什么</h3>
+  <span class="code-loc">EnterPlanModePermissionRequest.tsx:24-35</span>
+  <pre><code>function handleResponse(value: 'yes' | 'no'): void {
+  if (value === 'yes') {
+    logEvent('tengu_plan_enter', {
+      interviewPhaseEnabled: isPlanModeInterviewPhaseEnabled(),
+      entryMethod: 'tool' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+    })
+    handlePlanModeTransition(toolPermissionContextMode, 'plan')
+    onDone()
+    toolUseConfirm.onAllow({}, [
+      { type: 'setMode', mode: 'plan', destination: 'session' },
+    ])
+  } else { ... }
+}</code></pre>
+
+  <p>
+    Yes 路径非常薄：发 <code class="inline">tengu_plan_enter</code> 事件、调用 <code class="inline">handlePlanModeTransition</code>、
+    通过 <code class="inline">onAllow</code> 把 <code class="inline">setMode: 'plan'</code> 注入到 permission update。
+  </p>
+
+  <div class="callout info">
+    <span class="icon">INFO</span>
+    <code class="inline">onAllow({}, [{...}])</code> 中第一个空对象是 <em>updated input</em>（无字段需更新），
+    第二个数组是 <em>permission updates</em>（模式切到 plan）。
+  </div>
+</section>
+
+<hr>
+
+<section id="exit">
+  <h2><span class="section-num">07</span>ExitPlanModeV2Tool 实现</h2>
+
+  <p>
+    <span class="file">src/tools/ExitPlanModeTool/ExitPlanModeV2Tool.ts</span> 共 493 行，是 plan 系统的核心。
+    比 Enter 复杂得多：磁盘写、CCR 编辑、teammate 审批、auto mode 联动、UI 提示等全在这里。
+  </p>
+
+  <h3>Schema（V2 关键差异）</h3>
+  <span class="code-loc">ExitPlanModeV2Tool.ts:77-89</span>
+  <pre><code>const inputSchema = lazySchema(() =>
+  z
+    .strictObject({
+      // Prompt-based permissions requested by the plan
+      allowedPrompts: z
+        .array(allowedPromptSchema())
+        .optional()
+        .describe(
+          'Prompt-based permissions needed to implement the plan. These describe categories of actions rather than specific commands.',
+        ),
+    })
+    .passthrough(),
+)</code></pre>
+
+  <p>
+    V2 <strong>不</strong> 暴露 <code class="inline">plan</code> 字段（plan 走磁盘）；
+    但保留了 <code class="inline">allowedPrompts</code>（语义化权限请求，ant 专属）。
+    SDK 注入字段在 <code class="inline">_sdkInputSchema</code> 中扩展
+    <span class="line-ref">ExitPlanModeV2Tool.ts:97-108</span>。
+  </p>
+
+  <h3>call() 主流程（按分支顺序）</h3>
+  <ol>
+    <li>
+      <strong>读取 plan 来源</strong>：优先用 <code class="inline">input.plan</code>（CCR 编辑后由 hook 注入），
+      否则 <code class="inline">getPlan(agentId)</code> 读磁盘
+      <span class="line-ref">ExitPlanModeV2Tool.ts:251-253</span>
+    </li>
+    <li>
+      <strong>同步磁盘</strong>：如果 input.plan 存在则 <code class="inline">writeFile(filePath, inputPlan)</code>，
+      然后 <code class="inline">persistFileSnapshotIfRemote()</code>（仅 CCR 走）
+      <span class="line-ref">ExitPlanModeV2Tool.ts:258-261</span>
+    </li>
+    <li>
+      <strong>Teammate + planModeRequired 分支</strong>：发 <code class="inline">plan_approval_request</code> 到 team-lead 邮箱，
+      返回 <code class="inline">awaitingLeaderApproval: true</code>
+      <span class="line-ref">ExitPlanModeV2Tool.ts:264-313</span>
+    </li>
+    <li>
+      <strong>Auto-mode 闸门回退</strong>：如果 <code class="inline">prePlanMode === 'auto'</code> 但闸门已关（断路器触发），
+      强制还原为 <code class="inline">default</code>，并发出 <code class="inline">plan exit → default</code> 通知
+      <span class="line-ref">ExitPlanModeV2Tool.ts:328-355</span>
+    </li>
+    <li>
+      <strong>状态切换</strong>：<code class="inline">setHasExitedPlanMode(true)</code>、<code class="inline">setNeedsPlanModeExitAttachment(true)</code>、
+      <code class="inline">restoreMode = prePlanMode ?? 'default'</code>
+      <span class="line-ref">ExitPlanModeV2Tool.ts:357-403</span>
+    </li>
+    <li>
+      <strong>返回输出</strong>：含 <code class="inline">plan</code>、<code class="inline">isAgent</code>、
+      <code class="inline">filePath</code>、<code class="inline">hasTaskTool</code>、<code class="inline">planWasEdited</code>
+      <span class="line-ref">ExitPlanModeV2Tool.ts:405-417</span>
+    </li>
+  </ol>
+
+  <h3>validateInput —— 提前拦截非 plan mode 调用</h3>
+  <span class="code-loc">ExitPlanModeV2Tool.ts:195-220</span>
+  <pre><code>async validateInput(_input, { getAppState, options }) {
+  // Teammate AppState may show leader's mode (runAgent.ts skips override in
+  // acceptEdits/bypassPermissions/auto); isPlanModeRequired() is the real source
+  if (isTeammate()) {
+    return { result: true }
+  }
+  // The deferred-tool list announces this tool regardless of mode, so the
+  // model can call it after plan approval (fresh delta on compact/clear).
+  // Reject before checkPermissions to avoid showing the approval dialog.
+  const mode = getAppState().toolPermissionContext.mode
+  if (mode !== 'plan') {
+    logEvent('tengu_exit_plan_mode_called_outside_plan', { ... })
+    return {
+      result: false,
+      message:
+        'You are not in plan mode. This tool is only for exiting plan mode after writing a plan. If your plan was already approved, continue with implementation.',
+      errorCode: 1,
+    }
+  }
+  return { result: true }
+}</code></pre>
+
+  <h3>Teammate 远端审批（写入 mailbox）</h3>
+  <span class="code-loc">ExitPlanModeV2Tool.ts:264-295</span>
+  <pre><code>if (isTeammate() &amp;&amp; isPlanModeRequired()) {
+  if (!plan) {
+    throw new Error(
+      `No plan file found at ${filePath}. Please write your plan to this file before calling ExitPlanMode.`,
+    )
+  }
+  const agentName = getAgentName() || 'unknown'
+  const teamName = getTeamName()
+  const requestId = generateRequestId(
+    'plan_approval',
+    formatAgentId(agentName, teamName || 'default'),
+  )
+
+  const approvalRequest = {
+    type: 'plan_approval_request',
+    from: agentName,
+    timestamp: new Date().toISOString(),
+    planFilePath: filePath,
+    planContent: plan,
+    requestId,
+  }
+
+  await writeToMailbox(
+    'team-lead',
+    { from: agentName, text: jsonStringify(approvalRequest), timestamp: ... },
+    teamName,
+  )</code></pre>
+
+  <div class="callout pin">
+    <span class="icon">PIN</span>
+    <code class="inline">inProcessTeammateTaskId</code> 搜索 + <code class="inline">setAwaitingPlanApproval</code>
+    是 process 内 teammate 的可视化锚点 —— 让 PillLabel 渲染"等待审批"状态
+    <span class="line-ref">ExitPlanModeV2Tool.ts:298-302</span>。
+  </div>
+</section>
+
+<hr>
+
+<section id="exit-ui">
+  <h2><span class="section-num">08</span>ExitPlanMode 审批 UI</h2>
+
+  <p>
+    <span class="file">src/components/permissions/ExitPlanModePermissionRequest/ExitPlanModePermissionRequest.tsx</span>
+    共 1042 行（包含导出 helper），是 plan 系统中 <em>最复杂</em> 的组件。
+  </p>
+
+  <h3>状态机（按 ResponseValue 枚举）</h3>
+  <span class="code-loc">ExitPlanModePermissionRequest.tsx:105-114</span>
+  <pre><code>type ResponseValue =
+  | 'yes-bypass-permissions'
+  | 'yes-accept-edits'
+  | 'yes-accept-edits-keep-context'
+  | 'yes-default-keep-context'
+  | 'yes-resume-auto-mode'
+  | 'yes-auto-clear-context'
+  | 'ultraplan'
+  | 'no'</code></pre>
+
+  <h3>选项构建（按场景）</h3>
+  <span class="code-loc">ExitPlanModePermissionRequest.tsx:948-1011</span>
+  <pre><code>export function buildPlanApprovalOptions({...}) {
+  const options: OptionWithDescription&lt;ResponseValue&gt;[] = []
+  const usedLabel = usedPercent !== null ? ` (${usedPercent}% used)` : ''
+
+  if (showClearContext) {
+    if (feature('TRANSCRIPT_CLASSIFIER') &amp;&amp; isAutoModeAvailable) {
+      options.push({ label: `Yes, clear context${usedLabel} and use auto mode`, value: 'yes-auto-clear-context' })
+    } else if (isBypassPermissionsModeAvailable) {
+      options.push({ label: `Yes, clear context${usedLabel} and bypass permissions`, value: 'yes-bypass-permissions' })
+    } else {
+      options.push({ label: `Yes, clear context${usedLabel} and auto-accept edits`, value: 'yes-accept-edits' })
+    }
+  }
+
+  // Slot 2: keep-context with elevated mode
+  if (feature('TRANSCRIPT_CLASSIFIER') &amp;&amp; isAutoModeAvailable) {
+    options.push({ label: 'Yes, and use auto mode', value: 'yes-resume-auto-mode' })
+  } else if (isBypassPermissionsModeAvailable) {
+    options.push({ label: 'Yes, and bypass permissions', value: 'yes-accept-edits-keep-context' })
+  } else {
+    options.push({ label: 'Yes, auto-accept edits', value: 'yes-accept-edits-keep-context' })
+  }
+
+  options.push({ label: 'Yes, manually approve edits', value: 'yes-default-keep-context' })
+
+  if (showUltraplan) {
+    options.push({ label: 'No, refine with Ultraplan on Claude Code on the web', value: 'ultraplan' })
+  }
+
+  options.push({
+    type: 'input',
+    label: 'No, keep planning',
+    value: 'no',
+    placeholder: 'Tell Claude what to change',
+    description: 'shift+tab to approve with this feedback',
+    onChange: onFeedbackChange,
+  })
+
+  return options
+}</code></pre>
+
+  <h3>键盘快捷键</h3>
+  <ul>
+    <li><strong>Ctrl+G</strong>：在 <code class="inline">$EDITOR</code> 中编辑 plan（V2 写文件、V1 写 prompt）
+        <span class="line-ref">ExitPlanModePermissionRequest.tsx:340-377</span></li>
+    <li><strong>Shift+Tab</strong>：快速选择 "auto-accept edits"（带/不带 clear-context 视配置）
+        <span class="line-ref">ExitPlanModePermissionRequest.tsx:380-386</span></li>
+    <li><strong>取消（Esc）</strong>：拒绝 + 记录 <code class="inline">tengu_plan_exit outcome: 'no'</code></li>
+  </ul>
+
+  <h3>U1 流程图：标准审批（keep context + acceptEdits）</h3>
+  <div class="flow">[模型]  ExitPlanModeV2Tool({ allowedPrompts?: ... })
+   |
+   v
+[validateInput]  mode === 'plan' OR isTeammate() ?
+   | yes
+   v
+[checkPermissions]  isTeammate() ? allow : ask "Exit plan mode?"
+   |
+   v
+[ExitPlanModePermissionRequest 弹窗]
+   |
+   v
+{ user picks } ---- yes-default-keep-context ----&gt;  toolUseConfirm.onAllow({}, buildPermissionUpdates('default'))
+   |
+   |--- yes-accept-edits-keep-context ----------&gt;  toolUseConfirm.onAllow({}, buildPermissionUpdates('acceptEdits'))
+   |
+   |--- yes-resume-auto-mode (TRANSCRIPT_CLASSIFIER) -&gt; setAppState mode='auto' + onAllow
+   |
+   |--- yes-accept-edits / yes-bypass-permissions --&gt;  setAppState initialMessage + onReject (清空上下文)
+   |
+   |--- ultraplan (ULTRAPLAN flag) ---------------&gt;  本地 reject + launchUltraplan(...)
+   |
+   |--- no (带 feedback) -------------------------&gt;  onReject(feedback)  留在 plan mode
+   v
+[call()]  状态切换 prePlanMode -&gt; restoreMode
+   |
+   v
+[mapToolResultToToolResultBlockParam]
+   |
+   v
+[tool_result]  "User has approved your plan. You can now start coding."</div>
+
+  <h3>关键分支：clear-context 路径</h3>
+  <span class="code-loc">ExitPlanModePermissionRequest.tsx:517-538</span>
+  <pre><code>setAppState(prev => ({
+  ...prev,
+  initialMessage: {
+    message: {
+      ...createUserMessage({
+        content: `Implement the following plan:\n\n${currentPlan}${verificationInstruction}${transcriptHint}${teamHint}${feedbackSuffix}`,
+      }),
+      planContent: currentPlan,
+    },
+    clearContext: true,
+    mode,
+    allowedPrompts,
+  },
+}))
+
+setHasExitedPlanMode(true)
+onDone()
+onReject()
+// Reject the tool use to unblock the query loop
+// The REPL will see pendingInitialQuery and trigger fresh query
+toolUseConfirm.onReject()</code></pre>
+
+  <p>
+    注意 <code class="inline">onReject()</code>：清空上下文模式下，<em>故意</em> 拒绝当前 ExitPlanMode，
+    REPL 看到 <code class="inline">pendingInitialQuery</code> 后会触发全新 query，把 plan 当成首条 user message。
+  </p>
+
+  <h3>Ctrl+G 编辑回写</h3>
+  <span class="code-loc">ExitPlanModePermissionRequest.tsx:344-359</span>
+  <pre><code>if (e.ctrl &amp;&amp; e.key === 'g') {
+  e.preventDefault()
+  logEvent('tengu_plan_external_editor_used', {})
+
+  void (async () => {
+    if (isV2 &amp;&amp; planFilePath) {
+      const result = await editFileInEditor(planFilePath)
+      if (result.error) addNotification({ key: 'external-editor-error', text: result.error, color: 'warning', priority: 'high' })
+      if (result.content !== null) {
+        if (result.content !== currentPlan) setPlanEditedLocally(true)
+        setCurrentPlan(result.content)
+        setShowSaveMessage(true)
+      }
+    } else {
+      const result = await editPromptInEditor(currentPlan)
+      ...
+      if (result.content !== null &amp;&amp; result.content !== currentPlan) {
+        setCurrentPlan(result.content)
+        setShowSaveMessage(true)
+      }
+    }
+  })()
+  return
+}</code></pre>
+</section>
+
+<hr>
+
+<section id="v1-vs-v2">
+  <h2><span class="section-num">09</span>V1 vs V2 行为对比</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>维度</th>
+        <th>V1（已删）</th>
+        <th>V2（默认）</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Plan 存储</td>
+        <td><code class="inline">input.plan</code> 字符串</td>
+        <td>磁盘 <code class="inline">${slug}.md</code></td>
+      </tr>
+      <tr>
+        <td>用户编辑</td>
+        <td>通过 <code class="inline">editPromptInEditor</code>（改字符串）</td>
+        <td>通过 <code class="inline">editFileInEditor</code>（改文件）</td>
+      </tr>
+      <tr>
+        <td>CCR Web UI 编辑</td>
+        <td>不支持</td>
+        <td>支持，hook 注入 <code class="inline">input.plan</code></td>
+      </tr>
+      <tr>
+        <td>Schema</td>
+        <td>含 <code class="inline">plan</code> 字段</td>
+        <td>不含 <code class="inline">plan</code> 字段（<code class="inline">_sdkInputSchema</code> 扩展）</td>
+      </tr>
+      <tr>
+        <td>tool_result 中的 plan</td>
+        <td>始终 echo</td>
+        <td>仅当 <code class="inline">planWasEdited</code> 时 echo</td>
+      </tr>
+      <tr>
+        <td>磁盘写时机</td>
+        <td>无</td>
+        <td><code class="inline">call()</code> 中 <code class="inline">writeFile(filePath, inputPlan)</code></td>
+      </tr>
+      <tr>
+        <td>检测方式</td>
+        <td>检查 <code class="inline">input.plan</code> 存在</td>
+        <td>检查 <code class="inline">toolUseConfirm.tool.name === 'ExitPlanMode'</code> 且无 <code class="inline">input.plan</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="bilingual">
+    <div class="bilingual-head">
+      <span class="tag-en">EN</span>
+      <span class="tag-zh">中文</span>
+      <span class="swap-icon">/</span>
+    </div>
+    <div class="bilingual-body">
+      <div class="bilingual-en">
+        // Use tool name to detect V2 instead of checking input.plan, because
+        // PR #10394 injects plan content into input.plan for hooks/SDK, which
+        // broke the old detection (see issue #10878)
+      </div>
+      <div class="bilingual-zh">
+        用工具名而非 input.plan 来检测 V2 —— 因为 PR #10394 会为 hooks/SDK 注入 plan
+        内容到 input.plan，把旧的检测方式搞坏了（见 issue #10878）。
+      </div>
+    </div>
+    <div class="bilingual-cite">ExitPlanModePermissionRequest.tsx:288-292</div>
+  </div>
+</section>
+
+<hr>
+
+<section id="storage">
+  <h2><span class="section-num">10</span>计划存储：plans.ts 与文件路径</h2>
+
+  <p>
+    <span class="file">src/utils/plans.ts</span> 共 397 行，负责 plan 文件的全生命周期。
+  </p>
+
+  <h3>目录解析（带路径遍历保护）</h3>
+  <span class="code-loc">plans.ts:79-111</span>
+  <pre><code>export const getPlansDirectory = memoize(function getPlansDirectory(): string {
+  const settings = getInitialSettings()
+  const settingsDir = settings.plansDirectory
+  let plansPath: string
+
+  if (settingsDir) {
+    const cwd = getCwd()
+    const resolved = resolve(cwd, settingsDir)
+
+    // Validate path stays within project root to prevent path traversal
+    if (!resolved.startsWith(cwd + sep) &amp;&amp; resolved !== cwd) {
+      logError(new Error(`plansDirectory must be within project root: ${settingsDir}`))
+      plansPath = join(getClaudeConfigHomeDir(), 'plans')
+    } else {
+      plansPath = resolved
+    }
+  } else {
+    plansPath = join(getClaudeConfigHomeDir(), 'plans')
+  }
+
+  try { getFsImplementation().mkdirSync(plansPath) } catch (error) { logError(error) }
+
+  return plansPath
+})</code></pre>
+
+  <p>
+    默认 <code class="inline">${CLAUDE_CONFIG_HOME}/plans/</code>，可通过
+    <code class="inline">settings.plansDirectory</code> 改成项目内相对路径（不允许 <code class="inline">../</code> 跳出）。
+  </p>
+
+  <h3>文件名规则（slug 机制）</h3>
+  <span class="code-loc">plans.ts:32-49</span>
+  <pre><code>export function getPlanSlug(sessionId?: SessionId): string {
+  const id = sessionId ?? getSessionId()
+  const cache = getPlanSlugCache()
+  let slug = cache.get(id)
+  if (!slug) {
+    const plansDir = getPlansDirectory()
+    for (let i = 0; i &lt; MAX_SLUG_RETRIES; i++) {  // 10
+      slug = generateWordSlug()
+      const filePath = join(plansDir, `${slug}.md`)
+      if (!getFsImplementation().existsSync(filePath)) break
+    }
+    cache.set(id, slug!)
+  }
+  return slug!
+}</code></pre>
+
+  <p>
+    slug 是 3 词人类可读串（<code class="inline">generateWordSlug</code>），与 sessionId 一一对应（缓存）。
+    文件名形如 <code class="inline">swift-fox-jumps.md</code>。
+  </p>
+
+  <h3>主会话 vs subagent 文件名</h3>
+  <span class="code-loc">plans.ts:119-129</span>
+  <pre><code>export function getPlanFilePath(agentId?: AgentId): string {
+  const planSlug = getPlanSlug(getSessionId())
+
+  if (!agentId) {
+    return join(getPlansDirectory(), `${planSlug}.md`)
+  }
+
+  return join(getPlansDirectory(), `${planSlug}-agent-${agentId}.md`)
+}</code></pre>
+
+  <h3>会话恢复：从 3 处找回 plan</h3>
+  <span class="code-loc">plans.ts:267-326</span>
+  <pre><code>function recoverPlanFromMessages(log: LogOption): string | null {
+  for (let i = log.messages.length - 1; i &gt;= 0; i--) {
+    const msg = log.messages[i]
+    if (!msg) continue
+
+    if (msg.type === 'assistant') {
+      const { content } = (msg as AssistantMessage).message
+      if (Array.isArray(content)) {
+        for (const block of content) {
+          if (block.type === 'tool_use' &amp;&amp; block.name === EXIT_PLAN_MODE_V2_TOOL_NAME) {
+            const input = block.input as Record&lt;string, unknown&gt; | undefined
+            const plan = input?.plan
+            if (typeof plan === 'string' &amp;&amp; plan.length &gt; 0) return plan
+          }
+        }
+      }
+    }
+
+    if (msg.type === 'user') {
+      const userMsg = msg as UserMessage
+      if (typeof userMsg.planContent === 'string' &amp;&amp; userMsg.planContent.length &gt; 0) {
+        return userMsg.planContent
+      }
+    }
+
+    if (msg.type === 'attachment') {
+      const attachmentMsg = msg as AttachmentMessage
+      if (attachmentMsg.attachment?.type === 'plan_file_reference') {
+        const plan = (attachmentMsg.attachment as { planContent?: string }).planContent
+        if (typeof plan === 'string' &amp;&amp; plan.length &gt; 0) return plan
+      }
+    }
+  }
+  return null
+}</code></pre>
+
+  <div class="callout info">
+    <span class="icon">INFO</span>
+    恢复优先级：<strong>磁盘文件</strong> → <strong>file_snapshot（CCR）</strong> →
+    <strong>消息历史三处（assistant tool_use / user planContent / attachment plan_file_reference）</strong>。
+    其中 attachment.plan_file_reference 是 auto-compact 用来跨压缩边界保留 plan 的钩子。
+  </div>
+
+  <h3>File snapshot（CCR 远端会话）</h3>
+  <span class="code-loc">plans.ts:360-397</span>
+  <pre><code>export async function persistFileSnapshotIfRemote(): Promise&lt;void&gt; {
+  if (getEnvironmentKind() === null) return  // 本地会话跳过
+  try {
+    const snapshotFiles: SystemFileSnapshotMessage['snapshotFiles'] = []
+    const plan = getPlan()
+    if (plan) {
+      (snapshotFiles as any[]).push({
+        key: 'plan', path: getPlanFilePath(), content: plan,
+      })
+    }
+    if ((snapshotFiles as any[]).length === 0) return
+
+    const message: SystemFileSnapshotMessage = {
+      type: 'system', subtype: 'file_snapshot', content: 'File snapshot',
+      level: 'info', isMeta: true, timestamp: new Date().toISOString(),
+      uuid: randomUUID(), snapshotFiles,
+    }
+    const { recordTranscript } = await import('./sessionStorage.js')
+    await recordTranscript([message])
+  } catch (error) { logError(error) }
+}</code></pre>
+
+  <h3>Fork vs Resume 的差异</h3>
+  <ul>
+    <li><strong>copyPlanForResume</strong>：复用原 slug，先尝试读盘，丢失则从 file snapshot / 消息历史恢复
+        <span class="line-ref">plans.ts:164-231</span></li>
+    <li><strong>copyPlanForFork</strong>：生成 <em>新</em> slug，<code class="inline">copyFile</code> 原文件到新路径（防止 fork 后两份会话互相覆盖）
+        <span class="line-ref">plans.ts:239-264</span></li>
+  </ul>
+</section>
+
+<hr>
+
+<section id="verify">
+  <h2><span class="section-num">11</span>VerifyPlanExecution 与 planAgent</h2>
+
+  <h3>VerifyPlanExecution：占位实现</h3>
+  <p>
+    <span class="file">src/tools/VerifyPlanExecutionTool/VerifyPlanExecutionTool.js</span>（注意是 .js 不是 .ts）共 1 行：
+  </p>
+
+  <span class="code-loc">src/tools/VerifyPlanExecutionTool/VerifyPlanExecutionTool.js:1</span>
+  <pre><code>export const VerifyPlanExecutionTool = { name: 'VerifyPlanExecutionTool', isEnabled: () =&gt; false }</code></pre>
+
+  <p>
+    <span class="file">src/tools/VerifyPlanExecutionTool/constants.ts</span> 同样空：
+  </p>
+
+  <span class="code-loc">src/tools/VerifyPlanExecutionTool/constants.ts:1-3</span>
+  <pre><code>// Auto-generated stub — replace with real implementation
+export {};
+export const VERIFY_PLAN_EXECUTION_TOOL_NAME: string = '';</code></pre>
+
+  <p>
+    入口在 <span class="line-ref">src/tools.ts:87-94</span>：<code class="inline">CLAUDE_CODE_VERIFY_PLAN=true</code> 时
+    才会 require。注释为 <em>dead code elimination</em>，因为外部构建中该 env 为 <code class="inline">'false'</code>。
+  </p>
+
+  <div class="callout warn">
+    <span class="icon">WARN</span>
+    <code class="inline">VERIFY_PLAN_EXECUTION_TOOL_NAME = ''</code> 而非工具名，会导致所有 <code class="inline">name === ''</code>
+    的引用全部失效。该工具目前 <em>完全</em> 不可用。
+  </div>
+
+  <h3>Plan agent（只读架构师 subagent）</h3>
+  <p>
+    <span class="file">src/tools/AgentTool/built-in/planAgent.ts</span> 共 92 行，定义 <code class="inline">PLAN_AGENT</code>。
+  </p>
+
+  <span class="code-loc">src/tools/AgentTool/built-in/planAgent.ts:73-92</span>
+  <pre><code>export const PLAN_AGENT: BuiltInAgentDefinition = {
+  agentType: 'Plan',
+  whenToUse:
+    'Software architect agent for designing implementation plans. Use this when you need to plan the implementation strategy for a task. Returns step-by-step plans, identifies critical files, and considers architectural trade-offs.',
+  disallowedTools: [
+    AGENT_TOOL_NAME,
+    EXIT_PLAN_MODE_TOOL_NAME,
+    FILE_EDIT_TOOL_NAME,
+    FILE_WRITE_TOOL_NAME,
+    NOTEBOOK_EDIT_TOOL_NAME,
+  ],
+  source: 'built-in',
+  tools: EXPLORE_AGENT.tools,
+  baseDir: 'built-in',
+  model: 'inherit',
+  // Plan is read-only and can Read CLAUDE.md directly if it needs conventions.
+  // Dropping it from context saves tokens without blocking access.
+  omitClaudeMd: true,
+  getSystemPrompt: () =&gt; getPlanV2SystemPrompt(),
+}</code></pre>
+
+  <h3>System prompt 关键约束</h3>
+  <span class="code-loc">planAgent.ts:23-32</span>
+  <pre><code>=== CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===
+This is a READ-ONLY planning task. You are STRICTLY PROHIBITED from:
+- Creating new files (no Write, touch, or file creation of any kind)
+- Modifying existing files (no Edit operations)
+- Deleting files (no rm or deletion)
+- Moving or copying files (no mv or cp)
+- Creating temporary files anywhere, including /tmp
+- Using redirect operators (>, &gt;&gt;, |) or heredocs to write to files
+- Running ANY commands that change system state</code></pre>
+
+  <h3>为什么 <code class="inline">disallowedTools</code> 含 <code class="inline">AGENT_TOOL_NAME</code> 和 <code class="inline">EXIT_PLAN_MODE_TOOL_NAME</code></h3>
+  <ul>
+    <li><code class="inline">AGENT_TOOL_NAME</code>：防止 plan agent 派生子 agent（递归规划）</li>
+    <li><code class="inline">EXIT_PLAN_MODE_TOOL_NAME</code>：plan agent 不能自己退出 plan mode，必须由主线程 ExitPlanMode</li>
+    <li><code class="inline">FILE_EDIT/WRITE/NOTEBOOK_EDIT</code>：进一步在工具层硬约束（即便 prompt 漏掉）</li>
+  </ul>
+
+  <div class="callout pin">
+    <span class="icon">PIN</span>
+    <code class="inline">tools: EXPLORE_AGENT.tools</code> 直接复用 explore agent 的工具集（Glob/Grep/Read/Bash 只读），
+    不再单独维护一份白名单。少一处需要同步的地方。
+  </div>
+</section>
+
+<hr>
+
+<section id="ultraplan">
+  <h2><span class="section-num">12</span>V2 ultraplan 系统</h2>
+
+  <p>
+    Ultraplan 是把 plan 评审 <em>外移到 Claude Code on the Web (CCR)</em> 的远端协作流，
+    由 <code class="inline">ULTRAPLAN</code> feature flag 控制（dev 默认关闭，build 默认关闭）。
+  </p>
+
+  <h3>三个文件</h3>
+  <ul>
+    <li><span class="file">src/utils/ultraplan/ccrSession.ts</span> — 轮询 CCR session、解析 ExitPlanMode 事件</li>
+    <li><span class="file">src/utils/ultraplan/keyword.ts</span> — 把输入中的 "<em>ultraplan</em>" 关键词触发为命令</li>
+    <li><span class="file">src/utils/ultraplan/prompt.txt</span> — 远端 prompt</li>
+  </ul>
+
+  <h3>ccrSession 状态机</h3>
+  <span class="code-loc">src/utils/ultraplan/ccrSession.ts:58-66</span>
+  <pre><code>export type UltraplanPhase = 'running' | 'needs_input' | 'plan_ready'</code></pre>
+
+  <p>
+    事件流分类器 <code class="inline">ExitPlanModeScanner</code> 把 SDKMessage 批次归类为：
+  </p>
+  <span class="code-loc">ccrSession.ts:50-57</span>
+  <pre><code>export type ScanResult =
+  | { kind: 'approved'; plan: string }
+  | { kind: 'teleport'; plan: string }
+  | { kind: 'rejected'; id: string }
+  | { kind: 'pending' }
+  | { kind: 'terminated'; subtype: string }
+  | { kind: 'unchanged' }</code></pre>
+
+  <h3>优先级</h3>
+  <blockquote>
+    approved &gt; terminated &gt; rejected &gt; pending &gt; unchanged<br>
+    pollRemoteSessionEvents paginates up to 50 pages per call, so one ingest
+    can span seconds of session activity. A batch may contain both an approved
+    tool_result AND a subsequent {type:'result'} (user approved, then remote
+    crashed). The approved plan is real and in threadstore — don't drop it.
+  </blockquote>
+  <p class="src">— src/utils/ultraplan/ccrSession.ts:74-78</p>
+
+  <h3>关键词触发（防误触设计）</h3>
+  <span class="code-loc">src/utils/ultraplan/keyword.ts:18-41</span>
+  <pre><code> *   (tag-like only, so `n < 5 ultraplan n > 10` is not a phantom range),
+ *
+ *   followed by a non-word char (or end), so "let's ultraplan it's"
+ *
+ *   `\b` sees a boundary at `-`, so `ultraplan-s` would otherwise
+ *   match. This keeps `src/ultraplan/foo.ts`, `ultraplan.tsx`, and
+ *   `--ultraplan-mode` from triggering while `ultraplan.` at a sentence
+ *
+ *   not keyword detection), so `/rename ultraplan foo` never triggers.
+ *
+ *   the "will launch ultraplan" notification even though submitting the
+ *   input runs /rename, not /ultraplan.</code></pre>
+
+  <h3>UI 入口</h3>
+  <span class="code-loc">ExitPlanModePermissionRequest.tsx:220-228</span>
+  <pre><code>const ultraplanSessionUrl = useAppState(s => s.ultraplanSessionUrl)
+const ultraplanLaunching = useAppState(s => s.ultraplanLaunching)
+const showUltraplan = feature('ULTRAPLAN')
+  ? !ultraplanSessionUrl &amp;&amp; !ultraplanLaunching
+  : false</code></pre>
+
+  <p>
+    当选择 "No, refine with Ultraplan..." 时：
+  </p>
+  <span class="code-loc">ExitPlanModePermissionRequest.tsx:396-421</span>
+  <pre><code>if (value === 'ultraplan') {
+  logEvent('tengu_plan_exit', { planLengthChars: currentPlan.length, outcome: 'ultraplan' as ..., interviewPhaseEnabled: isPlanModeInterviewPhaseEnabled(), planStructureVariant })
+  onDone()
+  onReject()
+  toolUseConfirm.onReject('Plan being refined via Ultraplan — please wait for the result.')
+  void launchUltraplan({ blurb: '', seedPlan: currentPlan, getAppState: store.getState, setAppState: store.setState, signal: new AbortController().signal })
+    .then(msg =&gt; enqueuePendingNotification({ value: msg, mode: 'task-notification' }))
+    .catch(logError)
+  return
+}</code></pre>
+
+  <div class="callout tip">
+    <span class="icon">TIP</span>
+    Ultraplan 选择走的是 <em>本地 reject</em> + <em>远端 launch</em>。本地 reject 让 query loop 立刻解锁，
+    <code class="inline">launchUltraplan</code> 是 detached 异步执行，完成后通过
+    <code class="inline">enqueuePendingNotification</code> 把"结果"消息塞回命令队列。
+  </div>
+
+  <h3>UI 状态展示</h3>
+  <span class="code-loc">src/tools/ExitPlanModeTool/UI.tsx:42-57</span>
+  <pre><code>if (awaitingLeaderApproval) {
+  return (
+    &lt;Box flexDirection="column" marginTop={1}&gt;
+      &lt;Box flexDirection="row"&gt;
+        &lt;Text color={getModeColor('plan')}&gt;{BLACK_CIRCLE}&lt;/Text&gt;
+        &lt;Text&gt; Plan submitted for team lead approval&lt;/Text&gt;
+      &lt;/Box&gt;
+      &lt;MessageResponse&gt;
+        &lt;Box flexDirection="column"&gt;
+          {filePath &amp;&amp; &lt;Text dimColor&gt;Plan file: {displayPath}&lt;/Text&gt;}
+          &lt;Text dimColor&gt;Waiting for team lead to review and approve...&lt;/Text&gt;
+        &lt;/Box&gt;
+      &lt;/MessageResponse&gt;
+    &lt;/Box&gt;
+  )
+}</code></pre>
+</section>
+
+<hr>
+
+<section id="state">
+  <h2><span class="section-num">13</span>状态机与权限 Context</h2>
+
+  <h3>模式切换函数</h3>
+  <span class="code-loc">src/bootstrap/state.ts:1349-1363</span>
+  <pre><code>export function handlePlanModeTransition(
+  fromMode: string,
+  toMode: string,
+): void {
+  if (toMode === 'plan' &amp;&amp; fromMode !== 'plan') {
+    STATE.needsPlanModeExitAttachment = false
+  }
+  if (fromMode === 'plan' &amp;&amp; toMode !== 'plan') {
+    STATE.needsPlanModeExitAttachment = true
+  }
+}</code></pre>
+
+  <p>
+    切到 plan 模式时清掉 pending exit attachment；切出 plan 模式时设上 exit attachment。
+    <code class="inline">needsPlanModeExitAttachment</code> 由 <code class="inline">messages.ts</code> 检查以决定是否插入
+    <code class="inline">plan_mode_exit</code> 提示（告诉模型已退出 plan mode）。
+  </p>
+
+  <h3>Auto ↔ Plan 联动</h3>
+  <p>
+    <code class="inline">permissionSetup.ts</code> 中的 <code class="inline">prepareContextForPlanMode</code>：
+  </p>
+  <span class="code-loc">src/utils/permissions/permissionSetup.ts:608-625</span>
+  <pre><code>if (toMode === 'plan' &amp;&amp; fromMode !== 'plan') {
+  return prepareContextForPlanMode(context)
+}
+
+// Plan with auto active counts as using the classifier (for the leaving side).
+// isAutoModeActive() is the authoritative signal — prePlanMode/strippedDangerousRules
+// are unreliable proxies because auto can be deactivated mid-plan (non-opt-in
+// entry, transitionPlanAutoMode) while those fields remain set/unset.</code></pre>
+
+  <h3>为何 ExitPlanModeV2Tool 退出时强制检查 isAutoModeActive</h3>
+  <span class="code-loc">ExitPlanModeV2Tool.ts:362-378</span>
+  <pre><code>const finalRestoringAuto = restoreMode === 'auto'
+// Capture pre-restore state — isAutoModeActive() is the authoritative
+// signal (prePlanMode/strippedDangerousRules are stale after
+// transitionPlanAutoMode deactivates mid-plan).
+const autoWasUsedDuringPlan =
+  autoModeStateModule?.isAutoModeActive() ?? false
+autoModeStateModule?.setAutoModeActive(finalRestoringAuto)
+if (autoWasUsedDuringPlan &amp;&amp; !finalRestoringAuto) {
+  setNeedsAutoModeExitAttachment(true)
+}</code></pre>
+
+  <h3>权限恢复逻辑（退出 plan 时）</h3>
+  <span class="code-loc">ExitPlanModeV2Tool.ts:380-394</span>
+  <pre><code>// If restoring to a non-auto mode and permissions were stripped (either
+// from entering plan from auto, or from shouldPlanUseAutoMode),
+// restore them. If restoring to auto, keep them stripped.
+const restoringToAuto = restoreMode === 'auto'
+let baseContext = prev.toolPermissionContext
+if (restoringToAuto) {
+  baseContext =
+    permissionSetupModule?.stripDangerousPermissionsForAutoMode(baseContext) ?? baseContext
+} else if (prev.toolPermissionContext.strippedDangerousRules) {
+  baseContext =
+    permissionSetupModule?.restoreDangerousPermissions(baseContext) ?? baseContext
+}</code></pre>
+
+  <h3>Teammate 启动时强制 plan mode</h3>
+  <span class="code-loc">src/main.tsx:4029-4035</span>
+  <pre><code>const effectiveToolPermissionContext = {
+  ...toolPermissionContext,
+  mode:
+    isAgentSwarmsEnabled() &amp;&amp; getTeammateUtils().isPlanModeRequired()
+      ? ('plan' as const)
+      : toolPermissionContext.mode,
+}</code></pre>
+
+  <h3>CLI 选项 <code class="inline">--plan-mode-required</code></h3>
+  <span class="code-loc">src/main.tsx:5327-5332</span>
+  <pre><code>program.addOption(
+  new Option(
+    '--plan-mode-required',
+    'Require plan mode before implementation',
+  ).hideHelp(),
+)</code></pre>
+
+  <span class="code-loc">src/main.tsx:6565-6574</span>
+  <pre><code>type TeammateOptions = {
+  agentId?: string
+  agentName?: string
+  teamName?: string
+  agentColor?: string
+  planModeRequired?: boolean
+  parentSessionId?: string
+  teammateMode?: 'auto' | 'tmux' | 'in-process'
+  agentType?: string
+}</code></pre>
+</section>
+
+<hr>
+
+<section id="registration">
+  <h2><span class="section-num">14</span>工具注册与模型可见性</h2>
+
+  <p>
+    <span class="file">src/tools.ts</span> 是主注册表。Plan 工具在这里被装载到默认工具列表。
+  </p>
+
+  <h3>条件 require：VerifyPlanExecution 的 dead code elimination</h3>
+  <span class="code-loc">src/tools.ts:87-94</span>
+  <pre><code>// Dead code elimination: conditional import for CLAUDE_CODE_VERIFY_PLAN
+/* eslint-disable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
+const VerifyPlanExecutionTool =
+  process.env.CLAUDE_CODE_VERIFY_PLAN === 'true'
+    ? require('./tools/VerifyPlanExecutionTool/VerifyPlanExecutionTool.js')
+        .VerifyPlanExecutionTool
+    : null
+/* eslint-enable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */</code></pre>
+
+  <h3>注册到默认工具列表</h3>
+  <span class="code-loc">src/tools.ts:201-212</span>
+  <pre><code>ExitPlanModeV2Tool,
+FileReadTool,
+FileEditTool,
+FileWriteTool,
+NotebookEditTool,
+WebFetchTool,
+TodoWriteTool,
+WebSearchTool,
+TaskStopTool,
+AskUserQuestionTool,
+SkillTool,
+EnterPlanModeTool,</code></pre>
+
+  <h3>尾部追加（按 feature / env 决定）</h3>
+  <span class="code-loc">src/tools.ts:230-240</span>
+  <pre><code>...(VerifyPlanExecutionTool ? [VerifyPlanExecutionTool] : []),
+...(process.env.USER_TYPE === 'ant' &amp;&amp; REPLTool ? [REPLTool] : []),
+...(WorkflowTool ? [WorkflowTool] : []),
+...(SleepTool ? [SleepTool] : []),
+...cronTools,
+...(RemoteTriggerTool ? [RemoteTriggerTool] : []),
+...(MonitorTool ? [MonitorTool] : []),
+BriefTool,
+...(SendUserFileTool ? [SendUserFileTool] : []),
+...(PushNotificationTool ? [PushNotificationTool] : []),</code></pre>
+
+  <h3>模型看到的工具描述</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>工具</th>
+        <th>description</th>
+        <th>searchHint</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code class="inline">EnterPlanMode</code></td>
+        <td>"Requests permission to enter plan mode for complex tasks requiring exploration and design"</td>
+        <td>"switch to plan mode to design an approach before coding"</td>
+      </tr>
+      <tr>
+        <td><code class="inline">ExitPlanMode</code></td>
+        <td>"Prompts the user to exit plan mode and start coding"</td>
+        <td>"present plan for approval and start coding (plan mode only)"</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    <code class="inline">searchHint</code> 给工具搜索功能（tool search）使用，模型可在自然语言中触发。
+  </p>
+</section>
+
+<hr>
+
+<section id="flows">
+  <h2><span class="section-num">15</span>端到端调用链（场景化）</h2>
+
+  <h3>场景 A：标准 V2 plan 周期</h3>
+  <div class="flow">[user]  /plan redesign auth flow
+  |
+  v
+[commands/plan/plan.tsx]  currentMode != 'plan'
+  |-&gt; handlePlanModeTransition(prev, 'plan')
+  |-&gt; applyPermissionUpdate(prepareContextForPlanMode, setMode: 'plan')
+  |-&gt; onDone('Enabled plan mode', { shouldQuery: true })
+  |
+  v
+[REPL]  pendingInitialQuery = "redesign auth flow"
+  |
+  v
+[query.ts]  第一次 API 请求
+  |
+  v
+[model]  tool_use(EnterPlanMode) -- 不必要（已经在 plan mode），但模型也可能调
+  |
+  v
+[EnterPlanModeTool]  mode 已为 'plan'，仍然可以调（无副作用）
+  |
+  v
+[model]  探索代码（Read/Grep/Glob） + 写 plan 文件
+  |
+  v
+[model]  tool_use(ExitPlanModeV2)
+  |
+  v
+[ExitPlanModeV2Tool.validateInput]  mode === 'plan' OK
+  |
+  v
+[checkPermissions]  ask "Exit plan mode?"
+  |
+  v
+[ExitPlanModePermissionRequest]  渲染 plan + 选项
+  |
+  v
+[user picks yes-default-keep-context]
+  |
+  v
+[handleResponse]  setHasExitedPlanMode(true) + toolUseConfirm.onAllow(...)
+  |
+  v
+[ExitPlanModeV2Tool.call]
+  |-&gt; getPlanFilePath() -&gt; e.g. "${slug}.md"
+  |-&gt; getPlan()  读盘
+  |-&gt; setAppState mode: 'default', prePlanMode: undefined
+  |
+  v
+[tool_result to model]
+  |
+  v
+[model]  继续按 plan 实施</div>
+
+  <h3>场景 B：CCR 用户编辑 plan 后批准</h3>
+  <div class="flow">[CCR UI]  user 在 PlanModal 中修改 plan 文本 -&gt; permissionResult.updatedInput = { plan: "<edited text>" }
+  |
+  v
+[queryHelpers]  full-replaces finalInput
+  |
+  v
+[normalizeToolInput]  注入 plan 和 planFilePath
+  |
+  v
+[ExitPlanModeV2Tool.call]
+  |-&gt; inputPlan = input.plan (edited)
+  |-&gt; getPlan()  忽略（inputPlan 优先）
+  |-&gt; writeFile(filePath, inputPlan)  同步磁盘
+  |-&gt; persistFileSnapshotIfRemote()  CCR 增量快照
+  |
+  v
+[mapToolResultToToolResultBlockParam]  planWasEdited = true
+  |
+  v
+[tool_result]  "Approved Plan (edited by user):\n<plan>"</div>
+
+  <h3>场景 C：Teammate 必经审批</h3>
+  <div class="flow">[teammate CLI]  --plan-mode-required --agent-id=...
+  |
+  v
+[main.tsx]  planModeRequired = true
+  |-&gt; setDynamicTeamContext({ planModeRequired: true, ... })
+  |
+  v
+[teammate 启动]
+  |-&gt; effectiveToolPermissionContext.mode = 'plan'
+  |
+  v
+[teammate]  写 plan 到 ${slug}-agent-${agentId}.md
+  |
+  v
+[teammate]  tool_use(ExitPlanMode)
+  |
+  v
+[ExitPlanModeV2Tool]  isTeammate() &amp;&amp; isPlanModeRequired()
+  |-&gt; checkPermissions  behavior: 'allow' (跳过 UI)
+  |-&gt; writeToMailbox('team-lead', { type: 'plan_approval_request', planContent, requestId })
+  |-&gt; setAwaitingPlanApproval(agentTaskId, setAppState, true)
+  |-&gt; return { awaitingLeaderApproval: true, requestId }
+  |
+  v
+[UI]  "Plan submitted for team lead approval"
+  |
+  v
+[team-lead inbox]  收到 approval_request
+  |-&gt; 人类审批
+  |
+  v
+[teammate]  收到 inbox 消息，恢复实施</div>
+
+  <h3>场景 D：clear-context 路径（彻底重启）</h3>
+  <div class="flow">[user]  在 ExitPlanMode 弹窗选择 "Yes, clear context and bypass permissions"
+  |
+  v
+[handleResponse]  value = 'yes-bypass-permissions'
+  |-&gt; autoNameSessionFromPlan(currentPlan, setAppState, true)
+  |-&gt; setAppState initialMessage = { message: createUserMessage(`Implement the following plan: ...`), planContent, clearContext: true, mode: 'bypassPermissions' }
+  |-&gt; setHasExitedPlanMode(true)
+  |-&gt; onDone() + onReject() + toolUseConfirm.onReject()  -- 故意 reject 让 query loop 跑 fresh query
+  |
+  v
+[REPL]  看到 pendingInitialQuery
+  |-&gt; regenerateSessionId()  (因为 clearContext)
+  |-&gt; 应用新 mode (bypassPermissions)
+  |-&gt; 跑 fresh query
+  |
+  v
+[model]  看到首条 user message = "Implement the following plan: <plan>"
+  |
+  v
+[实施]</div>
+</section>
+
+<hr>
+
+<section id="limits">
+  <h2><span class="section-num">16</span>限制、边界、异常</h2>
+
+  <h3>EnterPlanMode 边界</h3>
+  <ul>
+    <li>在 subagent 上下文中直接抛错（"cannot be used in agent contexts"）</li>
+    <li>KAIROS + <code class="inline">--channels</code> 模式下被禁用（避免模型进入却无法退出）</li>
+    <li>非 plan mode 调用是合法的（会触发切换）；不会重复触发 notification</li>
+  </ul>
+
+  <h3>ExitPlanMode 边界</h3>
+  <ul>
+    <li>非 plan mode 调用被 <code class="inline">validateInput</code> 拒绝，但 <em>仅当非 teammate</em></li>
+    <li>teammate 模式：plan 内容为空时直接抛错（要求先写盘）</li>
+    <li>tool_result 中 <code class="inline">plan</code> 字段可能为 <code class="inline">null</code>（plan 文件不存在），
+        弹窗走简化版 "Exit plan mode? Yes/No"
+        <span class="line-ref">ExitPlanModePermissionRequest.tsx:762-840</span></li>
+    <li>断路器触发时：<code class="inline">prePlanMode === 'auto'</code> 但 <code class="inline">isAutoModeGateEnabled() === false</code>，
+        强制回退到 <code class="inline">default</code> + 通知用户</li>
+  </ul>
+
+  <h3>plans.ts 边界</h3>
+  <ul>
+    <li>slug 冲突最多重试 10 次（<code class="inline">MAX_SLUG_RETRIES = 10</code>）</li>
+    <li>路径遍历防护：<code class="inline">settings.plansDirectory</code> 必须在 <code class="inline">cwd</code> 下</li>
+    <li><code class="inline">getPlansDirectory</code> 是 <code class="inline">memoize</code>，但若 settings 改变不会重新计算</li>
+    <li>file snapshot 只在 CCR 远端会话写（<code class="inline">getEnvironmentKind() === null</code> 时直接返回）</li>
+  </ul>
+
+  <h3>VerifyPlanExecution：纯占位</h3>
+  <ul>
+    <li>即使 <code class="inline">CLAUDE_CODE_VERIFY_PLAN=true</code>，<code class="inline">isEnabled: () =&gt; false</code> 永远不启用</li>
+    <li>外部 build 注释：<code class="inline">CLAUDE_CODE_VERIFY_PLAN='false'</code> 是恒假，由 Bun 静态消除</li>
+  </ul>
+
+  <h3>Ultraplan 限制</h3>
+  <ul>
+    <li>同一 plan 周期内：选过 Ultraplan 后按钮立刻消失（<code class="inline">!ultraplanSessionUrl &amp;&amp; !ultraplanLaunching</code>）</li>
+    <li>失败时 <code class="inline">enqueuePendingNotification</code> 把消息塞回命令队列（不是 query 上下文）</li>
+    <li>轮询间隔 3s，连续失败 5 次报 <code class="inline">network_or_unknown</code></li>
+  </ul>
+</section>
+
+<hr>
+
+<section id="design">
+  <h2><span class="section-num">17</span>为什么这么设计（官方原话 + 注释）</h2>
+
+  <h3>17.1 plan 文件存在磁盘而不是 message</h3>
+  <div class="bilingual">
+    <div class="bilingual-head">
+      <span class="tag-en">EN</span>
+      <span class="tag-zh">中文</span>
+      <span class="swap-icon">/</span>
+    </div>
+    <div class="bilingual-body">
+      <div class="bilingual-en">
+        // Sync disk so VerifyPlanExecution / Read see the edit. Re-snapshot
+        // after: the only other persistFileSnapshotIfRemote call (api.ts) runs
+        // in normalizeToolInput, pre-permission — it captured the old plan.
+      </div>
+      <div class="bilingual-zh">
+        同步到磁盘以便 VerifyPlanExecution / Read 看到编辑。再次 snapshot：
+        另一个 persistFileSnapshotIfRemote 调用（api.ts）在 normalizeToolInput
+        里、permission 之前跑，它捕获的是旧 plan。
+      </div>
+    </div>
+    <div class="bilingual-cite">ExitPlanModeV2Tool.ts:255-260</div>
+  </div>
+
+  <h3>17.2 KAIROS channels 禁用 plan mode</h3>
+  <div class="bilingual">
+    <div class="bilingual-head">
+      <span class="tag-en">EN</span>
+      <span class="tag-zh">中文</span>
+      <span class="swap-icon">/</span>
+    </div>
+    <div class="bilingual-body">
+      <div class="bilingual-en">
+        // When --channels is active, ExitPlanMode is disabled (its approval
+        // dialog needs the terminal). Disable entry too so plan mode isn't a
+        // trap the model can enter but never leave.
+      </div>
+      <div class="bilingual-zh">
+        当 --channels 激活时禁用 ExitPlanMode（其审批弹窗需要终端）。也禁用
+        入口，避免 plan mode 成为模型能进不能出的陷阱。
+      </div>
+    </div>
+    <div class="bilingual-cite">EnterPlanModeTool.ts:57-58</div>
+  </div>
+
+  <h3>17.3 Pewter Ledger 实验动机</h3>
+  <div class="bilingual">
+    <div class="bilingual-head">
+      <span class="tag-en">EN</span>
+      <span class="tag-zh">中文</span>
+      <span class="swap-icon">/</span>
+    </div>
+    <div class="bilingual-body">
+      <div class="bilingual-en">
+        // Baseline (control, 14d ending 2026-03-02, N=26.3M):
+        //   p50 4,906 chars | p90 11,617 | mean 6,207 | 82% Opus 4.6
+        //   Reject rate monotonic with size: 20% at &lt;2K → 50% at 20K+
+        // Primary: session-level Avg Cost — Opus output is 5× input price so
+        // cost is an output-weighted proxy.
+      </div>
+      <div class="bilingual-zh">
+        基线（对照组，14天截至 2026-03-02，N=26.3M）：
+        p50 4,906 字符 | p90 11,617 | 均值 6,207 | 82% Opus 4.6
+        拒批率随文件长度单调上升：&lt;2K 时 20% → 20K+ 时 50%。
+        主指标：会话级平均成本 —— Opus 输出价是输入的 5×，所以成本是输出的加权代理。
+      </div>
+    </div>
+    <div class="bilingual-cite">planModeV2.ts:77-83</div>
+  </div>
+
+  <h3>17.4 V1/V2 检测的 bug 历史</h3>
+  <p>
+    旧检测方式（<code class="inline">input.plan</code> 存在即 V1）被 PR #10394 打破 —— 该 PR 为 hooks/SDK 注入
+    <code class="inline">input.plan</code>，导致 V2 误判为 V1。修复：改用 <code class="inline">tool.name === 'ExitPlanMode'</code>
+    作为 V2 标记，<code class="inline">input.plan</code> 视为可选 hint。
+    <span class="line-ref">ExitPlanModePermissionRequest.tsx:288-292</span>
+  </p>
+
+  <h3>17.5 Tool call call() 不与 /clear 冲突</h3>
+  <div class="bilingual">
+    <div class="bilingual-head">
+      <span class="tag-en">EN</span>
+      <span class="tag-zh">中文</span>
+      <span class="swap-icon">/</span>
+    </div>
+    <div class="bilingual-body">
+      <div class="bilingual-en">
+        // Note: Background verification hook is registered in REPL.tsx AFTER context clear
+        // via registerPlanVerificationHook(). Registering here would be cleared during context clear.
+      </div>
+      <div class="bilingual-zh">
+        注：后台验证 hook 通过 REPL.tsx 的 registerPlanVerificationHook() 在
+        上下文清空 <em>之后</em> 注册。如果在这里注册，context clear 时会被一并清掉。
+      </div>
+    </div>
+    <div class="bilingual-cite">ExitPlanModeV2Tool.ts:315-316</div>
+  </div>
+
+  <h3>17.6 generateSessionName 的 plan 切片方向</h3>
+  <div class="bilingual">
+    <div class="bilingual-head">
+      <span class="tag-en">EN</span>
+      <span class="tag-zh">中文</span>
+      <span class="swap-icon">/</span>
+    </div>
+    <div class="bilingual-body">
+      <div class="bilingual-en">
+        // generateSessionName tail-slices to the last 1000 chars (correct for
+        // conversations, where recency matters). Plans front-load the goal and
+        // end with testing steps — head-slice so Haiku sees the summary.
+      </div>
+      <div class="bilingual-zh">
+        generateSessionName 默认 tail-slice 取末尾 1000 字符（对话场景下越近越重要）。
+        Plan 文件则把目标写在前、把测试步骤放最后，所以改用 head-slice 让
+        Haiku 看到摘要。
+      </div>
+    </div>
+    <div class="bilingual-cite">ExitPlanModePermissionRequest.tsx:172-174</div>
+  </div>
+</section>
+
+<hr>
+
+<section id="issues">
+  <h2><span class="section-num">18</span>已知问题 / 未实现</h2>
+
+  <ol>
+    <li>
+      <strong>VerifyPlanExecution 是空壳</strong>：1 行 stub，<code class="inline">VERIFY_PLAN_EXECUTION_TOOL_NAME = ''</code>，
+      永远不可用。无法做计划后自动验证。
+    </li>
+    <li>
+      <strong>Ultraplan 按钮在 dev 默认关闭</strong>：需运行时 <code class="inline">ULTRAPLAN=1</code> 或构建时打开。
+    </li>
+    <li>
+      <strong>Pewter Ledger 由 GrowthBook 控制</strong>：外部用户无法本地切换实验臂，只能在 4 个变体中随机。
+    </li>
+    <li>
+      <strong>Interview phase 5 阶段对外部用户默认关闭</strong>：必须 <code class="inline">CLAUDE_CODE_PLAN_MODE_INTERVIEW_PHASE=1</code>。
+    </li>
+    <li>
+      <strong>路径遍历防护未审计 settings 之外来源</strong>：只有 <code class="inline">settings.plansDirectory</code> 走校验，
+      <code class="inline">--plans-directory</code> CLI flag 不存在（间接通过 settings 走）。
+    </li>
+    <li>
+      <strong>被拒 plan 的 user message 重建</strong>：<code class="inline">recoverPlanFromMessages</code> 在 attachment 之前
+      先匹配 <code class="inline">user.planContent</code>，但 clear-context 路径下 <code class="inline">planContent</code> 字段是
+      退出时由 <code class="inline">ExitPlanModeV2Tool</code> 写入 <code class="inline">setAppState</code> 的，并未实际持久化到
+      <code class="inline">UserMessage</code> 字段；resume 时能否正确恢复需要实际跑一次 resume 验证。
+    </li>
+    <li>
+      <strong>Subagent 的 plan 文件名冲突</strong>：<code class="inline">${slug}-agent-${agentId}.md</code>，如果两个 teammate
+      有相同的 agentId 字符串就会冲突（概率低但理论可能）。
+    </li>
+    <li>
+      <strong>V1 路径已删但 constants 保留</strong>：<code class="inline">EXIT_PLAN_MODE_TOOL_NAME</code> 和
+      <code class="inline">EXIT_PLAN_MODE_V2_TOOL_NAME</code> 值相同，可能引起类型混淆。
+    </li>
+    <li>
+      <strong>ENTER_PLAN_MODE 常量无 v2 区分</strong>：<span class="line-ref">EnterPlanModeTool/constants.ts:1</span>
+      只有 <code class="inline">ENTER_PLAN_MODE_TOOL_NAME = 'EnterPlanMode'</code>，无 <code class="inline">_V2_</code> 后缀。
+    </li>
+  </ol>
+</section>
+
+<hr>
+
+<section id="files">
+  <h2><span class="section-num">19</span>关键文件清单</h2>
+
+  <ul class="file-index">
+    <li>
+      <span class="file">src/tools/EnterPlanModeTool/EnterPlanModeTool.ts</span>
+      <span class="role">入口工具实现（126 行）</span>
+    </li>
+    <li>
+      <span class="file">src/tools/EnterPlanModeTool/UI.tsx</span>
+      <span class="role">入口工具渲染（42 行）</span>
+    </li>
+    <li>
+      <span class="file">src/tools/EnterPlanModeTool/prompt.ts</span>
+      <span class="role">入口工具 prompt（ant vs 外部两套，170 行）</span>
+    </li>
+    <li>
+      <span class="file">src/tools/EnterPlanModeTool/constants.ts</span>
+      <span class="role">工具名常量</span>
+    </li>
+    <li>
+      <span class="file">src/tools/ExitPlanModeTool/ExitPlanModeV2Tool.ts</span>
+      <span class="role">V2 出口实现（493 行，核心）</span>
+    </li>
+    <li>
+      <span class="file">src/tools/ExitPlanModeTool/UI.tsx</span>
+      <span class="role">V2 出口渲染（89 行）</span>
+    </li>
+    <li>
+      <span class="file">src/tools/ExitPlanModeTool/prompt.ts</span>
+      <span class="role">V2 出口 prompt</span>
+    </li>
+    <li>
+      <span class="file">src/tools/ExitPlanModeTool/constants.ts</span>
+      <span class="role">V1/V2 共用工具名常量</span>
+    </li>
+    <li>
+      <span class="file">src/tools/VerifyPlanExecutionTool/VerifyPlanExecutionTool.js</span>
+      <span class="role">占位实现（1 行，<code class="inline">isEnabled: () =&gt; false</code>）</span>
+    </li>
+    <li>
+      <span class="file">src/tools/VerifyPlanExecutionTool/constants.ts</span>
+      <span class="role">空常量（<code class="inline">VERIFY_PLAN_EXECUTION_TOOL_NAME = ''</code>）</span>
+    </li>
+    <li>
+      <span class="file">src/tools/AgentTool/built-in/planAgent.ts</span>
+      <span class="role">只读架构师 subagent（92 行）</span>
+    </li>
+    <li>
+      <span class="file">src/utils/plans.ts</span>
+      <span class="role">plan 文件路径、读、写、恢复（397 行）</span>
+    </li>
+    <li>
+      <span class="file">src/utils/planModeV2.ts</span>
+      <span class="role">5-phase / Pewter Ledger / interview 开关（95 行）</span>
+    </li>
+    <li>
+      <span class="file">src/commands/plan/index.ts</span>
+      <span class="role">/plan 斜杠命令注册</span>
+    </li>
+    <li>
+      <span class="file">src/commands/plan/plan.tsx</span>
+      <span class="role">/plan 斜杠命令实现（107 行）</span>
+    </li>
+    <li>
+      <span class="file">src/utils/ultraplan/ccrSession.ts</span>
+      <span class="role">CCR 轮询 + ExitPlanMode 事件分类器</span>
+    </li>
+    <li>
+      <span class="file">src/utils/ultraplan/keyword.ts</span>
+      <span class="role">"ultraplan" 关键词检测（防误触）</span>
+    </li>
+    <li>
+      <span class="file">src/utils/ultraplan/prompt.txt</span>
+      <span class="role">远端 prompt</span>
+    </li>
+    <li>
+      <span class="file">src/components/permissions/EnterPlanModePermissionRequest/EnterPlanModePermissionRequest.tsx</span>
+      <span class="role">入口审批弹窗（82 行）</span>
+    </li>
+    <li>
+      <span class="file">src/components/permissions/ExitPlanModePermissionRequest/ExitPlanModePermissionRequest.tsx</span>
+      <span class="role">出口审批弹窗（1042 行，最大组件）</span>
+    </li>
+    <li>
+      <span class="file">src/components/messages/PlanApprovalMessage.tsx</span>
+      <span class="role">teammate 计划审批消息（紫色边框）</span>
+    </li>
+    <li>
+      <span class="file">src/components/messages/UserPlanMessage.tsx</span>
+      <span class="role">user 显示 plan 内容</span>
+    </li>
+    <li>
+      <span class="file">src/components/messages/UserToolResultMessage/RejectedPlanMessage.tsx</span>
+      <span class="role">plan 被拒时显示</span>
+    </li>
+    <li>
+      <span class="file">src/utils/messages.ts</span>
+      <span class="role">plan mode attachment 注入（4 阶段 + 4 变体）</span>
+    </li>
+    <li>
+      <span class="file">src/utils/permissions/permissionSetup.ts</span>
+      <span class="role">auto ↔ plan 权限 context 转换</span>
+    </li>
+    <li>
+      <span class="file">src/bootstrap/state.ts</span>
+      <span class="role">planSlug 缓存 + handlePlanModeTransition</span>
+    </li>
+    <li>
+      <span class="file">src/main.tsx</span>
+      <span class="role"><code class="inline">--plan-mode-required</code> CLI flag + teammate 强制 plan</span>
+    </li>
+    <li>
+      <span class="file">src/tools.ts</span>
+      <span class="role">工具注册表（含 VerifyPlanExecution 条件 require）</span>
+    </li>
+  </ul>
+</section>
+
+<hr>
+
+<div class="footer">
+  <p>本报告由 10 个前序 agent（8 Discovery + 2 Verify）的事实发现整合而成。</p>
+  <p>代码引用全部经过反编译 <code class="inline">2.1.888</code> 版本交叉验证。保留 <code class="inline">unknown</code> /
+  <code class="inline">never</code> / <code class="inline">_c(N)</code> 等反编译痕迹。</p>
+</div>
+
+</main>
+
+</div>
+
+</body>
+</html>

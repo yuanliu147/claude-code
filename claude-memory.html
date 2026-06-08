@@ -1,0 +1,1918 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code 记忆机制深度解析</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2333;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --accent2: #3fb950;
+    --accent3: #d2a8ff;
+    --accent4: #f0883e;
+    --red: #f85149;
+    --code-bg: #0d1117;
+    --highlight: #1f2937;
+
+    /* ===== 标注区域专用色 (暖色系, 与原文档冷色调形成对比) ===== */
+    --anno-bg: #2a1f1a;
+    --anno-surface: #382922;
+    --anno-border: #6b4423;
+    --anno-accent: #ffa657;
+    --anno-accent2: #ff7b72;
+    --anno-text: #f0d8c0;
+    --anno-muted: #c9a47e;
+    --anno-warn-bg: #3a2818;
+    --anno-warn-border: #ffa657;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    font-size: 15px;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: 2.2em; margin-bottom: 8px; color: var(--accent); }
+  h2 { font-size: 1.6em; margin: 48px 0 16px; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  h3 { font-size: 1.25em; margin: 32px 0 12px; color: var(--accent3); }
+  h4 { font-size: 1.05em; margin: 24px 0 8px; color: var(--accent4); }
+  p { margin: 12px 0; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .subtitle { color: var(--text-muted); font-size: 1.1em; margin-bottom: 32px; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    vertical-align: middle;
+    margin-left: 6px;
+  }
+  .badge-core { background: #1f6feb33; color: var(--accent); }
+  .badge-service { background: #238636; color: #fff; }
+  .badge-ui { background: #8957e5aa; color: #fff; }
+  .badge-util { background: #9e6a03aa; color: #fff; }
+  .file-ref {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.85em;
+    color: var(--accent);
+    background: #1f6feb12;
+    padding: 1px 6px;
+    border-radius: 4px;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    overflow-x: auto;
+    margin: 16px 0;
+    font-size: 0.88em;
+    line-height: 1.55;
+  }
+  code {
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    font-size: 0.9em;
+  }
+  :not(pre) > code {
+    background: #1f6feb18;
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: var(--accent3);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.92em;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    text-align: left;
+  }
+  th { background: var(--surface2); color: var(--accent); font-weight: 600; }
+  tr:hover { background: var(--surface); }
+  .flow-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    margin: 20px 0;
+    overflow-x: auto;
+  }
+  .flow-box pre { border: none; background: transparent; padding: 0; margin: 0; }
+  .note {
+    background: #1f6feb12;
+    border-left: 3px solid var(--accent);
+    padding: 12px 16px;
+    margin: 16px 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .warn {
+    background: #9e6a0318;
+    border-left: 3px solid var(--accent4);
+    padding: 12px 16px;
+    margin: 16px 0;
+    border-radius: 0 6px 6px 0;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin: 16px 0;
+  }
+  .card-title { font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 768px) { .two-col { grid-template-columns: 1fr; } }
+  .tag {
+    display: inline-block;
+    font-size: 0.78em;
+    padding: 1px 7px;
+    border-radius: 4px;
+    margin-right: 4px;
+  }
+  .tag-user { background: #1f6feb33; color: var(--accent); }
+  .tag-feedback { background: #238636aa; color: #fff; }
+  .tag-project { background: #8957e5aa; color: #fff; }
+  .tag-reference { background: #9e6a03aa; color: #fff; }
+  ul, ol { padding-left: 24px; margin: 8px 0; }
+  li { margin: 4px 0; }
+  .toc { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 28px; margin: 20px 0; }
+  .toc ol { counter-reset: toc; list-style: none; padding-left: 0; }
+  .toc > ol > li { counter-increment: toc; margin: 6px 0; }
+  .toc > ol > li::before { content: counter(toc) ". "; color: var(--accent); font-weight: 600; }
+  .toc ol ol { padding-left: 20px; }
+  .toc ol ol li { margin: 3px 0; }
+  .toc ol ol li::before { content: "→ "; color: var(--text-muted); }
+  .emoji { font-size: 1.1em; }
+
+  /* ============================================================== */
+  /* 标注区域专用样式 (与原文档的冷色调形成强烈对比)                      */
+  /* ============================================================== */
+
+  /* 整个标注区域的大容器 — 明显的暖橙色调 */
+  .annotations-section {
+    background: var(--anno-bg);
+    border: 2px solid var(--anno-border);
+    border-radius: 14px;
+    padding: 36px 40px;
+    margin: 56px 0 0;
+    box-shadow: 0 0 0 1px var(--anno-border), 0 8px 32px rgba(255, 166, 87, 0.08);
+    position: relative;
+  }
+
+  /* 标注区顶部"这是标注"的提示横幅 */
+  .annotations-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(135deg, #3a2818 0%, #4a2f1c 100%);
+    border: 1px solid var(--anno-border);
+    border-radius: 8px;
+    padding: 14px 20px;
+    margin-bottom: 32px;
+    color: var(--anno-accent);
+    font-weight: 600;
+    font-size: 0.95em;
+  }
+  .annotations-banner-icon {
+    font-size: 1.4em;
+    background: var(--anno-accent);
+    color: #1a0e07;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-weight: 800;
+  }
+  .annotations-banner-text { flex: 1; }
+  .annotations-banner-text small {
+    display: block;
+    font-weight: 400;
+    color: var(--anno-muted);
+    font-size: 0.85em;
+    margin-top: 2px;
+  }
+
+  /* 标注区 H2 — 与原文档不同的颜色 */
+  .annotations-section > h2 {
+    color: var(--anno-accent) !important;
+    border-bottom: 2px dashed var(--anno-border) !important;
+    padding-bottom: 12px !important;
+    margin-top: 0 !important;
+  }
+
+  /* 标注区 H3 — 分类标题 */
+  .annotations-section h3 {
+    color: var(--anno-accent2) !important;
+    background: linear-gradient(90deg, rgba(255, 123, 114, 0.1) 0%, transparent 100%);
+    padding: 8px 0 8px 12px;
+    border-left: 4px solid var(--anno-accent2);
+    margin-top: 36px !important;
+  }
+
+  /* 标注区段落 — 暖色文字 */
+  .annotations-section p {
+    color: var(--anno-text);
+  }
+  .annotations-section li {
+    color: var(--anno-text);
+  }
+  .annotations-section strong {
+    color: var(--anno-accent);
+  }
+
+  /* 标注区的 inline code — 暖色背景 */
+  .annotations-section :not(pre) > code {
+    background: rgba(255, 166, 87, 0.15) !important;
+    color: #ffc995 !important;
+  }
+
+  /* 标注区的引用块 — 暖色调警告框 */
+  .annotations-section .warn {
+    background: var(--anno-warn-bg) !important;
+    border-left: 4px solid var(--anno-warn-border) !important;
+    color: var(--anno-text) !important;
+  }
+  .annotations-section .warn strong {
+    color: var(--anno-accent);
+  }
+
+  /* 标注区的提示框 (note) */
+  .annotations-section .note {
+    background: rgba(255, 166, 87, 0.08) !important;
+    border-left: 4px solid var(--anno-accent) !important;
+  }
+
+  /* 标注区的卡片 — 完全重写样式,与原文档卡片区分 */
+  .annotations-section .card {
+    background: var(--anno-surface) !important;
+    border: 1px solid var(--anno-border) !important;
+    border-left: 4px solid var(--anno-accent) !important;
+    color: var(--anno-text);
+  }
+  .annotations-section .card-title {
+    color: var(--anno-accent) !important;
+    font-size: 1.05em;
+  }
+  .annotations-section .card strong {
+    color: var(--anno-accent);
+  }
+
+  /* 标注区表格 — 暖色系 */
+  .annotations-section table {
+    border-color: var(--anno-border);
+  }
+  .annotations-section th {
+    background: var(--anno-surface) !important;
+    color: var(--anno-accent) !important;
+    border-color: var(--anno-border) !important;
+  }
+  .annotations-section td {
+    border-color: var(--anno-border) !important;
+    color: var(--anno-text);
+  }
+  .annotations-section tr:hover {
+    background: rgba(255, 166, 87, 0.06) !important;
+  }
+
+  /* 标注区 code block */
+  .annotations-section pre {
+    background: #1a0e07 !important;
+    border: 1px solid var(--anno-border) !important;
+  }
+
+  /* 标注区的"边界/边界说明"小标签 */
+  .edge-label {
+    display: inline-block;
+    background: var(--anno-accent2);
+    color: #1a0e07;
+    font-size: 0.7em;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+
+  /* 标注区 H2 前的标注徽章 */
+  .annotations-section h2::before {
+    content: "📌 标注 · ";
+    font-size: 0.7em;
+    color: var(--anno-accent2);
+    font-weight: 600;
+  }
+
+  /* 标注区结束标记 */
+  .annotations-end {
+    text-align: center;
+    color: var(--anno-muted);
+    font-size: 0.9em;
+    padding-top: 32px;
+    margin-top: 40px;
+    border-top: 2px dashed var(--anno-border);
+  }
+
+  /* 标注区有序列表 — 用 emoji 序号 */
+  .annotations-section ol { counter-reset: anno-counter; }
+  .annotations-section ol > li {
+    counter-increment: anno-counter;
+    color: var(--anno-text);
+  }
+
+  /* 引用块中的"前端类比"样式 */
+  .frontend-analogy {
+    background: rgba(255, 123, 114, 0.08);
+    border-left: 3px solid var(--anno-accent2);
+    padding: 10px 14px;
+    margin: 10px 0;
+    border-radius: 0 6px 6px 0;
+    color: var(--anno-text);
+  }
+  .frontend-analogy::before {
+    content: "🎨 前端类比: ";
+    font-weight: 700;
+    color: var(--anno-accent2);
+  }
+
+  /* 引用块中的"澄清"样式 */
+  .clarify {
+    background: rgba(255, 166, 87, 0.08);
+    border-left: 3px solid var(--anno-accent);
+    padding: 10px 14px;
+    margin: 10px 0;
+    border-radius: 0 6px 6px 0;
+    color: var(--anno-text);
+  }
+  .clarify::before {
+    content: "💡 澄清: ";
+    font-weight: 700;
+    color: var(--anno-accent);
+  }
+
+  /* ============================================================== */
+  /* 双列布局: 左侧 sticky TOC + 右侧主内容滚动                       */
+  /* ============================================================== */
+  .layout {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  @media (max-width: 960px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { display: none; }
+  }
+  aside {
+    background: var(--bg);
+    border-right: 1px solid var(--border);
+    padding: 32px 20px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  aside h2 {
+    color: var(--accent);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  aside .toc {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+  }
+  aside .toc strong { display: none; }
+  aside .toc ol { list-style: none; padding: 0; }
+  aside .toc > ol > li { margin: 4px 0; counter-increment: none; }
+  aside .toc > ol > li::before { content: none; }
+  aside .toc ol ol { display: none; }
+  aside .toc a {
+    display: block;
+    padding: 5px 10px;
+    color: var(--text-muted);
+    font-size: 13px;
+    border-radius: 6px;
+    border-left: 2px solid transparent;
+    transition: all 0.15s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  aside .toc a:hover {
+    color: var(--text);
+    background: var(--surface);
+    border-left-color: var(--accent);
+    text-decoration: none;
+  }
+  main {
+    padding: 40px 56px 80px;
+    max-width: 1100px;
+  }
+  @media (max-width: 720px) { main { padding: 24px 16px 40px; } }
+</style>
+</head>
+<body>
+<div class="layout">
+<aside>
+<h2>目录</h2>
+<div class="toc">
+<ol>
+<li><a href="#overview">1. 全景概览：记忆系统的三层架构</a></li>
+<li><a href="#memory-paths">2. 路径解析：记忆文件存在哪里</a></li>
+<li><a href="#memory-format">3. 文件格式：记忆长什么样</a></li>
+<li><a href="#loading-flow">4. 加载流程：记忆如何注入到 AI 上下文</a></li>
+<li><a href="#recall-flow">5. 召回流程：AI 如何找到相关记忆</a></li>
+<li><a href="#write-flow">6. 写入流程：AI 如何创建/更新记忆</a></li>
+<li><a href="#extraction">7. 后台提取：extractMemories 自动记忆</a></li>
+<li><a href="#dream">8. 记忆整合：dream 合并与清理</a></li>
+<li><a href="#session-memory">9. 会话记忆：SessionMemory 机制</a></li>
+<li><a href="#agent-memory">10. Agent 记忆：子代理专用记忆</a></li>
+<li><a href="#feature-flags">11. Feature Flags 与配置</a></li>
+<li><a href="#security">12. 安全机制</a></li>
+<li><a href="#skills">13. Skills：/remember 与 /dream</a></li>
+<li><a href="#file-map">14. 源文件全景地图</a></li>
+<li><a href="#faq">15. 常见问题</a></li>
+</ol>
+</div>
+</aside>
+<main>
+
+<h1>🧠 Claude Code 记忆机制深度解析</h1>
+<p class="subtitle">从架构设计到函数调用链路的完整分析 — 让每位前端工程师都能深入掌握</p>
+
+<!-- ============================================================ -->
+<h2 id="overview">1. 全景概览：记忆系统的三层架构</h2>
+
+<p>Claude Code 的记忆系统并非单一机制，而是由<strong>三个互补层</strong>组成的架构：</p>
+
+<div class="flow-box">
+<pre>
+┌─────────────────────────────────────────────────────────────┐
+│                     Claude Code 记忆架构                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌───────────┐ │
+│  │   指令层          │  │   自动记忆层       │  │  会话记忆层│ │
+│  │   (CLAUDE.md)     │  │   (Auto Memory)   │  │ (Session) │ │
+│  │                  │  │                  │  │           │ │
+│  │ 用户手动管理      │  │ AI 自动管理       │  │ 会话级临时 │ │
+│  │ 项目规范/指令     │  │ 跨会话持久知识    │  │ 对话笔记   │ │
+│  │ 可提交到 Git     │  │ 存储在 ~/.claude  │  │ 存在本地   │ │
+│  └────────┬─────────┘  └────────┬─────────┘  └─────┬─────┘ │
+│           │                     │                   │       │
+│           ▼                     ▼                   ▼       │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │              API 请求上下文 (System Prompt)              │ │
+│  │  System Prompt Section: memory 行为指令                  │ │
+│  │  User Context: CLAUDE.md 内容 + MEMORY.md 索引           │ │
+│  │  Attachments: 相关记忆文件 (按需召回)                      │ │
+│  └────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+</pre>
+</div>
+
+<div class="two-col">
+<div class="card">
+<div class="card-title">📝 CLAUDE.md (指令层)</div>
+<ul>
+<li><strong>管理方</strong>: 用户直接编辑</li>
+<li><strong>用途</strong>: 项目规范、编码约定</li>
+<li><strong>存储</strong>: 项目目录内，可 Git 提交</li>
+<li><strong>加载</strong>: 作为 User Context 注入</li>
+<li><strong>来源</strong>: Managed / User / Project / Local</li>
+</ul>
+</div>
+<div class="card">
+<div class="card-title">🤖 Auto Memory (自动记忆层)</div>
+<ul>
+<li><strong>管理方</strong>: AI 自动写入</li>
+<li><strong>用途</strong>: 用户偏好、反馈、项目上下文</li>
+<li><strong>存储</strong>: <code>~/.claude/projects/&lt;path&gt;/memory/</code></li>
+<li><strong>加载</strong>: System Prompt + 按需召回</li>
+<li><strong>类型</strong>: user / feedback / project / reference</li>
+</ul>
+</div>
+</div>
+
+<div class="note">
+<strong>关键区别</strong>: CLAUDE.md 是用户告诉 AI "你应该怎么做"，Auto Memory 是 AI 自己记住的"我学到了什么"。两者互补但不重叠——系统明确要求 AI 不要把 CLAUDE.md 中已有的内容存为记忆。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="memory-paths">2. 路径解析：记忆文件存在哪里</h2>
+
+<h3>2.1 Auto Memory 目录路径</h3>
+
+<p>核心函数 <code>getAutoMemPath()</code> 在 <span class="file-ref">src/memdir/paths.ts:223</span> 中定义，使用 <code>memoize</code> 缓存：</p>
+
+<pre><span class="comment">// src/memdir/paths.ts</span>
+export const getAutoMemPath = memoize(
+  (): string => {
+    <span class="comment">// 优先级 1: 环境变量覆盖 (Cowork 场景)</span>
+    const override = getAutoMemPathOverride() ?? getAutoMemPathSetting()
+    if (override) return override
+
+    <span class="comment">// 优先级 2: 默认路径</span>
+    const projectsDir = join(getMemoryBaseDir(), 'projects')
+    return (
+      join(projectsDir, sanitizePath(getAutoMemBase()), 'memory') + sep
+    ).normalize('NFC')
+  },
+  () => getProjectRoot(),  <span class="comment">// 缓存键</span>
+)</pre>
+
+<p><strong>路径解析优先级</strong>（第一个命中的生效）：</p>
+
+<table>
+<tr><th>优先级</th><th>来源</th><th>路径</th><th>使用场景</th></tr>
+<tr><td>1</td><td><code>CLAUDE_COWORK_MEMORY_PATH_OVERRIDE</code></td><td>环境变量指定的完整路径</td><td>Cowork SDK 集成</td></tr>
+<tr><td>2</td><td><code>settings.json → autoMemoryDirectory</code></td><td>用户自定义路径</td><td>用户手动配置</td></tr>
+<tr><td>3</td><td>默认计算</td><td><code>~/.claude/projects/&lt;sanitized-git-root&gt;/memory/</code></td><td>标准场景</td></tr>
+</table>
+
+<div class="warn">
+<strong>安全注意</strong>: <code>projectSettings</code>（即 <code>.claude/settings.json</code>）<strong>故意被排除</strong>在 <code>getAutoMemPathSetting()</code> 之外——恶意仓库不能通过提交 <code>autoMemoryDirectory: "~/.ssh"</code> 来获得对敏感目录的写权限。
+</div>
+
+<h3>2.2 Team Memory 目录</h3>
+
+<p>Team Memory 是 Auto Memory 的子目录，在 <span class="file-ref">src/memdir/teamMemPaths.ts:84</span> 中定义：</p>
+
+<pre><span class="comment">// src/memdir/teamMemPaths.ts</span>
+export function getTeamMemPath(): string {
+  return (join(getAutoMemPath(), 'team') + sep).normalize('NFC')
+}
+<span class="comment">// 结果: ~/.claude/projects/&lt;path&gt;/memory/team/</span></pre>
+
+<h3>2.3 Agent Memory 目录</h3>
+
+<p>Agent Memory 有三个作用域，在 <span class="file-ref">src/tools/AgentTool/agentMemory.ts:52</span> 中定义：</p>
+
+<table>
+<tr><th>作用域</th><th>路径</th><th>用途</th></tr>
+<tr><td><code>user</code></td><td><code>~/.claude/agent-memory/&lt;agentType&gt;/</code></td><td>跨项目的通用 Agent 知识</td></tr>
+<tr><td><code>project</code></td><td><code>&lt;cwd&gt;/.claude/agent-memory/&lt;agentType&gt;/</code></td><td>项目级 Agent 知识，可 Git 提交</td></tr>
+<tr><td><code>local</code></td><td><code>&lt;cwd&gt;/.claude/agent-memory-local/&lt;agentType&gt;/</code></td><td>本地 Agent 知识，不提交 VCS</td></tr>
+</table>
+
+<h3>2.4 完整目录树示例</h3>
+
+<pre>~/.claude/
+├── CLAUDE.md                          <span class="comment"># 用户级指令</span>
+├── projects/
+│   └── home-user-WorkSpace-myapp/     <span class="comment"># sanitizePath(gitRoot)</span>
+│       └── memory/                    <span class="comment"># Auto Memory 根目录</span>
+│           ├── MEMORY.md              <span class="comment"># 索引文件 (入口点)</span>
+│           ├── user_role.md           <span class="comment"># 记忆文件</span>
+│           ├── feedback_testing.md
+│           ├── project_deadline.md
+│           ├── reference_linear.md
+│           ├── logs/                  <span class="comment"># KAIROS 日志模式</span>
+│           │   └── 2026/06/
+│           │       └── 2026-06-03.md
+│           └── team/                  <span class="comment"># Team Memory</span>
+│               ├── MEMORY.md
+│               └── project_deploy.md
+├── agent-memory/                      <span class="comment"># User-scope Agent Memory</span>
+│   └── explore/
+│       └── MEMORY.md
+└── session-memory/                    <span class="comment"># 会话记忆</span>
+    └── session-xxx.md
+
+&lt;project-root&gt;/
+├── CLAUDE.md                          <span class="comment"># 项目级指令</span>
+├── CLAUDE.local.md                    <span class="comment"># 本地指令 (不提交)</span>
+├── .claude/
+│   ├── CLAUDE.md                      <span class="comment"># .claude 目录下的指令</span>
+│   ├── rules/                         <span class="comment"># 规则文件</span>
+│   │   └── testing.md
+│   ├── settings.json                  <span class="comment"># 项目配置</span>
+│   ├── agent-memory/                  <span class="comment"># Project-scope Agent Memory</span>
+│   │   └── explore/
+│   │       └── MEMORY.md
+│   └── agent-memory-local/            <span class="comment"># Local-scope Agent Memory</span>
+│       └── explore/
+│           └── MEMORY.md
+</pre>
+
+<!-- ============================================================ -->
+<h2 id="memory-format">3. 文件格式：记忆长什么样</h2>
+
+<h3>3.1 单个记忆文件格式</h3>
+
+<p>每个记忆文件使用 YAML frontmatter + Markdown 正文的格式，在 <span class="file-ref">src/memdir/memoryTypes.ts:261</span> 中定义了模板：</p>
+
+<pre><span class="comment">---</span>
+<span class="comment">name: 用户角色</span>
+<span class="comment">description: 用户是一名资深前端工程师，主要使用 React 和 TypeScript</span>
+<span class="comment">type: user</span>
+<span class="comment">---</span>
+
+用户有 10 年前端经验，精通 React/TypeScript。
+最近在学习 Rust 用于 CLI 工具开发。
+偏好函数式编程风格，不喜欢 class 组件。</pre>
+
+<h3>3.2 四类型分类体系</h3>
+
+<p>记忆被严格约束为四种类型（<span class="file-ref">src/memdir/memoryTypes.ts:14</span>），每种类型有明确的适用范围：</p>
+
+<table>
+<tr><th>类型</th><th>标签</th><th>含义</th><th>何时保存</th><th>示例</th></tr>
+<tr>
+<td><code>user</code></td>
+<td><span class="tag tag-user">user</span></td>
+<td>用户的角色、目标、知识水平</td>
+<td>了解到用户的背景信息时</td>
+<td>"用户是数据科学家，正在调查日志系统"</td>
+</tr>
+<tr>
+<td><code>feedback</code></td>
+<td><span class="tag tag-feedback">feedback</span></td>
+<td>用户对工作方式的指导（纠正+确认）</td>
+<td>用户纠正或确认非显而易见的做法时</td>
+<td>"不要在测试中 mock 数据库——上次出过问题"</td>
+</tr>
+<tr>
+<td><code>project</code></td>
+<td><span class="tag tag-project">project</span></td>
+<td>项目上下文：目标、截止日期、决策</td>
+<td>了解到代码/历史中不可推导的项目信息时</td>
+<td>"周四之后冻结非关键合并——移动端在切分支"</td>
+</tr>
+<tr>
+<td><code>reference</code></td>
+<td><span class="tag tag-reference">reference</span></td>
+<td>外部系统的指引（Linear、Grafana 等）</td>
+<td>了解到外部资源的位置和用途时</td>
+<td>"pipeline bug 在 Linear 的 INGEST 项目中追踪"</td>
+</tr>
+</table>
+
+<div class="note">
+<strong>feedback 类型的特殊结构</strong>: 系统要求 feedback 类型的记忆按 <code>规则 → Why → How to apply</code> 三段式组织，这样未来的 AI 能判断边缘情况，而不是盲目执行规则。
+</div>
+
+<h3>3.3 MEMORY.md 索引文件</h3>
+
+<p>MEMORY.md 是记忆目录的索引文件，<strong>不是</strong>记忆本身。格式为纯 Markdown，每行一条：</p>
+
+<pre>- [用户角色](user_role.md) — 前端工程师，React/TS 专家
+- [测试规范](feedback_testing.md) — 必须用真实数据库，不能 mock
+- [部署流程](project_deploy.md) — 通过 #deploy-queue 频道审批
+- [Linear 项目](reference_linear.md) — pipeline bugs 在 INGEST 项目</pre>
+
+<p><strong>限制</strong>（<span class="file-ref">src/memdir/memdir.ts:35-38</span>）：</p>
+<ul>
+<li>最多 <strong>200 行</strong>（<code>MAX_ENTRYPOINT_LINES</code>）</li>
+<li>最多 <strong>25KB</strong>（<code>MAX_ENTRYPOINT_BYTES</code>）</li>
+<li>超限时自动截断并附加警告信息</li>
+</ul>
+
+<h3>3.4 Frontmatter 解析</h3>
+
+<p>Frontmatter 由 <span class="file-ref">src/utils/frontmatterParser.ts</span> 中的 <code>parseFrontmatter()</code> 函数解析：</p>
+
+<pre><span class="comment">// src/utils/frontmatterParser.ts</span>
+export function parseFrontmatter(
+  markdown: string,
+  sourcePath?: string,
+): ParsedMarkdown {
+  <span class="comment">// 1. 用正则匹配 --- 之间的内容</span>
+  const match = markdown.match(/^---\s*\n([\s\S]*?)---\s*\n?/)
+  if (!match) return { frontmatter: {}, content: markdown }
+
+  <span class="comment">// 2. 用 YAML 解析器解析</span>
+  let frontmatter = parseYaml(match[1])
+
+  <span class="comment">// 3. 如果失败，尝试自动引用特殊字符后重试</span>
+  if (!frontmatter) {
+    frontmatter = parseYaml(quoteProblematicValues(match[1]))
+  }
+
+  return { frontmatter, content: markdown.slice(match[0].length) }
+}</pre>
+
+<!-- ============================================================ -->
+<h2 id="loading-flow">4. 加载流程：记忆如何注入到 AI 上下文</h2>
+
+<p>这是整个记忆系统中最关键的流程。记忆通过<strong>三条并行路径</strong>注入到 AI 的对话上下文中：</p>
+
+<div class="flow-box">
+<pre>
+用户发送消息
+    │
+    ├─────────────────────────────────────────────────────┐
+    │                                                     │
+    ▼                                                     ▼
+┌───────────────────┐                        ┌─────────────────────┐
+│ 路径 A: System     │                        │ 路径 C: 按需召回      │
+│ Prompt 记忆指令     │                        │ (Relevant Memories)  │
+│                   │                        │                     │
+│ loadMemoryPrompt() │                        │ startRelevantMemory │
+│ → 行为指导文本     │                        │ Prefetch()          │
+│                   │                        │ → Sonnet 侧查询     │
+│ 告诉 AI "你有记忆  │                        │ → 选最相关的 5 个文件 │
+│  系统，按这四类存"  │                        │                     │
+└────────┬──────────┘                        └──────────┬──────────┘
+         │                                              │
+         ▼                                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    API 请求组装                                    │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │ System Prompt                                               │ │
+│  │  ├── [session_guidance]                                     │ │
+│  │  ├── [memory] ← 路径A: loadMemoryPrompt() 的输出            │ │
+│  │  ├── [language]                                             │ │
+│  │  └── ...                                                    │ │
+│  ├─────────────────────────────────────────────────────────────┤ │
+│  │ User Context (claudeMd)                                     │ │
+│  │  ├── Contents of ~/.claude/CLAUDE.md (user's instructions)  │ │
+│  │  ├── Contents of ./CLAUDE.md (project instructions)         │ │
+│  │  └── Contents of MEMORY.md (auto-memory index) ← 路径B      │ │
+│  ├─────────────────────────────────────────────────────────────┤ │
+│  │ Attachments                                                 │ │
+│  │  ├── &lt;system-reminder&gt; [relevant memory 1] &lt;/system-reminder│ │
+│  │  ├── &lt;system-reminder&gt; [relevant memory 2] &lt;/system-reminder│ │
+│  │  └── ... ← 路径C: 按需召回的文件内容                         │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────┘
+</pre>
+</div>
+
+<h3>4.1 路径 A: System Prompt 记忆指令</h3>
+
+<p>入口在 <span class="file-ref">src/constants/prompts.ts:496</span>：</p>
+
+<pre><span class="comment">// src/constants/prompts.ts</span>
+const dynamicSections = [
+  systemPromptSection('memory', () => loadMemoryPrompt()),
+  <span class="comment">// ...</span>
+]</pre>
+
+<p><code>loadMemoryPrompt()</code> 在 <span class="file-ref">src/memdir/memdir.ts:419</span> 中是核心调度函数：</p>
+
+<pre><span class="comment">// src/memdir/memdir.ts — loadMemoryPrompt() 简化版</span>
+export async function loadMemoryPrompt(): Promise&lt;string | null&gt; {
+  <span class="comment">// 1. 检查是否启用自动记忆</span>
+  if (!isAutoMemoryEnabled()) return null
+
+  <span class="comment">// 2. KAIROS 模式 → 日志范式</span>
+  if (feature('KAIROS') && getKairosActive()) {
+    return buildAssistantDailyLogPrompt()
+  }
+
+  <span class="comment">// 3. Team Memory 模式 → 合并提示</span>
+  if (feature('TEAMMEM') && isTeamMemoryEnabled()) {
+    await ensureMemoryDirExists(teamDir)
+    return buildCombinedMemoryPrompt()
+  }
+
+  <span class="comment">// 4. 标准 Auto Memory 模式</span>
+  await ensureMemoryDirExists(autoDir)
+  return buildMemoryLines('auto memory', autoDir).join('\n')
+}</pre>
+
+<p><code>buildMemoryLines()</code>（<span class="file-ref">src/memdir/memdir.ts:199</span>）组装完整的记忆行为指令，包含：</p>
+<ul>
+<li>记忆系统描述（路径、存在性保证）</li>
+<li>四类型分类体系（<code>TYPES_SECTION_INDIVIDUAL</code>）</li>
+<li>不要保存什么（<code>WHAT_NOT_TO_SAVE_SECTION</code>）</li>
+<li>如何保存（两步：写文件 + 更新索引）</li>
+<li>何时访问（<code>WHEN_TO_ACCESS_SECTION</code>）</li>
+<li>信任验证（<code>TRUSTING_RECALL_SECTION</code>）</li>
+<li>搜索历史上下文的方法</li>
+</ul>
+
+<h3>4.2 路径 B: MEMORY.md 内容注入</h3>
+
+<p>在 <span class="file-ref">src/context.ts:177</span> 中：</p>
+
+<pre><span class="comment">// src/context.ts</span>
+const claudeMd = getClaudeMds(
+  filterInjectedMemoryFiles(await getMemoryFiles())
+)</pre>
+
+<p><code>getMemoryFiles()</code>（<span class="file-ref">src/utils/claudemd.ts:790</span>）按以下顺序发现并加载所有指令文件：</p>
+
+<ol>
+<li><strong>Managed</strong>: <code>/etc/claude-code/CLAUDE.md</code> + <code>/etc/claude-code/.claude/rules/*.md</code></li>
+<li><strong>User</strong>: <code>~/.claude/CLAUDE.md</code> + <code>~/.claude/rules/*.md</code></li>
+<li><strong>Project</strong>: 从 CWD 向上遍历到根目录，每层加载：
+  <ul>
+  <li><code>CLAUDE.md</code></li>
+  <li><code>.claude/CLAUDE.md</code></li>
+  <li><code>.claude/rules/*.md</code></li>
+  </ul>
+</li>
+<li><strong>Local</strong>: 各层的 <code>CLAUDE.local.md</code></li>
+<li><strong>AutoMem</strong>: <code>MEMORY.md</code>（通过 <code>getAutoMemEntrypoint()</code>）</li>
+<li><strong>TeamMem</strong>: <code>memory/team/MEMORY.md</code></li>
+</ol>
+
+<div class="note">
+<strong>Feature Flag 影响</strong>: 当 <code>tengu_moth_copse</code> 开启时，<code>filterInjectedMemoryFiles()</code> 会从 User Context 中排除 AutoMem/TeamMem 的 MEMORY.md——因为它们改为通过路径 C（按需召回）注入。
+</div>
+
+<h3>4.3 路径 C: 按需召回 (Relevant Memories)</h3>
+
+<p>这是最智能的一条路径。当用户发送消息时，系统异步查找最相关的记忆文件：</p>
+
+<pre><span class="comment">// src/utils/attachments.ts — startRelevantMemoryPrefetch()</span>
+<span class="comment">// 用户发送消息时触发</span>
+
+1. startRelevantMemoryPrefetch()
+2.   → findRelevantMemories(query, memoryDir)     <span class="comment">// src/memdir/findRelevantMemories.ts</span>
+3.     → scanMemoryFiles(memoryDir)                <span class="comment">// 扫描所有 .md 文件的 frontmatter</span>
+4.     → selectRelevantMemories(query, memories)   <span class="comment">// 调用 Sonnet 选择最相关的</span>
+5.   → readMemoriesForSurfacing(selected)           <span class="comment">// 读取文件内容</span>
+6.   → memoryFilesToAttachments(memories)           <span class="comment">// 转为 attachment</span>
+7. → 渲染为 &lt;system-reminder&gt; 包裹的用户消息</pre>
+
+<p>具体实现在 <span class="file-ref">src/memdir/findRelevantMemories.ts:39</span>：</p>
+
+<pre><span class="comment">// src/memdir/findRelevantMemories.ts</span>
+export async function findRelevantMemories(
+  query: string,
+  memoryDir: string,
+  signal: AbortSignal,
+  recentTools: readonly string[] = [],
+  alreadySurfaced: ReadonlySet&lt;string&gt; = new Set(),
+): Promise&lt;RelevantMemory[]&gt; {
+  <span class="comment">// 1. 扫描记忆目录，获取所有 .md 文件的 frontmatter</span>
+  const memories = (await scanMemoryFiles(memoryDir, signal))
+    .filter(m => !alreadySurfaced.has(m.filePath))
+
+  <span class="comment">// 2. 调用 Sonnet 侧查询选择最相关的（最多 5 个）</span>
+  const selectedFilenames = await selectRelevantMemories(
+    query, memories, signal, recentTools,
+  )
+
+  <span class="comment">// 3. 返回路径 + mtime</span>
+  return selected.map(m => ({ path: m.filePath, mtimeMs: m.mtimeMs }))
+}</pre>
+
+<p>侧查询的系统提示（<span class="file-ref">src/memdir/findRelevantMemories.ts:18</span>）要求 Sonnet：</p>
+<ul>
+<li>只选择<strong>确定</strong>有用的记忆，不确定就不选</li>
+<li>最多返回 5 个文件名</li>
+<li>如果用户正在使用某个工具，不要选该工具的使用文档（但要选已知问题/注意事项）</li>
+<li>可以返回空列表</li>
+</ul>
+
+<h3>4.4 记忆新鲜度提示</h3>
+
+<p><span class="file-ref">src/memdir/memoryAge.ts</span> 提供了记忆年龄的计算和过时警告：</p>
+
+<pre><span class="comment">// src/memdir/memoryAge.ts</span>
+export function memoryAge(mtimeMs: number): string {
+  const d = memoryAgeDays(mtimeMs)
+  if (d === 0) return 'today'
+  if (d === 1) return 'yesterday'
+  return `${d} days ago`
+}
+
+export function memoryFreshnessText(mtimeMs: number): string {
+  const d = memoryAgeDays(mtimeMs)
+  if (d <= 1) return ''
+  return `This memory is ${d} days old. ` +
+    `Memories are point-in-time observations, not live state — ` +
+    `claims about code behavior or file:line citations may be outdated. ` +
+    `Verify against current code before asserting as fact.`
+}</pre>
+
+<p>超过 1 天的记忆会自动附加过时警告，防止 AI 把过时信息当作当前事实。</p>
+
+<!-- ============================================================ -->
+<h2 id="recall-flow">5. 召回流程：AI 如何找到相关记忆</h2>
+
+<p>记忆召回使用了 <strong>Sonnet 侧查询</strong>（sideQuery）——一个轻量级的、与主对话隔离的 API 调用：</p>
+
+<div class="flow-box">
+<pre>
+用户输入: "帮我看看部署流程的配置"
+    │
+    ▼
+┌─────────────────────────────────┐
+│ 1. scanMemoryFiles(memoryDir)   │
+│    扫描 memory/ 下所有 .md 文件  │
+│    读取 frontmatter (前 30 行)    │
+│    按 mtime 降序排列，最多 200 个 │
+└──────────────┬──────────────────┘
+               │
+               ▼
+┌─────────────────────────────────┐
+│ 2. formatMemoryManifest()       │
+│    生成文本清单:                  │
+│    - [user] user_role.md        │
+│      (2026-06-01T...): 前端...  │
+│    - [project] deploy.md        │
+│      (2026-06-02T...): 部署...  │
+└──────────────┬──────────────────┘
+               │
+               ▼
+┌─────────────────────────────────┐
+│ 3. sideQuery() → Sonnet         │
+│    System: "You are selecting    │
+│    memories useful to Claude..." │
+│    User: "Query: 帮我看看部署...  │
+│    Available memories: ...       │
+│    Recently used tools: ..."     │
+│    Response (JSON):              │
+│    { "selected_memories":        │
+│      ["deploy.md"] }             │
+└──────────────┬──────────────────┘
+               │
+               ▼
+┌─────────────────────────────────┐
+│ 4. readMemoriesForSurfacing()   │
+│    读取选中文件的完整内容          │
+│    截断到 MAX_MEMORY_LINES/      │
+│    MAX_MEMORY_BYTES              │
+└──────────────┬──────────────────┘
+               │
+               ▼
+┌─────────────────────────────────┐
+│ 5. 转为 attachment 注入消息       │
+│    &lt;system-reminder&gt;             │
+│    This memory is yesterday.     │
+│    Contents of deploy.md:        │
+│    ...                           │
+│    &lt;/system-reminder&gt;             │
+└─────────────────────────────────┘
+</pre>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="write-flow">6. 写入流程：AI 如何创建/更新记忆</h2>
+
+<h3>6.1 直接写入（主 Agent）</h3>
+
+<p>主 Agent 的系统提示中包含完整的"如何保存"指令。它使用标准的 <code>Write</code> 和 <code>Edit</code> 工具：</p>
+
+<pre><span class="comment">// AI 的保存流程（两步）:</span>
+
+<span class="comment">// 步骤 1: 写记忆文件</span>
+Write tool → ~/.claude/projects/.../memory/feedback_testing.md
+---
+name: 测试规范
+description: 测试必须使用真实数据库，不能 mock
+type: feedback
+---
+
+集成测试必须连接真实数据库，不能使用 mock。
+**Why:** 上季度 mock 测试通过但生产迁移失败，mock/prod 差异掩盖了问题。
+**How to apply:** 编写测试时始终使用测试数据库连接，不使用 jest.mock 或类似工具。
+
+<span class="comment">// 步骤 2: 更新索引</span>
+Edit tool → ~/.claude/projects/.../memory/MEMORY.md
+添加一行: `- [测试规范](feedback_testing.md) — 必须用真实数据库，不能 mock`</pre>
+
+<h3>6.2 写入权限特殊处理</h3>
+
+<p><span class="file-ref">src/tools/FileWriteTool/FileWriteTool.ts</span> 中对 Auto Memory 路径有特殊豁免：</p>
+
+<pre><span class="comment">// FileWriteTool 对 auto memory 路径的处理:</span>
+if (isAutoMemPath(filePath)) {
+  <span class="comment">// 绕过 DANGEROUS_DIRECTORIES 限制</span>
+  <span class="comment">// 不需要显式用户许可即可写入</span>
+  return { behavior: 'allow' }
+}
+
+<span class="comment">// Team Memory 还会检查敏感信息</span>
+if (isTeamMemPath(filePath)) {
+  <span class="comment">// 拒绝写入 API key、密码等</span>
+}</pre>
+
+<h3>6.3 删除记忆</h3>
+
+<p>AI 被指示："如果用户要求忘记某些内容，找到并删除相关条目。"删除使用标准的 <code>rm</code> 或编辑工具。但注意：后台提取 Agent <strong>不允许</strong>执行 <code>rm</code>，只有主 Agent 可以删除。</p>
+
+<!-- ============================================================ -->
+<h2 id="extraction">7. 后台提取：extractMemories 自动记忆</h2>
+
+<p>这是记忆系统中最精巧的部分。每次对话轮次结束后，一个后台 Agent 会自动分析对话并提取值得记住的信息。</p>
+
+<h3>7.1 核心架构</h3>
+
+<div class="flow-box">
+<pre>
+主 Agent 完成一轮回复（无 tool call）
+    │
+    ▼
+handleStopHooks()
+    │
+    ├─→ executeExtractMemories()     <span class="comment">// 记忆提取</span>
+    ├─→ executeAutoDream()           <span class="comment">// 记忆整合（条件触发）</span>
+    └─→ 其他 hooks...
+    │
+    ▼
+┌─────────────────────────────────────────────┐
+│ extractMemories (Forked Agent)               │
+│                                             │
+│ 1. 检查主 Agent 是否已写记忆 → 跳过          │
+│ 2. 检查门控条件 (feature flag + 设置)         │
+│ 3. 扫描现有记忆文件 → 生成清单               │
+│ 4. 构建提取提示                              │
+│ 5. runForkedAgent() → 分叉子代理             │
+│    - 共享父代理的 prompt cache               │
+│    - 只允许 Read/Grep/Glob + 内存目录写入     │
+│    - 最多 5 个 turn                         │
+│ 6. 记录结果 + 日志                          │
+└─────────────────────────────────────────────┘
+</pre>
+</div>
+
+<h3>7.2 互斥机制</h3>
+
+<p><span class="file-ref">src/services/extractMemories/extractMemories.ts:121</span> 中的关键设计——主 Agent 和后台提取 Agent <strong>互斥</strong>：</p>
+
+<pre><span class="comment">// src/services/extractMemories/extractMemories.ts</span>
+function hasMemoryWritesSince(messages, sinceUuid): boolean {
+  <span class="comment">// 检查从上次提取以来，主 Agent 是否已写入记忆文件</span>
+  for (const message of messages) {
+    if (message.type === 'assistant') {
+      for (const block of message.message.content) {
+        <span class="comment">// 检查 Write/Edit tool_use 目标是否在 auto-memory 路径</span>
+        if (getWrittenFilePath(block) && isAutoMemPath(filePath)) {
+          return true  <span class="comment">// 主 Agent 已写，跳过后台提取</span>
+        }
+      }
+    }
+  }
+  return false
+}</pre>
+
+<p>这确保了同一个轮次不会重复写入记忆。</p>
+
+<h3>7.3 并发控制</h3>
+
+<p>提取使用 <code>inProgress</code> 标志和 <code>pendingContext</code> 槽位实现简单的并发控制：</p>
+
+<pre><span class="comment">// 状态机:</span>
+空闲 ──(新请求)──→ 执行中 ──(完成)──→ 空闲
+                   │
+                   ├──(新请求到达)──→ 暂存到 pendingContext
+                   │                   │
+                   └──(完成后)──────→ 执行 trailing run</pre>
+
+<h3>7.4 工具权限约束</h3>
+
+<p>后台提取 Agent 的工具权限被严格限制（<span class="file-ref">src/services/extractMemories/extractMemories.ts:171</span>）：</p>
+
+<table>
+<tr><th>工具</th><th>权限</th><th>说明</th></tr>
+<tr><td>Read / Grep / Glob</td><td>✅ 完全允许</td><td>只读工具</td></tr>
+<tr><td>Bash (只读命令)</td><td>✅ 仅限 ls/find/cat/stat 等</td><td>通过 <code>isReadOnly()</code> 检查</td></tr>
+<tr><td>Edit / Write</td><td>✅ 仅限 memory 目录内</td><td>通过 <code>isAutoMemPath()</code> 检查</td></tr>
+<tr><td>Bash (写命令 / rm)</td><td>❌ 拒绝</td><td>防止删除记忆</td></tr>
+<tr><td>MCP / Agent 等</td><td>❌ 拒绝</td><td>不允许调用其他工具</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="dream">8. 记忆整合：dream 合并与清理</h2>
+
+<h3>8.1 Dream 是什么</h3>
+
+<p>"Dream"（做梦）是一个记忆整合过程——AI 回顾所有记忆文件，合并重复项、修复过时信息、清理索引。灵感来自人类睡眠时的记忆整合。</p>
+
+<h3>8.2 四阶段流程</h3>
+
+<p><span class="file-ref">src/services/autoDream/consolidationPrompt.ts</span> 中定义了四个阶段：</p>
+
+<div class="card">
+<div class="card-title">Phase 1 — Orient（定向）</div>
+<ul>
+<li><code>ls</code> 记忆目录查看现有文件</li>
+<li>读取 MEMORY.md 理解当前索引</li>
+<li>浏览现有主题文件，避免创建重复</li>
+</ul>
+</div>
+
+<div class="card">
+<div class="card-title">Phase 2 — Gather recent signal（收集近期信号）</div>
+<ul>
+<li>检查每日日志（<code>logs/YYYY/MM/YYYY-MM-DD.md</code>）</li>
+<li>查找已漂移的记忆（与当前代码矛盾的）</li>
+<li>窄范围搜索会话转录（JSONL 文件）</li>
+</ul>
+</div>
+
+<div class="card">
+<div class="card-title">Phase 3 — Consolidate（整合）</div>
+<ul>
+<li>将新信号合并到现有主题文件</li>
+<li>将相对日期转换为绝对日期</li>
+<li>删除被证伪的事实</li>
+</ul>
+</div>
+
+<div class="card">
+<div class="card-title">Phase 4 — Prune and index（修剪与索引）</div>
+<ul>
+<li>更新 MEMORY.md，保持在 200 行 / 25KB 以内</li>
+<li>删除指向过时记忆的指针</li>
+<li>缩短过长的索引行</li>
+<li>解决矛盾</li>
+</ul>
+</div>
+
+<h3>8.3 自动 Dream 的触发条件</h3>
+
+<p><span class="file-ref">src/services/autoDream/autoDream.ts</span> 中定义了三级门控：</p>
+
+<pre><span class="comment">// 门控顺序（从便宜到昂贵）:</span>
+1. 时间门控: 距上次整合 ≥ minHours (默认 24h)
+2. 会话门控: 自上次整合以来的会话数 ≥ minSessions (默认 5)
+3. 锁门控:   没有其他进程在整合中</pre>
+
+<!-- ============================================================ -->
+<h2 id="session-memory">9. 会话记忆：SessionMemory 机制</h2>
+
+<p>Session Memory 是一个<strong>会话级</strong>的笔记系统，维护当前对话的关键信息摘要。</p>
+
+<h3>9.1 触发条件</h3>
+
+<p><span class="file-ref">src/services/SessionMemory/sessionMemory.ts:134</span> 中的 <code>shouldExtractMemory()</code>：</p>
+
+<pre>触发条件（满足任一）:
+├── token 阈值 AND tool call 阈值都满足
+└── token 阈值满足 AND 最后一轮没有 tool call（自然对话断点）</pre>
+
+<h3>9.2 会话记忆模板</h3>
+
+<p>模板在 <span class="file-ref">src/services/SessionMemory/prompts.ts</span> 中定义，包含以下章节：</p>
+
+<ul>
+<li>Session Title</li>
+<li>Current State</li>
+<li>Task specification</li>
+<li>Files and Functions</li>
+<li>Workflow</li>
+<li>Errors &amp; Corrections</li>
+<li>Codebase and System Documentation</li>
+<li>Learnings</li>
+<li>Key results</li>
+<li>Worklog</li>
+</ul>
+
+<h3>9.3 与 Auto Memory 的区别</h3>
+
+<table>
+<tr><th>特性</th><th>Auto Memory</th><th>Session Memory</th></tr>
+<tr><td>生命周期</td><td>跨会话持久</td><td>单会话</td></tr>
+<tr><td>存储位置</td><td><code>~/.claude/projects/.../memory/</code></td><td><code>~/.claude/session-memory/</code></td></tr>
+<tr><td>管理方</td><td>AI + 后台提取</td><td>后台子代理</td></tr>
+<tr><td>用途</td><td>长期知识积累</td><td>会话上下文压缩（辅助 compact）</td></tr>
+<tr><td>可被召回</td><td>是（跨会话）</td>否（仅当前会话）</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="agent-memory">10. Agent 记忆：子代理专用记忆</h2>
+
+<p>每个 Agent 类型（如 <code>Explore</code>、<code>Plan</code>）可以有自己的独立记忆空间。</p>
+
+<h3>10.1 三个作用域</h3>
+
+<p><span class="file-ref">src/tools/AgentTool/agentMemory.ts:52</span>：</p>
+
+<pre>export function getAgentMemoryDir(agentType: string, scope: AgentMemoryScope): string {
+  switch (scope) {
+    case 'project':
+      <span class="comment">// 项目级: .claude/agent-memory/&lt;agentType&gt;/</span>
+      return join(getCwd(), '.claude', 'agent-memory', dirName) + sep
+    case 'local':
+      <span class="comment">// 本地级: .claude/agent-memory-local/&lt;agentType&gt;/</span>
+      return getLocalAgentMemoryDir(dirName)
+    case 'user':
+      <span class="comment">// 用户级: ~/.claude/agent-memory/&lt;agentType&gt;/</span>
+      return join(getMemoryBaseDir(), 'agent-memory', dirName) + sep
+  }
+}</pre>
+
+<h3>10.2 Agent Memory 加载</h3>
+
+<p><code>loadAgentMemoryPrompt()</code>（<span class="file-ref">src/tools/AgentTool/agentMemory.ts:138</span>）为每个 Agent 构建独立的记忆提示：</p>
+
+<pre>export function loadAgentMemoryPrompt(agentType: string, scope: AgentMemoryScope): string {
+  const memoryDir = getAgentMemoryDir(agentType, scope)
+  void ensureMemoryDirExists(memoryDir)  <span class="comment">// 异步创建目录</span>
+  return buildMemoryPrompt({
+    displayName: 'Persistent Agent Memory',
+    memoryDir,
+    extraGuidelines: [scopeNote],  <span class="comment">// 根据作用域添加指导</span>
+  })
+}</pre>
+
+<!-- ============================================================ -->
+<h2 id="feature-flags">11. Feature Flags 与配置</h2>
+
+<h3>11.1 记忆系统相关的所有 Feature Flags</h3>
+
+<table>
+<tr><th>Flag</th><th>默认</th><th>功能</th></tr>
+<tr><td><code>isAutoMemoryEnabled()</code></td><td>true</td><td>总开关：自动记忆、Agent 记忆、历史搜索</td></tr>
+<tr><td><code>isTeamMemoryEnabled()</code></td><td>false</td><td>团队记忆（需 auto memory + GB flag）</td></tr>
+<tr><td><code>isExtractModeActive()</code></td><td>false</td><td>后台记忆提取</td></tr>
+<tr><td><code>tengu_moth_copse</code></td><td>false</td><td>MEMORY.md 不注入 User Context，改为按需召回</td></tr>
+<tr><td><code>tengu_coral_fern</code></td><td>false</td><td>启用"搜索历史上下文"指令</td></tr>
+<tr><td><code>tengu_herring_clock</code></td><td>false</td><td>启用 Team Memory</td></tr>
+<tr><td><code>tengu_passport_quail</code></td><td>false</td><td>extractMemories 门控</td></tr>
+<tr><td><code>KAIROS</code></td><td>false</td><td>日志模式（append-only daily log）</td></tr>
+<tr><td><code>TEAMMEM</code></td><td>false</td><td>Team Memory 功能编译开关</td></tr>
+<tr><td><code>tengu_onyx_plover</code></td><td>null</td><td>自动 Dream 配置（minHours, minSessions）</td></tr>
+<tr><td><code>tengu_session_memory</code></td><td>false</td><td>会话记忆功能</td></tr>
+<tr><td><code>tengu_bramble_lintel</code></td><td>1</td><td>提取频率（每 N 个合格轮次执行一次）</td></tr>
+</table>
+
+<h3>11.2 isAutoMemoryEnabled() 优先级链</h3>
+
+<pre><span class="comment">// src/memdir/paths.ts:30</span>
+export function isAutoMemoryEnabled(): boolean {
+  <span class="comment">// 优先级 1: 环境变量强制关闭</span>
+  if (isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY)) return false
+
+  <span class="comment">// 优先级 2: 环境变量强制开启</span>
+  if (isEnvDefinedFalsy(process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY)) return true
+
+  <span class="comment">// 优先级 3: --bare 模式关闭</span>
+  if (isEnvTruthy(process.env.CLAUDE_CODE_SIMPLE)) return false
+
+  <span class="comment">// 优先级 4: CCR 无持久存储时关闭</span>
+  if (isRemoteMode && !hasRemoteMemoryDir) return false
+
+  <span class="comment">// 优先级 5: settings.json 配置</span>
+  const settings = getInitialSettings()
+  if (settings.autoMemoryEnabled !== undefined) return settings.autoMemoryEnabled
+
+  <span class="comment">// 默认: 开启</span>
+  return true
+}</pre>
+
+<!-- ============================================================ -->
+<h2 id="security">12. 安全机制</h2>
+
+<h3>12.1 路径遍历防护</h3>
+
+<p><span class="file-ref">src/memdir/teamMemPaths.ts</span> 中实现了多层安全检查：</p>
+
+<pre><span class="comment">// 三层防护:</span>
+
+<span class="comment">// 1. 空字节注入</span>
+if (key.includes('\0')) throw PathTraversalError
+
+<span class="comment">// 2. URL 编码遍历</span>
+decoded = decodeURIComponent(key)
+if (decoded.includes('..') || decoded.includes('/')) throw PathTraversalError
+
+<span class="comment">// 3. Unicode 正规化攻击</span>
+normalized = key.normalize('NFKC')
+if (normalized !== key && includes('../')) throw PathTraversalError
+
+<span class="comment">// 4. 符号链接解析 (realpathDeepestExisting)</span>
+<span class="comment">// 防止通过 symlink 逃逸出 memory 目录</span>
+const realPath = await realpathDeepestExisting(resolvedPath)
+if (!isRealPathWithinTeamDir(realPath)) throw PathTraversalError</pre>
+
+<h3>12.2 settings.json 安全排除</h3>
+
+<p><code>getAutoMemPathSetting()</code>（<span class="file-ref">src/memdir/paths.ts:179</span>）故意排除 <code>projectSettings</code>：</p>
+
+<div class="warn">
+<strong>攻击场景</strong>: 恶意仓库提交 <code>.claude/settings.json</code> 包含 <code>autoMemoryDirectory: "~/.ssh"</code>。如果允许 projectSettings 设置记忆路径，AI 就能通过 FileWriteTool 的 auto-memory 豁免写入 <code>~/.ssh/authorized_keys</code>。
+</div>
+
+<h3>12.3 Team Memory 敏感信息检查</h3>
+
+<p>写入 Team Memory 时会检查是否包含 API key、密码等敏感信息。</p>
+
+<!-- ============================================================ -->
+<h2 id="skills">13. Skills：/remember 与 /dream</h2>
+
+<h3>13.1 /remember 技能</h3>
+
+<p><span class="file-ref">src/skills/bundled/remember.ts</span> — 审查记忆并提议"晋升"：</p>
+
+<div class="flow-box">
+<pre>
+/remember
+    │
+    ▼
+┌─────────────────────────────────────┐
+│ 1. 收集所有记忆层                    │
+│    CLAUDE.md + CLAUDE.local.md      │
+│    + auto-memory (系统提示中)        │
+│    + team memory (如有)             │
+├─────────────────────────────────────┤
+│ 2. 分类每条自动记忆                  │
+│    ┌──────────────┬────────────────┐ │
+│    │ 目标          │ 适合什么       │ │
+│    ├──────────────┼────────────────┤ │
+│    │ CLAUDE.md    │ 项目规范/约定   │ │
+│    │ CLAUDE.local │ 个人偏好/指令   │ │
+│    │ Team Memory  │ 组织级知识      │ │
+│    │ 保留         │ 工作笔记/临时   │ │
+│    └──────────────┴────────────────┘ │
+├─────────────────────────────────────┤
+│ 3. 找出清理机会                      │
+│    - 重复: auto-memory 已在 CLAUDE.md│
+│    - 过时: 旧指令被新记忆否定        │
+│    - 冲突: 两层之间的矛盾            │
+├─────────────────────────────────────┤
+│ 4. 输出报告（不自动修改）            │
+│    用户审批后才执行                  │
+└─────────────────────────────────────┘
+</pre>
+</div>
+
+<h3>13.2 /dream 技能</h3>
+
+<p><span class="file-ref">src/skills/bundled/dream.ts</span> — 手动触发记忆整合：</p>
+
+<ul>
+<li>与自动 Dream 使用相同的四阶段流程</li>
+<li>但拥有完整工具权限（用户正在观看）</li>
+<li>会乐观地记录整合时间戳</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="file-map">14. 源文件全景地图</h2>
+
+<h3>核心记忆目录模块 (<code>src/memdir/</code>)</h3>
+
+<table>
+<tr><th>文件</th><th>职责</th><th>关键导出</th></tr>
+<tr><td><span class="file-ref">paths.ts</span><span class="badge badge-core">core</span></td><td>路径解析、启用检查</td><td><code>getAutoMemPath()</code>, <code>isAutoMemoryEnabled()</code>, <code>isAutoMemPath()</code></td></tr>
+<tr><td><span class="file-ref">memdir.ts</span><span class="badge badge-core">core</span></td><td>记忆提示构建、调度</td><td><code>loadMemoryPrompt()</code>, <code>buildMemoryLines()</code>, <code>truncateEntrypointContent()</code></td></tr>
+<tr><td><span class="file-ref">memoryTypes.ts</span><span class="badge badge-core">core</span></td><td>四类型分类体系</td><td><code>TYPES_SECTION_INDIVIDUAL</code>, <code>WHAT_NOT_TO_SAVE_SECTION</code></td></tr>
+<tr><td><span class="file-ref">memoryScan.ts</span><span class="badge badge-core">core</span></td><td>记忆目录扫描</td><td><code>scanMemoryFiles()</code>, <code>formatMemoryManifest()</code></td></tr>
+<tr><td><span class="file-ref">findRelevantMemories.ts</span><span class="badge badge-core">core</span></td><td>相关记忆查找 (Sonnet 侧查询)</td><td><code>findRelevantMemories()</code></td></tr>
+<tr><td><span class="file-ref">memoryAge.ts</span><span class="badge badge-util">util</span></td><td>记忆年龄计算与过时警告</td><td><code>memoryAge()</code>, <code>memoryFreshnessText()</code></td></tr>
+<tr><td><span class="file-ref">teamMemPaths.ts</span><span class="badge badge-core">core</span></td><td>Team Memory 路径 + 安全校验</td><td><code>getTeamMemPath()</code>, <code>validateTeamMemWritePath()</code></td></tr>
+<tr><td><span class="file-ref">teamMemPrompts.ts</span><span class="badge badge-core">core</span></td><td>Team Memory 合并提示</td><td><code>buildCombinedMemoryPrompt()</code></td></tr>
+</table>
+
+<h3>记忆提取与整合 (<code>src/services/</code>)</h3>
+
+<table>
+<tr><th>文件</th><th>职责</th><th>关键导出</th></tr>
+<tr><td><span class="file-ref">extractMemories/extractMemories.ts</span><span class="badge badge-service">service</span></td><td>后台记忆提取</td><td><code>executeExtractMemories()</code>, <code>initExtractMemories()</code></td></tr>
+<tr><td><span class="file-ref">extractMemories/prompts.ts</span><span class="badge badge-service">service</span></td><td>提取 Agent 提示模板</td><td><code>buildExtractAutoOnlyPrompt()</code></td></tr>
+<tr><td><span class="file-ref">autoDream/autoDream.ts</span><span class="badge badge-service">service</span></td><td>自动记忆整合</td><td><code>executeAutoDream()</code>, <code>initAutoDream()</code></td></tr>
+<tr><td><span class="file-ref">autoDream/consolidationPrompt.ts</span><span class="badge badge-service">service</span></td><td>整合提示（四阶段）</td><td><code>buildConsolidationPrompt()</code></td></tr>
+<tr><td><span class="file-ref">autoDream/consolidationLock.ts</span><span class="badge badge-service">service</span></td><td>整合锁机制</td><td><code>tryAcquireConsolidationLock()</code></td></tr>
+<tr><td><span class="file-ref">SessionMemory/sessionMemory.ts</span><span class="badge badge-service">service</span></td><td>会话记忆</td><td><code>initSessionMemory()</code>, <code>shouldExtractMemory()</code></td></tr>
+</table>
+
+<h3>上下文加载 (<code>src/</code>)</h3>
+
+<table>
+<tr><th>文件</th><th>职责</th><th>关键函数</th></tr>
+<tr><td><span class="file-ref">constants/prompts.ts</span><span class="badge badge-core">core</span></td><td>系统提示构建</td><td><code>getSystemPrompt()</code> 注册 memory section</td></tr>
+<tr><td><span class="file-ref">context.ts</span><span class="badge badge-core">core</span></td><td>用户/系统上下文</td><td><code>getUserContext()</code> 加载 CLAUDE.md + MEMORY.md</td></tr>
+<tr><td><span class="file-ref">utils/claudemd.ts</span><span class="badge badge-core">core</span></td><td>指令文件发现与加载</td><td><code>getMemoryFiles()</code>, <code>getClaudeMds()</code></td></tr>
+<tr><td><span class="file-ref">utils/attachments.ts</span><span class="badge badge-core">core</span></td><td>Attachment 注入</td><td><code>startRelevantMemoryPrefetch()</code></td></tr>
+<tr><td><span class="file-ref">utils/frontmatterParser.ts</span><span class="badge badge-util">util</span></td><td>YAML frontmatter 解析</td><td><code>parseFrontmatter()</code></td></tr>
+<tr><td><span class="file-ref">utils/memoryFileDetection.ts</span><span class="badge badge-util">util</span></td><td>记忆文件路径检测</td><td><code>isAutoMemFile()</code>, <code>isAutoManagedMemoryFile()</code></td></tr>
+</table>
+
+<h3>Agent 记忆</h3>
+
+<table>
+<tr><th>文件</th><th>职责</th></tr>
+<tr><td><span class="file-ref">tools/AgentTool/agentMemory.ts</span><span class="badge badge-core">core</span></td><td>Agent 专用记忆（三个作用域）</td></tr>
+<tr><td><span class="file-ref">tools/AgentTool/agentMemorySnapshot.ts</span><span class="badge badge-core">core</span></td><td>Agent 记忆快照同步</td></tr>
+</table>
+
+<h3>Skills</h3>
+
+<table>
+<tr><th>文件</th><th>职责</th></tr>
+<tr><td><span class="file-ref">skills/bundled/remember.ts</span><span class="badge badge-ui">skill</span></td><td>/remember — 记忆审查与晋升提议</td></tr>
+<tr><td><span class="file-ref">skills/bundled/dream.ts</span><span class="badge badge-ui">skill</span></td><td>/dream — 手动记忆整合</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="faq">15. 常见问题</h2>
+
+<div class="card">
+<div class="card-title">Q: CLAUDE.md 和 Auto Memory 会冲突吗？</div>
+<p>不会。系统有明确的"不要保存"规则：<em>"Anything already documented in CLAUDE.md files."</em> CLAUDE.md 是用户主动写的指令，Auto Memory 是 AI 自己学到的知识，两者有不同的语义。如果有冲突，CLAUDE.md 优先级更高（因为它在 User Context 中加载得更晚，模型对后加载的内容关注度更高）。</p>
+</div>
+
+<div class="card">
+<div class="card-title">Q: MEMORY.md 超过 200 行会怎样？</div>
+<p>自动截断。函数 <code>truncateEntrypointContent()</code> 会先按行截断，再按字节截断（25KB），并在末尾附加警告信息。被截断的部分不会丢失——它们仍然在磁盘上的文件中，只是不会被加载到上下文里。</p>
+</div>
+
+<div class="card">
+<div class="card-title">Q: 后台提取 Agent 和主 Agent 会同时写记忆吗？</div>
+<p>不会。有互斥机制：<code>hasMemoryWritesSince()</code> 会检查主 Agent 是否已在当前轮次写入过记忆文件。如果主 Agent 已写，后台提取会跳过该轮次。</p>
+</div>
+
+<div class="card">
+<div class="card-title">Q: 记忆文件有大小限制吗？</div>
+<p>单个记忆文件没有硬限制，但 MEMORY.md 索引有 200 行 / 25KB 的限制。Session Memory 有 <code>MAX_SECTION_LENGTH = 2000</code> 字符和 <code>MAX_TOTAL_SESSION_MEMORY_TOKENS = 12000</code> token 的限制。</p>
+</div>
+
+<div class="card">
+<div class="card-title">Q: 为什么有些记忆没有被召回？</div>
+<p>Sonnet 侧查询是<strong>保守</strong>的——它只选择"确定有用"的记忆。如果记忆的 <code>description</code> 字段写得不够具体，或者与当前查询的关联不明显，就不会被选中。建议在 <code>description</code> 中写清楚记忆的使用场景。</p>
+</div>
+
+<div class="card">
+<div class="card-title">Q: /remember 和 /dream 有什么区别？</div>
+<p><strong>/remember</strong> 是审查和整理——它只提出建议，不自动修改文件。目的是把自动记忆"晋升"到 CLAUDE.md 等更持久的位置。<br>
+<strong>/dream</strong> 是整合和清理——它会实际修改文件，合并重复项、修复过时信息、修剪索引。相当于 AI 的"大扫除"。</p>
+</div>
+
+<div class="card">
+<div class="card-title">Q: KAIROS 模式有什么不同？</div>
+<p>KAIROS 是"助手模式"（长时间运行的会话），记忆采用<strong>追加日志</strong>范式：AI 将记忆追加到 <code>logs/YYYY/MM/YYYY-MM-DD.md</code> 文件中，而不是维护 MEMORY.md 索引。每晚的 /dream 会将日志蒸馏为主题文件 + MEMORY.md。</p>
+</div>
+
+<!-- ============================================================ -->
+<div class="annotations-section">
+
+<div class="annotations-banner">
+<span class="annotations-banner-icon">!</span>
+<span class="annotations-banner-text">
+本节是「标注内容」，是阅读过程中识别出的疑惑点与澄清。
+<small>视觉上与原文档（冷色调蓝紫）区分：标注区采用暖色调（橙色/红色），且有独立边框、顶部横幅和样式覆写。原文内容保持原样未修改。</small>
+</span>
+</div>
+
+<h2 id="confusion-annotations">附录：前端工程师视角的疑惑与澄清</h2>
+
+<p>这份文档是写给"懂前端但不一定懂后端 / 系统 / AI 基础设施"的读者。下面是阅读过程中可能出现的<strong>30 个高频困惑点</strong>，每个都给出<strong>为什么会有这个概念</strong>+ <strong>类比/解释</strong>，帮助跨越认知鸿沟。</p>
+
+<div class="warn">
+<strong>使用方法</strong>：遇到看不懂的概念时，先在本文中查找关键词；如果列表中有，点击跳转看完整解释。
+</div>
+
+<!-- ========== 类别 1: 运行时与环境 ========== -->
+<h3>🟦 类别一：运行时与环境</h3>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 1: <code>import { feature } from 'bun:bundle'</code> 是什么？</div>
+<p><strong>困惑点</strong>: 前端工程师熟悉的 import 都是 npm 包名,没见过 <code>bun:</code> 这种前缀。</p>
+<p><strong>澄清</strong>: Bun 运行时（不是 Node.js！）内置了一些<strong>伪模块</strong>：</p>
+<ul>
+<li><code>bun:bundle</code> — 编译时注入的常量,被 Bun 的打包器特殊处理</li>
+<li><code>bun:ffi</code> — 调用 C 语言原生库</li>
+</ul>
+<p><strong>类比</strong>: 类似 webpack 的 <code>process.env.NODE_ENV</code>,但更底层——在编译时直接做条件消除（tree-shaking）。如果 <code>feature('KAIROS')</code> 在编译时被设为 <code>false</code>,整个分支代码会被直接删掉,产物里看不到这些代码。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 2: 为什么要用 Bun 而不是 Node.js？</div>
+<p><strong>澄清</strong>: Bun (https://bun.sh) 是一个用 Zig 写的 JavaScript 运行时,卖点是<strong>启动快、原生支持 TypeScript、内置打包器</strong>。Claude Code 选择 Bun 是因为：</p>
+<ul>
+<li>启动 <code>cli.tsx</code> 这样的入口文件几乎无延迟</li>
+<li>内置的 <code>Bun.build()</code> 可以做代码分割</li>
+<li><code>bun:bundle</code> 这种伪模块支持<strong>编译时宏</strong>,对条件编译很友好</li>
+</ul>
+<p><strong>前端类比</strong>: 类似 Vite vs Webpack 的差别——Bun 是一个 all-in-one 工具链。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 3: <code>--bare</code> 模式是什么?</code></div>
+<p><strong>澄清</strong>: <code>--bare</code> 是 Claude Code 的一个命令行参数,意为"<strong>极简模式</strong>"。开启后:</p>
+<ul>
+<li>不加载 CLAUDE.md</li>
+<li>不加载 Auto Memory</li>
+<li>不启动后台提取</li>
+</ul>
+<p>设计意图:给 CI/CD、自动化脚本、纯管道使用(<code>echo "..." | claude -p</code>)用的——这些场景下不需要任何个性化记忆。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 4: 什么是 CCR?</strong></div>
+<p><strong>澄清</strong>: <code>CLAUDE_CODE_REMOTE</code> 环境变量,意为 "Claude Code Remote"——可能是 Anthropic 的某个远程部署服务(代码里没有详细解释)。当处于 CCR 模式且没有 <code>CLAUDE_CODE_REMOTE_MEMORY_DIR</code> 时,自动记忆会被禁用(因为远程环境无持久化)。</p>
+</div>
+
+<!-- ========== 类别 2: 系统级概念 ========== -->
+<h3>🟧 类别二:系统级概念</h3>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 5: <code>realpath</code>、<code>lstat</code>、<code>symlink</code> 是什么?</strong></div>
+<p><strong>澄清</strong>: 这些是 Unix/Linux 文件系统调用,前端工程师很少接触:</p>
+<table>
+<tr><th>系统调用</th><th>作用</th><th>前端类比</th></tr>
+<tr><td><code>realpath(path)</code></td><td>解析所有符号链接,返回<strong>真实</strong>路径</td><td>类似 <code>path.resolve()</code> 但会跟踪 symlink</td></tr>
+<tr><td><code>lstat(path)</code></td><td>读取文件元数据(不跟随 symlink)</td><td>类似 <code>fs.stat()</code> 但不 follow link</td></tr>
+<tr><td><code>symlink</code></td><td>软链接(类似 Windows 快捷方式)</td><td>前端没对应概念,系统级概念</td></tr>
+</table>
+<p><strong>为什么记忆系统关心这些</strong>: 防止攻击者在记忆目录里放一个 <code>team/secret</code> → <code>~/.ssh/authorized_keys</code> 的符号链接,然后通过 Claude 的写入功能修改真实目标。<code>realpath</code> 能识破这种伪装。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 6: 什么是符号链接循环(<code>ELOOP</code>)和悬空符号链接?</strong></div>
+<p><strong>澄清</strong>:</p>
+<ul>
+<li><strong>符号链接循环 (ELOOP)</strong>: <code>a → b</code>, <code>b → a</code>,文件系统解析时无限循环。代码会显式拒绝。</li>
+<li><strong>悬空符号链接 (Dangling symlink)</strong>: <code>a → /path/that/does/not/exist</code>。链接本身存在,但目标不存在。<code>realpath</code> 报错时 <code>lstat</code> 能区分"真不存在"和"链接指向不存在"。</li>
+</ul>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 7: <code>findCanonicalGitRoot</code> 是什么?为什么需要?</strong></div>
+<p><strong>澄清</strong>: Git 支持<strong>worktree</strong>(一个仓库的多个工作副本)。例如:</p>
+<pre>main repo:   /home/user/myapp/
+worktree:    /home/user/myapp/.claude/worktrees/feature-x/
+             ↑ 这也是个 git repo,但它指向同一个 .git 目录</pre>
+<p>如果 AI 在 worktree 里工作,普通的 <code>git root</code> 会返回 worktree 路径,这意味着每个 worktree 都有独立的 Auto Memory 目录——但用户期望的是<strong>同一个项目共享一个记忆空间</strong>。</p>
+<p><code>findCanonicalGitRoot()</code> 会解析 worktree 链接,返回<strong>主仓库</strong>路径。这是为什么代码注释说:<em>"all worktrees of the same repo share one auto-memory directory"</em>。</p>
+<p><strong>前端类比</strong>: 类似 <code>monorepo</code> 里每个 package 的 <code>package.json</code> 路径解析——你希望子包能找到根目录的共享配置。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 8: 什么是 JSONL?</strong></div>
+<p><strong>澄清</strong>: JSON Lines (jsonlines.org) —— 每行一个合法 JSON 对象的文本格式:</p>
+<pre>{"role":"user","content":"hello"}
+{"role":"assistant","content":"hi"}
+{"role":"user","content":"how are you?"}</pre>
+<p>Claude Code 用 JSONL 存储会话转录日志。原因:</p>
+<ul>
+<li>每行独立,可以 <code>grep</code>、<code>tail -f</code> 流式追加</li>
+<li>崩溃时只丢失部分行,不会损坏整个文件</li>
+<li>天然支持 <code>grep -n</code> 行号定位</li>
+</ul>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 9: 什么是 <code>compact</code> 操作?</strong></div>
+<p><strong>澄清</strong>: <code>compact</code> 是"压缩上下文"的简称。当对话历史太长、超出模型上下文窗口时,Claude Code 会:</p>
+<ol>
+<li>用 LLM 把早期对话总结成简短摘要</li>
+<li>保留最近 N 轮原文</li>
+<li>用摘要 + 最近轮次拼接成新的上下文</li>
+</ol>
+<p>这是<strong>短期记忆</strong>的管理,跟本文档讲的长期记忆(磁盘文件)是两套独立机制。Session Memory 的存在正是为了让 <code>compact</code> 有更结构化的"当前状态"信息可参考。</p>
+</div>
+
+<!-- ========== 类别 3: AI/LLM 概念 ========== -->
+<h3>🟨 类别三:AI / LLM 概念</h3>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 10: 什么是 "Prompt Cache"?</strong></div>
+<p><strong>澄清</strong>: 每次调用 LLM API,都需要把所有"输入"重新计算一遍(称为<strong>prefill</strong>),这部分非常昂贵。Claude API 提供了 <strong>prompt cache</strong> 功能:如果连续的两次请求有<strong>相同的前缀</strong>,前缀部分只计算一次,后续请求可以<strong>缓存命中</strong>。</p>
+<p><strong>记忆系统怎么利用</strong>: 系统的提示词非常长(几千 token),如果每次用户发消息都重新计算,会非常慢。Claude Code 把"系统提示"做成<strong>缓存前缀</strong>,后续请求只要前缀不变就命中缓存。</p>
+<p><strong>这就是为什么</strong> <code>systemPromptSection('memory', () => loadMemoryPrompt())</code> 用了缓存包装器——只要记忆内容没变,系统提示前缀就不变,缓存就命中。</p>
+<p><strong>前端类比</strong>: 类似 React.memo + useMemo——计算结果依赖的"输入"没变,就复用上次的"输出"。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 11: 什么是 "Forked Agent"?</strong></div>
+<p><strong>澄清</strong>: 想象主对话是一个"推理过程"。当主 Agent 完成一轮回复后,系统需要"让它反思一下有没有要记住的事"——但又不想打断用户、不想让主对话的缓存失效。</p>
+<p>解决方案是 <strong>fork</strong>(分叉)出一个<strong>一模一样</strong>的子代理:</p>
+<ul>
+<li>系统提示相同 → prompt cache 命中</li>
+<li>对话历史相同 → 模型有同样的"上下文"</li>
+<li>但工具权限受限 → 只能做记忆相关操作</li>
+<li>并行运行 → 不阻塞主对话</li>
+</ul>
+<p>Git 里的 <code>git fork</code> 分支是同个概念:共享基础、独立演进。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 12: <code>sideQuery</code> 是什么?</strong></div>
+<p><strong>澄清</strong>: 与主对话<strong>完全隔离</strong>的一次性 API 调用。区别:</p>
+<table>
+<tr><th>特性</th><th>主对话</th><th>sideQuery</th></tr>
+<tr><td>用途</td><td>与用户交互的完整对话</td><td>辅助决策的小型查询</td></tr>
+<tr><td>消息历史</td><td>完整</td><td>只有 prompt 那一两条</td></tr>
+<tr><td>成本</td><td>高(完整上下文)</td><td>低(只发 prompt)</td></tr>
+<tr><td>典型用例</td><td>回答用户问题</td><td>分类、判断、抽取等</td></tr>
+</table>
+<p>记忆召回中,系统用 <code>sideQuery</code> 让 Sonnet 一次性挑出最相关的 5 个记忆,而不是在主对话里让模型做这件事——会浪费大量 token。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 13: 什么是 Anthropic SDK 的 "Streaming Events"?</strong></div>
+<p><strong>澄清</strong>: LLM API 支持流式响应(像 ChatGPT 那样边生成边显示)。Anthropic SDK 发送一系列 <code>BetaRawMessageStreamEvent</code> 事件:</p>
+<ul>
+<li><code>message_start</code> — 开始</li>
+<li><code>content_block_start</code> — 文本/工具调用开始</li>
+<li><code>content_block_delta</code> — 增量内容(一个字一个字)</li>
+<li><code>content_block_stop</code> — 结束</li>
+<li><code>message_stop</code> — 整个消息结束</li>
+</ul>
+<p>前端类比: 类似 Server-Sent Events (SSE) 或 WebSocket 的流式消息协议。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 14: 为什么"全量加载 CLAUDE.md"在 system prompt 里是好事?</strong></div>
+<p><strong>澄清</strong>: 看起来很浪费 token,但有两个理由:</p>
+<ol>
+<li><strong>一致性</strong>: 每次调用 LLM 看到的指令完全相同 → prompt cache 完美命中,边际成本接近 0</li>
+<li><strong>避免遗忘</strong>: LLM 在长对话中容易"丢失"指令(称为 "lost-in-the-middle" 现象),全量塞在 system prompt 中能持续生效</li>
+</ol>
+</div>
+
+<!-- ========== 类别 4: 状态管理 ========== -->
+<h3>🟩 类别四:状态管理与缓存</h3>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 15: 什么是 <code>memoize</code> ?为什么 <code>getProjectRoot</code> 作为 key?</strong></div>
+<p><strong>澄清</strong>: <code>memoize</code> 是函数级别的记忆化(类似 React.useMemo):同样的输入返回缓存的输出,避免重复计算。</p>
+<pre><span class="comment">// lodash-es 的 memoize 允许指定 key 函数</span>
+memoize(
+  () => computeExpensiveThing(),
+  () => getProjectRoot()  <span class="comment">// 用 projectRoot 作为缓存 key</span>
+)</pre>
+<p><strong>为什么用 <code>getProjectRoot()</code> 作为 key</strong>: 因为同一个 CLI 进程里,projectRoot 通常不变。如果中途切换了项目(测试场景),key 变化触发重算。</p>
+<p><strong>前端类比</strong>: 就是 <code>useMemo(() => compute(a, b), [a, b])</code> 的函数式版本。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 16: 什么是 <code>closure-scoped state</code>? 为什么 <code>initExtractMemories()</code> 用闭包?</strong></div>
+<p><strong>澄清</strong>: 看 <span class="file-ref">extractMemories.ts:296</span>:</p>
+<pre><span class="comment">// 模块顶层:</span>
+let extractor: ((...) => Promise&lt;void&gt;) | null = null
+
+<span class="comment">// 初始化时:</span>
+export function initExtractMemories() {
+  <span class="comment">// 这些变量都在这个函数作用域内</span>
+  let lastMemoryMessageUuid: string | undefined
+  let inProgress = false
+  let pendingContext = undefined
+  ...
+
+  <span class="comment">// 它们被内部函数捕获,形成闭包</span>
+  extractor = async (context, ...) => {
+    <span class="comment">// 这里能访问上面所有变量</span>
+  }
+}</pre>
+<p><strong>原因</strong>: 多个测试可以调用 <code>initExtractMemories()</code> 各自得到<strong>独立的</strong>状态副本(因为每次调用都创建新的闭包),不会相互污染。生产环境只调用一次。</p>
+<p><strong>前端类比</strong>: 类似 React 的 <code>useState</code>——每次组件挂载都有独立状态。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 17: 什么是 "System Prompt Section" 注册模式?</strong></div>
+<p><strong>澄清</strong>: 系统提示很长,分成多个<strong>独立可缓存</strong>的"section":</p>
+<pre>systemPromptSection('memory', () => loadMemoryPrompt())
+systemPromptSection('language', () => getLanguageSection(...))
+systemPromptSection('output_style', () => getOutputStyleSection(...))</pre>
+<p>每个 section:</p>
+<ol>
+<li>独立缓存(按 name)</li>
+<li>独立失效(改 memory 不会让 language section 也重算)</li>
+<li>按依赖顺序拼接成完整 system prompt</li>
+</ol>
+<p>这与 React 的 Context Provider 树形结构类似——每个 provider 独立决定自己的 value。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 18: <code>filterInjectedMemoryFiles()</code> 是干什么的?</strong></div>
+<p><strong>澄清</strong>: 当 feature flag <code>tengu_moth_copse</code> 开启时:</p>
+<ul>
+<li>Auto Memory 的 MEMORY.md <strong>不</strong>注入到 User Context</li>
+<li>改用路径 C(按需召回 attachment)注入</li>
+</ul>
+<p><strong>原因</strong>: 实验性优化——让所有记忆内容都通过 Sonnet 选择后才出现,可能比"先全量塞 MEMORY.md 索引,再召回"更精准。Feature flag 名是 GrowthBook 的实验标识符(<code>moth_copse</code> 是 A/B 测试名)。</p>
+</div>
+
+<!-- ========== 类别 5: 权限和安全 ========== -->
+<h3>🟪 类别五:权限与安全</h3>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 19: 什么是 <code>DANGEROUS_DIRECTORIES</code> ?</strong></div>
+<p><strong>澄清</strong>: Claude Code 内置的<strong>高风险目录黑名单</strong>:</p>
+<ul>
+<li><code>~/.ssh/</code> — 私钥</li>
+<li><code>~/.aws/</code> — AWS 凭证</li>
+<li><code>~/.gnupg/</code> — GPG 密钥</li>
+<li><code>~/.config/</code> — 各种应用配置</li>
+</ul>
+<p>默认情况下,AI 写入这些目录需要显式用户授权。但 <code>isAutoMemPath()</code> 为 <code>true</code> 时会<strong>豁免</strong>这条规则——因为 auto memory 目录是用户授权的合法位置。</p>
+<p>这就是为什么恶意项目设置 <code>autoMemoryDirectory: "~/.ssh"</code> 会被拒绝——只允许从<strong>受信的 settings 源</strong>(policy/local/user)配置。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 20: 什么是 <code>canUseTool</code> 模式?</strong></div>
+<p><strong>澄清</strong>: Claude Code 的工具调用都要经过 <code>canUseTool</code> 钩子审查:</p>
+<pre>function canUseTool(tool: Tool, input): { behavior: 'allow' | 'deny', ... }</pre>
+<p>每个工具调用都先问"我能用这个工具 + 这个输入吗?"。后端提取 Agent 的 <code>canUseTool</code> 非常严格——只允许读类工具和 memory 目录内的写操作。</p>
+<p><strong>前端类比</strong>: 类似 React 的 <code>useReducer</code> + 中间件,或者类似 Express 的 <code>middleware</code> 链——在"实际执行"前做权限检查。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 21: 什么是 "FSM" / 状态机在 <code>inProgress</code> 中的应用?</strong></div>
+<p><strong>澄清</strong>: 后台提取的状态机:</p>
+<pre>状态: 空闲 | 执行中 | 暂存待执行
+
+事件流:
+空闲 ──新请求──→ 执行中
+执行中 ──完成──→ 空闲
+执行中 ──新请求──→ 暂存 pendingContext
+执行中 ──完成──→ 消费 pendingContext ──→ 执行中(trailing run)
+                → 没有 pendingContext → 空闲</pre>
+<p>这是经典的有"挂起任务"槽位的并发控制模式。</p>
+</div>
+
+<!-- ========== 类别 6: 前端 vs 后端的语义差异 ========== -->
+<h3>🟥 类别六:前端工程师特有的"语义混淆"</h3>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 22: "Attachment" 在 Claude Code 里是什么?</strong></div>
+<p><strong>澄清</strong>: <strong>不是</strong>邮件附件,而是一种<strong>注入到对话的特殊消息</strong>:</p>
+<ul>
+<li>类型: <code>attachment</code></li>
+<li>位置: 插入到 user/assistant 消息之间</li>
+<li>渲染: 被渲染成 <code>&lt;system-reminder&gt;</code> 包裹的内容</li>
+</ul>
+<p>可以理解为 React 中"由框架自动注入的虚拟 DOM 节点"——用户看不见,但模型能感知。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 23: <code>&lt;system-reminder&gt;</code> 是什么?前端框架里没这概念啊</strong></div>
+<p><strong>澄清</strong>: 这是 Anthropic 约定的<strong>特殊标签</strong>,Claude 看到时会理解成"这是系统提示的一部分,不是用户说的话"。Claude Code 用这个标签来:</p>
+<ul>
+<li>在对话中插入"系统级别"的提示</li>
+<li>比如记忆召回结果、命令执行结果、文件读取摘要</li>
+</ul>
+<p><strong>前端类比</strong>: 类似 React DevTools 注入的 <code>__REACT_DEVTOOLS_GLOBAL_HOOK__</code>——不是用户写的,但运行时存在。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 24: 什么是 "Hooks" 系统? <code>handleStopHooks</code>、<code>registerPostSamplingHook</code></strong></div>
+<p><strong>澄清</strong>: 这是 Claude Code 的<strong>生命周期钩子</strong>(类似 React 的 useEffect、Vue 的 onMounted):</p>
+<table>
+<tr><th>钩子</th><th>时机</th><th>用途</th></tr>
+<tr><td><code>Stop</code></td><td>主 Agent 完成一轮回复(无 tool call)</td><td>触发 <code>extractMemories</code>、<code>autoDream</code>、<code>promptSuggestion</code></td></tr>
+<tr><td><code>PostToolUse</code></td><td>工具调用完成后</td><td>日志、统计、UI 更新</td></tr>
+<tr><td><code>PostSampling</code></td><td>主模型采样后</td><td>SessionMemory 等后台任务</td></tr>
+<tr><td><code>PreToolUse</code></td><td>工具调用前</td><td>权限检查、输入修改</td></tr>
+</table>
+<p>与 React 的 <code>useEffect</code> 思路相同——在某个时刻自动触发副作用。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 25: 什么是 "Tools" (工具) 在 Claude Code 里?</strong></div>
+<p><strong>澄清</strong>: LLM 不像前端可以"调用任何函数",它只能调用 Claude Code <strong>显式注册</strong>的工具。每个工具是一个独立的 module:</p>
+<ul>
+<li>有 <code>name</code>、<code>description</code>、<code>inputSchema</code> (Zod schema)</li>
+<li>有 <code>call()</code> 函数:实际执行逻辑</li>
+<li>有可选的 React 组件:渲染结果到终端</li>
+</ul>
+<p>LLM 在对话中通过 <code>tool_use</code> 块调用它们,系统执行后返回 <code>tool_result</code> 块。</p>
+<p><strong>前端类比</strong>: 类似"自定义 Hooks"——Claude Code 暴露给 LLM 的可调用 API 集合。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 26: 什么是 GrowthBook 和那些奇怪的名字(moth_copse、herring_clock)?</strong></div>
+<p><strong>澄清</strong>: GrowthBook (https://growthbook.io) 是一个开源的 A/B 测试和 Feature Flag 平台。Claude Code 用它做:</p>
+<ul>
+<li>灰度发布(只对 5% 用户启用新功能)</li>
+<li>A/B 测试(对比两种算法的效果)</li>
+<li>远程配置(不重新发布就能调整参数)</li>
+</ul>
+<p>那些奇怪的名字(<code>tengu_moth_copse</code>、<code>tengu_herring_clock</code>)是<strong>实验标识符</strong>——每个实验一个唯一名字,方便数据分析时追踪。<code>tengu_</code> 是项目代码前缀(可能是 "Tengu"——日本佛教中的山神/狐).</p>
+<p>前端类比: 类似 LaunchDarkly、Unleash 的 feature key。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 27: 什么是 "User Context" 和 "System Context"?</strong></div>
+<p><strong>澄清</strong>: API 请求被组织成三个独立段:</p>
+<table>
+<tr><th>段</th><th>位置</th><th>用途</th><th>变化频率</th></tr>
+<tr><td>System Prompt</td><td>消息最前</td><td>行为指令、可用工具</td><td>偶尔变化</td></tr>
+<tr><td>User Context</td><td>第一条 user message</td><td>CLAUDE.md、MEMORY.md、日期</td><td>每会话变化</td></tr>
+<tr><td>System Context</td><td>System context</td><td>git 状态、运行时信息</td><td>每次请求</td></tr>
+</table>
+<p><strong>设计意图</strong>: 把"很少变"和"经常变"的部分分开,最大化 prompt cache 命中率。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 28: 什么是 "Side Query" 的实现细节?</strong></div>
+<p><strong>澄清</strong>: 调用 LLM 的常规方式是把 prompt 拼到主对话里。但 <code>sideQuery</code> 做的是:</p>
+<ol>
+<li>用 Anthropic SDK 单独发一次 API 请求</li>
+<li>不走 query.ts 主循环</li>
+<li>不走工具调用机制</li>
+<li>只接收文本结果</li>
+</ol>
+<p>这是<strong>"无状态的一次性 LLM 调用"</strong>。类似前端里的 <code>fetch('/api/llm/side', { method: 'POST', body: prompt })</code>——只是 SDK 内部实现。</p>
+</div>
+
+<div class="card">
+<div class="card-title">❓ 疑惑 29: 什么是 <code>readFileState</code> 缓存?</strong></div>
+<p><strong>澄清</strong>: <span class="file-ref">sessionMemory.ts:216</span>:</p>
+<pre><span class="comment">// 显式删除缓存,强制下次读文件拿到真内容</span>
+toolUseContext.readFileState.delete(memoryPath)</pre>
+<p>这是 Claude Code 的<strong>文件读取缓存层</strong>——避免短时间内重复读同一文件。如果不删,SessionMemory 拿到的会是缓存的旧内容。</p>
+<p><strong>前端类比</strong>: 类似 <code>react-query</code> 的 <code>queryClient.invalidateQueries()</code>——主动让缓存失效,下次重新拉。</p>
+</div>
+
+<div class="card">
+<div<div class="card-title">❓ 疑惑 30: 那些"KAIROS"、"Tengu" 名字是品牌还是代码?</div>
+<p><strong>澄清</strong>: KAIROS、Tengu 都是 Anthropic 内部的<strong>项目代号</strong>。具体含义:</p>
+<ul>
+<li><strong>Tengu</strong> — 整个 Claude Code 项目的代号(山神/天狗)</li>
+<li><strong>KAIROS</strong> — "助手模式"的特性名,源自希腊语"关键时刻"</li>
+<li><strong>TeamMem</strong> — Team Memory 特性</li>
+</ul>
+<p>这不是营销品牌,而是内部命名空间——目的是让代码 feature flag 和模块名不与未来可能的商业产品名冲突。</p>
+</div>
+
+<!-- ========== 文档未明确的边界 ========== -->
+<h3>⚠️ 类别七:文档中可能不够清晰/有歧义的地方</h3>
+
+<div class="warn">
+<strong>说明</strong>: 以下是我在写文档时注意到、但当时没展开的内容。前端工程师可以带着这些问题去源码里找答案,这是深入学习的好机会。
+</div>
+
+<div class="card">
+<div class="card-title">⚠️ 边界 1: 多个 feature flag 的精确条件</div>
+<p>文档中提到了 12+ 个 feature flag,但每个的具体生效条件(比如 GrowthBook 用户百分比、地理限制、付费层级)没有详细说明。源码里有 <code>getFeatureValue_CACHED_MAY_BE_STALE('flag_name', false)</code> 的模式,fallback 值都是 <code>false</code>,这意味着<strong>默认行为是关闭</strong>。</p>
+<p><strong>建议</strong>: 真要看清楚需要去 GrowthBook 后台看实验配置。</p>
+</div>
+
+<div class="card">
+<div class="card-title">⚠️ 边界 2: Agent Memory 的同步机制</div>
+<p>提到了 <code>agentMemorySnapshot.ts</code> 处理"从 project 同步到 local",但具体<strong>什么时机会触发同步</strong>、<strong>同步是 push 还是 pull</strong>、<strong>冲突如何解决</strong>没展开。</p>
+</div>
+
+<div class="card">
+<div class="card-title">⚠️ 边界 3: Side Query 的成本</div>
+<p>侧查询每次发一次 API 请求,需要 token 成本。但没有明确说明:</p>
+<ul>
+<li>每轮用户消息都会触发吗?(看着是的,异步触发)</li>
+<li>Side Query 失败时如何降级?(代码里看是 <code>return []</code>,不阻塞主流程)</li>
+<li>Side Query 的延迟会不会让用户看到"延迟回忆"?(异步设计,应该不会)</li>
+</ul>
+</div>
+
+<div class="card">
+<div class="card-title">⚠️ 边界 4: <code>MEMORY.md</code> 的冲突解决</div>
+<p>如果主 Agent 和后台 Agent 同时写 MEMORY.md 怎么办?文档/代码里<strong>没有显式讨论</strong>。但实际上通过 <code>inProgress</code> 标志和 <code>hasMemoryWritesSince</code> 检查,确保了:</p>
+<ul>
+<li>主 Agent 在前端 <code>Edit</code>/<code>Write</code> 工具是同步的(用户看到的),不会并发</li>
+<li>后台 Agent 通过互斥标志串行化</li>
+</ul>
+<p>但两个不同时刻写 MEMORY.md 时(都过了几秒钟),仍可能竞争——这种 race condition 真实存在,但概率低(Edit 工具内部也有锁)。</p>
+</div>
+
+<div class="card">
+<div class="card-title">⚠️ 边界 5: Team Memory 的"同步"到底是怎么发生的</div>
+<p>代码里多次提到 "Team memories are synced at the beginning of every session" ,但实际同步机制(是 git pull?是后端 API?是文件复制?)没有详细展示。推测是通过某个 sync 服务,但 Claude Code 作为客户端不直接知道。</p>
+</div>
+
+<div class="card">
+<div class="card-title">⚠️ 边界 6: <code>@include</code> 的实际行为</div>
+<p>原文章提到 CLAUDE.md 支持 <code>@path</code> 引用其他文件,源码里 <code>claudemd.ts</code> 有相关实现。但具体支持的语法形式(@relative、@~/、@/)、嵌套深度限制、循环引用检测规则没有详细展示。</p>
+</div>
+
+<div class="card">
+<div class="card-title">⚠️ 边界 7: 路径在不同操作系统的处理</div>
+<p>代码里 <code>memoryFileDetection.ts</code> 大量处理 Windows 路径、MinGW 路径、POSIX 路径的转换。但 <strong>macOS/Linux</strong>(项目主要开发环境)和 <strong>Windows</strong> 的行为差异没有详细对比表。</p>
+</div>
+
+<!-- ========== 总结 ========== -->
+<h3>🎯 学习建议</h3>
+
+<p>这份文档读到这里,你应该已经掌握了 Claude Code 记忆系统的核心设计。但要真正<strong>深入</strong>理解,建议按以下顺序动手:</p>
+
+<ol>
+<li><strong>运行实际项目</strong>: 启动 <code>bun run dev</code>,实际用 <code>/memory</code> 命令看看文件长什么样</li>
+<li><strong>添加日志</strong>: 在 <code>loadMemoryPrompt()</code> 里加 <code>console.log</code>,看实际何时被调用</li>
+<li><strong>观察 prompt cache</strong>: 看 Claude API 返回的 <code>cache_read_input_tokens</code> 字段,理解缓存命中</li>
+<li><strong>尝试写个简单的"auto memory"</strong>: 复现 "索引常驻 + 内容按需" 模式,体会设计权衡</li>
+<li><strong>读一两个核心文件的完整代码</strong>: <code>findRelevantMemories.ts</code>(180 行)是个很好的起点</li>
+<li><strong>对比业界方案</strong>: 同时读 Mem0/Letta 的文档,看 Claude Code 怎么避开它们的坑</li>
+</ol>
+
+<div class="annotations-end">
+📌 标注区结束 · 以下为原文档底部
+</div>
+
+</div><!-- /.annotations-section -->
+
+<div style="margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border); text-align: center; color: var(--text-muted); font-size: 0.9em;">
+<p>基于 claude-code 仓库源码分析 · 2026-06-03 · 共覆盖 30+ 源文件 + 30+ 概念澄清</p>
+</div>
+
+</main>
+</div><!-- /.layout -->
+</body>
+</html>
