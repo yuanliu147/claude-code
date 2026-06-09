@@ -1,0 +1,2342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Code 无感自动更新机制深度解析</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg-soft: #161b22;
+    --bg-card: #1c2128;
+    --border: #30363d;
+    --fg: #c9d1d9;
+    --fg-soft: #8b949e;
+    --fg-bright: #f0f6fc;
+    --accent: #58a6ff;
+    --accent-2: #d2a8ff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --red: #f85149;
+    --yellow: #e3b341;
+    --purple: #bc8cff;
+    --code-bg: #161b22;
+    --code-fg: #c9d1d9;
+    --warn-bg: #3a2e0c;
+    --info-bg: #0c2d6b;
+    --tip-bg: #0c4a2d;
+    --pin-bg: #3c0c4a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; scroll-padding-top: 24px; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    font-size: 15px;
+    line-height: 1.75;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, pre {
+    font-family: "SF Mono", "JetBrains Mono", "Fira Code", "Cascadia Code",
+                 Consolas, Monaco, monospace;
+    font-size: 13px;
+  }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  @media (max-width: 960px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { display: none; }
+  }
+  aside {
+    background: var(--bg-soft);
+    border-right: 1px solid var(--border);
+    padding: 28px 18px;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  aside h2 {
+    color: var(--fg-bright);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  aside ol { list-style: none; padding: 0; }
+  aside ol li { margin: 2px 0; }
+  aside ol li a {
+    display: block;
+    padding: 5px 10px;
+    color: var(--fg-soft);
+    font-size: 12.5px;
+    border-radius: 5px;
+    border-left: 2px solid transparent;
+    transition: all 0.12s;
+  }
+  aside ol li a:hover {
+    color: var(--fg-bright);
+    background: var(--bg-card);
+    text-decoration: none;
+    border-left-color: var(--accent);
+  }
+  aside ol li a.sub { padding-left: 22px; font-size: 11.5px; opacity: 0.85; }
+  main {
+    padding: 36px 60px 80px;
+    max-width: 1180px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  @media (max-width: 720px) { main { padding: 22px 16px 40px; } }
+  .hero {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 28px;
+    margin-bottom: 36px;
+  }
+  .hero .tag {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 34px;
+    color: var(--fg-bright);
+    margin-bottom: 10px;
+    line-height: 1.2;
+  }
+  .subtitle {
+    color: var(--fg-soft);
+    font-size: 16px;
+    margin-bottom: 18px;
+  }
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    font-size: 12.5px;
+    color: var(--fg-soft);
+  }
+  .meta span {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+    border-radius: 5px;
+  }
+  section { margin-bottom: 50px; }
+  h2 {
+    color: var(--fg-bright);
+    font-size: 26px;
+    margin: 28px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 { color: var(--fg-bright); font-size: 19px; margin: 22px 0 12px; }
+  h4 { color: var(--accent); font-size: 15.5px; margin: 18px 0 8px; font-weight: 600; }
+  p { margin-bottom: 12px; }
+  ul, ol { margin: 0 0 14px 22px; }
+  li { margin-bottom: 5px; }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    margin: 10px 0 18px;
+  }
+  pre code { color: var(--code-fg); line-height: 1.6; }
+  .code-loc {
+    display: inline-block;
+    background: var(--bg-card);
+    color: var(--purple);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin: 6px 0 2px;
+    font-family: "SF Mono", Consolas, monospace;
+    border: 1px solid var(--border);
+  }
+  code.inline {
+    background: var(--bg-card);
+    color: var(--orange);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 13px;
+    border: 1px solid var(--border);
+  }
+  .callout {
+    border-left: 4px solid;
+    background: var(--bg-card);
+    padding: 12px 16px;
+    margin: 14px 0;
+    border-radius: 6px;
+  }
+  .callout.warn { border-color: var(--yellow); background: var(--warn-bg); }
+  .callout.info { border-color: var(--accent); background: var(--info-bg); }
+  .callout.tip  { border-color: var(--green);  background: var(--tip-bg); }
+  .callout.pin  { border-color: var(--purple); background: var(--pin-bg); }
+  .callout .icon { font-weight: 700; margin-right: 8px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 22px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 13.5px;
+  }
+  th, td { padding: 9px 13px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { background: var(--bg-soft); color: var(--fg-bright); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .file {
+    background: var(--bg-card);
+    color: var(--accent-2);
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 12.5px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+  }
+  .line-ref {
+    color: var(--yellow);
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 12.5px;
+  }
+  .section-num {
+    display: inline-block;
+    background: var(--bg-card);
+    color: var(--accent);
+    font-size: 12px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-right: 10px;
+    font-weight: 700;
+    border: 1px solid var(--accent);
+  }
+  .supp-block {
+    background: linear-gradient(135deg,
+      rgba(188, 140, 255, 0.10),
+      rgba(63, 185, 80, 0.06) 70%,
+      rgba(88, 166, 255, 0.06));
+    border: 1px dashed var(--purple);
+    border-radius: 10px;
+    padding: 0;
+    margin: 28px 0;
+    overflow: hidden;
+    position: relative;
+  }
+  .supp-block::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 4px;
+    background: linear-gradient(180deg, var(--purple), var(--accent), var(--green));
+  }
+  .supp-block .supp-header {
+    background: rgba(188, 140, 255, 0.18);
+    color: var(--purple);
+    padding: 9px 18px 9px 22px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    border-bottom: 1px solid rgba(188, 140, 255, 0.25);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .supp-block .supp-header .badge-tag {
+    background: var(--purple);
+    color: #fff;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+  }
+  .supp-block .supp-body { padding: 16px 22px 20px; }
+  .supp-block h4 { color: var(--purple); margin-top: 16px; }
+  .supp-block h4:first-child { margin-top: 4px; }
+  .flow {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+    margin: 14px 0;
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 12.5px;
+    line-height: 1.7;
+    color: var(--fg);
+    white-space: pre;
+    overflow-x: auto;
+  }
+  blockquote {
+    border-left: 3px solid var(--purple);
+    padding: 8px 16px;
+    margin: 10px 0;
+    color: var(--fg-soft);
+    font-style: italic;
+    background: var(--bg-card);
+    border-radius: 0 6px 6px 0;
+  }
+  .scenario {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin: 18px 0;
+  }
+  .scenario .head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .scenario .head h4 { margin: 0; color: var(--fg-bright); font-size: 16px; }
+  .scenario .head .map { font-size: 12px; color: var(--purple); }
+  .scenario .meta-line { font-size: 12.5px; color: var(--fg-soft); margin: 4px 0 8px; }
+  .scenario pre { margin: 8px 0; }
+  .scenario .anti {
+    margin-top: 10px; padding: 8px 12px;
+    background: rgba(248, 81, 73, 0.08);
+    border-left: 3px solid var(--red);
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  .scenario .case {
+    margin-top: 8px;
+    font-size: 13px; color: var(--green);
+  }
+  .alt {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin: 16px 0;
+  }
+  .alt h3 { color: var(--accent-2); margin-top: 0; }
+  .alt-section {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+  }
+  .alt-section .label {
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+  }
+  .six-pillars {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+    margin: 16px 0 22px;
+  }
+  .pillar {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .pillar .pnum {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    width: 22px; height: 22px;
+    text-align: center; line-height: 22px;
+    border-radius: 50%;
+    font-size: 12px; font-weight: 700;
+    margin-right: 8px;
+  }
+  .pillar h4 { color: var(--fg-bright); display: inline; }
+  .pillar p { margin: 8px 0 0; color: var(--fg-soft); font-size: 13.5px; line-height: 1.6; }
+  hr.sep { border: none; border-top: 1px dashed var(--border); margin: 30px 0; }
+  /* Glossary inline tooltip - 中级前端友好的术语注 */
+  .gloss-tip {
+    background: rgba(63, 185, 80, 0.08);
+    border: 1px solid rgba(63, 185, 80, 0.25);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 10px 0;
+    font-size: 13.5px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .gloss-tip .gloss-icon {
+    font-size: 18px;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .gloss-tip .gloss-body strong {
+    color: var(--green);
+    margin-right: 6px;
+  }
+  /* Glossary 2-column grid */
+  .glossary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 10px;
+    margin: 14px 0 22px;
+  }
+  .glossary .gitem {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+  .glossary .gitem .term {
+    display: inline-block;
+    background: var(--bg-soft);
+    color: var(--accent);
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 12.5px;
+    margin-right: 8px;
+    border: 1px solid var(--border);
+  }
+  .glossary .gitem .desc { color: var(--fg-soft); }
+  .glossary .gitem .analog {
+    display: block;
+    margin-top: 6px;
+    color: var(--green);
+    font-size: 12.5px;
+  }
+  /* Reading paths */
+  .reading-paths {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    margin: 14px 0 20px;
+  }
+  .reading-paths .path {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    padding: 14px 16px;
+  }
+  .reading-paths .path.fe { border-left-color: var(--green); }
+  .reading-paths .path.cli { border-left-color: var(--purple); }
+  .reading-paths .path.sys { border-left-color: var(--orange); }
+  .reading-paths .path h4 { margin: 0 0 8px; color: var(--fg-bright); font-size: 14px; }
+  .reading-paths .path p { font-size: 13px; color: var(--fg-soft); margin: 0; }
+  .reading-paths .path .route {
+    display: block;
+    margin-top: 8px;
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 11.5px;
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+<aside>
+  <h2>目录</h2>
+  <ol>
+    <li><a href="#sec-0">00 · 阅读地图 + 术语</a></li>
+    <li><a href="#sec-1">01 · 概览</a></li>
+    <li><a href="#sec-2">02 · 整体架构</a></li>
+    <li><a href="#sec-3">03 · 触发与时序</a></li>
+    <li><a href="#sec-4">04 · Native 原子机制</a></li>
+    <li><a href="#sec-4-1" class="sub">4.1 多版本目录布局</a></li>
+    <li><a href="#sec-4-2" class="sub">4.2 atomicMoveToInstallPath</a></li>
+    <li><a href="#sec-4-3" class="sub">4.3 Symlink 切换</a></li>
+    <li><a href="#sec-4-4" class="sub">4.4 Windows 分支</a></li>
+    <li><a href="#sec-5">05 · 锁机制层级</a></li>
+    <li><a href="#sec-5-1" class="sub">5.1 In-Process Singleflight</a></li>
+    <li><a href="#sec-5-2" class="sub">5.2 PID-based Lock</a></li>
+    <li><a href="#sec-5-3" class="sub">5.3 跨进程文件锁</a></li>
+    <li><a href="#sec-5-4" class="sub">5.4 mtime fallback</a></li>
+    <li><a href="#sec-6">06 · 下载与完整性</a></li>
+    <li><a href="#sec-7">07 · Kill Switch 多层防线</a></li>
+    <li><a href="#sec-8">08 · UI 通知层</a></li>
+    <li><a href="#sec-9">09 · 端到端时序</a></li>
+    <li><a href="#sec-10">10 · 架构决策与替代方案</a></li>
+    <li><a href="#sec-10-1" class="sub">10.1 Electron Squirrel</a></li>
+    <li><a href="#sec-10-2" class="sub">10.2 Sparkle</a></li>
+    <li><a href="#sec-10-3" class="sub">10.3 Chrome Omaha</a></li>
+    <li><a href="#sec-10-4" class="sub">10.4 npm 覆盖</a></li>
+    <li><a href="#sec-10-5" class="sub">10.5 Docker</a></li>
+    <li><a href="#sec-10-6" class="sub">10.6 Snap/Flatpak</a></li>
+    <li><a href="#sec-10-7" class="sub">10.7 OTA Hot Reload</a></li>
+    <li><a href="#sec-10-8" class="sub">10.8 PWA SW</a></li>
+    <li><a href="#sec-10-9" class="sub">10.9 综合判断</a></li>
+    <li><a href="#sec-11">11 · 前端可移植性</a></li>
+    <li><a href="#sec-11-5"><strong>11.5 · 如果你做 npm CLI ⭐</strong></a></li>
+    <li><a href="#sec-12">12 · 当前 fork 状态</a></li>
+    <li><a href="#sec-13">13 · 关键文件清单</a></li>
+  </ol>
+</aside>
+
+<main>
+
+<div class="hero">
+  <span class="tag">自动更新机制</span>
+  <h1>Claude Code 无感自动更新机制深度解析</h1>
+  <p class="subtitle">从原子 symlink 到 PID 锁，从 server kill switch 到前端工程可移植 —— 一份给中高级工程师的实战拆解</p>
+  <div class="meta">
+    <span>仓库 · claude-code (反编译 fork)</span>
+    <span>版本 · 2.1.888</span>
+    <span>分支 · feat-home</span>
+    <span>主分析对象 · 7 个核心模块</span>
+    <span>替代方案对比 · 8 种</span>
+    <span>前端映射场景 · 15 个</span>
+  </div>
+</div>
+
+<section id="sec-0">
+  <h2><span class="section-num">00</span> 阅读地图 + 术语速查</h2>
+
+  <p>这篇文档覆盖系统层（POSIX 文件系统、进程信号、锁）到应用层（React Hook、UI 通知、配置）。如果你是中级前端，下面 5 分钟读完，后面所有章节就没有隐形门槛。</p>
+
+  <h3>三条阅读路径</h3>
+
+  <div class="reading-paths">
+    <div class="path fe">
+      <h4>🎨 我是前端工程师</h4>
+      <p>主要想看"这套思路怎么在 PWA / 微前端 / SPA 里用"。</p>
+      <span class="route">§01 → §11 → §11.5</span>
+    </div>
+    <div class="path cli">
+      <h4>📦 我做 npm CLI 发版</h4>
+      <p>想了解 npm 包能不能照搬 CC 的无感更新。</p>
+      <span class="route">§01 → §11.5 → §05 → §07</span>
+    </div>
+    <div class="path sys">
+      <h4>⚙️ 我是系统/全栈工程师</h4>
+      <p>对 atomic rename / PID lock / kill switch 有专业兴趣。</p>
+      <span class="route">通读 §01-§13</span>
+    </div>
+  </div>
+
+  <h3>关键术语速查（按文档出现顺序）</h3>
+
+  <p>每条都附带一个"前端能想象的类比"。看到正文里出现这些词，回这里查一眼即可。</p>
+
+  <div class="glossary">
+    <div class="gitem">
+      <span class="term">symlink</span><span class="desc">Unix 文件系统的"指向另一个文件的指针"</span>
+      <span class="analog">≈ Windows 的快捷方式；切换 symlink target = 切换快捷方式指向</span>
+    </div>
+    <div class="gitem">
+      <span class="term">inode</span><span class="desc">Unix 文件的"档案号"，文件名只是标签</span>
+      <span class="analog">≈ 数据库的主键 id；一个 inode 可以有多个文件名指过去</span>
+    </div>
+    <div class="gitem">
+      <span class="term">FD (file descriptor)</span><span class="desc">进程"打开"一个文件后拿到的句柄</span>
+      <span class="analog">≈ React 的 ref；即使源文件被删，ref 指向的还在</span>
+    </div>
+    <div class="gitem">
+      <span class="term">rename(2) 原子性</span><span class="desc">POSIX 保证 rename 要么完成要么失败，没有"半完成"</span>
+      <span class="analog">≈ 数据库 transaction commit；CC 用它做 symlink 切换</span>
+    </div>
+    <div class="gitem">
+      <span class="term">PID</span><span class="desc">操作系统给每个进程的唯一编号</span>
+      <span class="analog">≈ React 的 component instance id；进程死了就没了</span>
+    </div>
+    <div class="gitem">
+      <span class="term"><code>process.kill(pid, 0)</code></span><span class="desc">不发任何信号，只测试"目标进程是否存在"的小技巧</span>
+      <span class="analog">≈ 给一个号码打电话只听响铃判断在不在</span>
+    </div>
+    <div class="gitem">
+      <span class="term">mtime</span><span class="desc">文件最后修改时间，<code>fs.stat()</code> 能拿到</span>
+      <span class="analog">≈ <code>updated_at</code> 字段</span>
+    </div>
+    <div class="gitem">
+      <span class="term">TOCTOU</span><span class="desc">Time-of-Check to Time-of-Use 竞态：检查完到使用之间世界变了</span>
+      <span class="analog">≈ React 里的 stale closure；你看到的数据已经过期</span>
+    </div>
+    <div class="gitem">
+      <span class="term">O_EXCL / flag: 'wx'</span><span class="desc">写文件时"如果已存在就报错"的标志位</span>
+      <span class="analog">≈ MongoDB 的 unique index；多个进程同时建文件只有一个成功</span>
+    </div>
+    <div class="gitem">
+      <span class="term">EEXIST / ENOENT / EXDEV</span><span class="desc">Unix 错误码：文件已存在 / 文件不存在 / 跨设备操作不允许</span>
+      <span class="analog">≈ HTTP 状态码 409 / 404 / 400</span>
+    </div>
+    <div class="gitem">
+      <span class="term">XDG_DATA_HOME</span><span class="desc">Linux/Unix 用户数据目录的环境变量，默认 <code>~/.local/share</code></span>
+      <span class="analog">≈ <code>localStorage</code> 在 Linux 上的物理对应</span>
+    </div>
+    <div class="gitem">
+      <span class="term">SHA256</span><span class="desc">一种密码学 hash，输出 64 位十六进制</span>
+      <span class="analog">≈ 你熟悉的 <code>integrity="sha256-..."</code>，HTML SRI 用的就是它</span>
+    </div>
+    <div class="gitem">
+      <span class="term">manifest</span><span class="desc">索引文件，列出"有哪些资源 + 每个的 hash"</span>
+      <span class="analog">≈ <code>package-lock.json</code> 的 dependencies 段 / PWA 的 webmanifest</span>
+    </div>
+    <div class="gitem">
+      <span class="term">GCS</span><span class="desc">Google Cloud Storage，对象存储服务</span>
+      <span class="analog">≈ 阿里云 OSS / AWS S3</span>
+    </div>
+    <div class="gitem">
+      <span class="term">GrowthBook</span><span class="desc">开源 feature flag / A-B 测试平台</span>
+      <span class="analog">≈ LaunchDarkly / 字节火山引擎实验平台</span>
+    </div>
+    <div class="gitem">
+      <span class="term">singleflight</span><span class="desc">Go 社区流行的去重模式：同一时刻同 key 只跑一个请求</span>
+      <span class="analog">≈ SWR / React Query 的 <code>dedupingInterval</code></span>
+    </div>
+    <div class="gitem">
+      <span class="term">semver / build metadata</span><span class="desc">2.1.888+abc123 里 <code>+abc123</code> 那段，按 semver 规范<strong>对比时被忽略</strong></span>
+      <span class="analog">≈ Git commit message vs commit hash 的关系</span>
+    </div>
+    <div class="gitem">
+      <span class="term">npm dist-tag</span><span class="desc">npm registry 的标签，常见 <code>latest</code> / <code>stable</code> / <code>beta</code></span>
+      <span class="analog">≈ Git tag / Docker image tag</span>
+    </div>
+  </div>
+
+  <div class="callout tip">
+    <span class="icon">💡</span><strong>读法</strong>：术语挂在正文里第一次出现时，文档会用 <span style="color:var(--green);">📖 小提示</span> 的形式再点一次本质，你不需要记住所有定义——遇到不熟悉的，回这一节查即可。
+  </div>
+</section>
+
+<section id="sec-1">
+  <h2><span class="section-num">01</span> 概览</h2>
+
+  <p>Claude Code 的"无感自动更新" <strong>不是某段魔法代码</strong>，而是六层设计的合力。先把结论摆出来，后面每一层都会展开到代码级。</p>
+
+  <div class="six-pillars">
+    <div class="pillar">
+      <span class="pnum">1</span><h4>触发是后台异步的</h4>
+      <p>UI 挂载即触发首次检查，之后每 30 分钟轮询一次。所有 I/O 都是 async/await，不挡用户输入。</p>
+    </div>
+    <div class="pillar">
+      <span class="pnum">2</span><h4>下载是带外的</h4>
+      <p>新版本写入与运行中二进制 <em>完全不同的路径</em>（每个版本一个文件），旧进程一直跑得好好的。</p>
+    </div>
+    <div class="pillar">
+      <span class="pnum">3</span><h4>切换是原子的</h4>
+      <p>用 <code class="inline">symlink(temp) → rename(temp → final)</code> 替换 <code class="inline">~/.local/bin/claude</code>，无半成品状态。</p>
+    </div>
+    <div class="pillar">
+      <span class="pnum">4</span><h4>旧版本受保护</h4>
+      <p>正在运行的版本通过 PID 锁锁定，cleanup 看到锁就跳过，绝不会"自杀"。</p>
+    </div>
+    <div class="pillar">
+      <span class="pnum">5</span><h4>生效靠下一次启动</h4>
+      <p>本次进程不重载，只在右下角打一行 <code class="inline">✓ Update installed · Restart to update</code>，下次起 shell → symlink 已经指向新版本。</p>
+    </div>
+    <div class="pillar">
+      <span class="pnum">6</span><h4>多层 Kill Switch</h4>
+      <p>服务端 <code class="inline">maxVersion</code>、用户 <code class="inline">minimumVersion</code>、<code class="inline">DISABLE_AUTOUPDATER</code>、<code class="inline">autoUpdates: false</code> —— 出问题随时叫停。</p>
+    </div>
+  </div>
+
+  <div class="callout pin">
+    <span class="icon">📌</span><strong>本文要做什么 / 不做什么</strong>
+    <p style="margin-top:8px;">做：基础实现 → 架构权衡 → 前端可移植 三层穿透；每个技术声明都带 <code class="inline">file:line</code> 引用。</p>
+    <p>不做：单纯的源码导读 / 替 Anthropic 写营销文 / 凑章节灌水。如果某一节没有真正的内容沉淀，宁可砍掉。</p>
+  </div>
+</section>
+
+<section id="sec-2">
+  <h2><span class="section-num">02</span> 整体架构</h2>
+
+  <p><span class="file">src/components/AutoUpdaterWrapper.tsx</span> 是入口分发器，根据 <code class="inline">getCurrentInstallationType()</code> 的结果选择具体的 Updater 组件：</p>
+
+  <div class="flow">┌─────────────────────────────────────────────────────────────────────┐
+│  PromptInput/Notifications.tsx  (右下角状态栏)                       │
+│     └─ &lt;AutoUpdaterWrapper shouldShowAutoUpdater={...} /&gt;            │
+│             │                                                        │
+│             ▼  getCurrentInstallationType()                          │
+│   ┌─────────┼──────────┬──────────────────┐                          │
+│   │         │          │                  │                          │
+│ native   npm-local  npm-global       package-manager                 │
+│   │       └────┬────┘                     │                          │
+│   ▼            ▼                          ▼                          │
+│ NativeAuto-  AutoUpdater.tsx        PackageManager-                  │
+│ Updater.tsx                         AutoUpdater.tsx                  │
+│   │            │                          │                          │
+│   ▼            ▼                          ▼                          │
+│ installLatest installGlobalPackage    只提示，不自动装               │
+│ (GCS+SHA256) /installOrUpdateClaude-  (brew/winget/apk 等)           │
+│              Package (npm install -g)                                │
+└─────────────────────────────────────────────────────────────────────┘</div>
+
+  <p>关键文件清单：</p>
+  <table>
+    <thead><tr><th>路径</th><th>角色</th></tr></thead>
+    <tbody>
+      <tr><td><span class="file">src/components/AutoUpdaterWrapper.tsx</span></td><td>分发器，按安装类型选择具体 Updater</td></tr>
+      <tr><td><span class="file">src/components/AutoUpdater.tsx</span></td><td>npm 安装（global / local）的 Updater</td></tr>
+      <tr><td><span class="file">src/components/NativeAutoUpdater.tsx</span></td><td>原生二进制安装的 Updater</td></tr>
+      <tr><td><span class="file">src/components/PackageManagerAutoUpdater.tsx</span></td><td>brew/winget/apk 等 "只提示不更新"</td></tr>
+      <tr><td><span class="file">src/utils/autoUpdater.ts</span></td><td>共享工具：版本查询、跨进程锁、<code class="inline">installGlobalPackage</code></td></tr>
+      <tr><td><span class="file">src/utils/nativeInstaller/installer.ts</span></td><td>原生路径核心：下载/校验/原子 symlink/lock <span class="line-ref">~1700 行</span></td></tr>
+      <tr><td><span class="file">src/utils/nativeInstaller/download.ts</span></td><td>GCS / Artifactory / npm 下载 + SHA256 校验</td></tr>
+      <tr><td><span class="file">src/utils/nativeInstaller/pidLock.ts</span></td><td>PID-based 锁，立刻识别崩溃进程</td></tr>
+      <tr><td><span class="file">src/utils/doctorDiagnostic.ts</span></td><td><code class="inline">getCurrentInstallationType()</code> 安装类型识别</td></tr>
+      <tr><td><span class="file">src/cli/update.ts</span></td><td>用户手动 <code class="inline">claude update</code> 命令</td></tr>
+      <tr><td><span class="file">src/migrations/migrateAutoUpdatesToSettings.ts</span></td><td>把老的 <code class="inline">autoUpdates: false</code> 迁移成 <code class="inline">DISABLE_AUTOUPDATER=1</code></td></tr>
+      <tr><td><span class="file">src/hooks/useUpdateNotification.ts</span></td><td>节流"重启提示"——只在 semver 段变化时才打通知</td></tr>
+      <tr><td><span class="file">src/utils/backgroundHousekeeping.ts</span></td><td>启动后 10 分钟跑一次 <code class="inline">cleanupOldVersions()</code></td></tr>
+      <tr><td><span class="file">src/setup.ts:310</span></td><td>启动时 <code class="inline">void lockCurrentVersion()</code> 锁住当前运行版本</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="sec-3">
+  <h2><span class="section-num">03</span> 触发与时序</h2>
+
+  <p>三个 Updater 都用同一个 React 模式（<span class="code-loc">NativeAutoUpdater.tsx:176-181</span>、<span class="code-loc">AutoUpdater.tsx:207-212</span>、<span class="code-loc">PackageManagerAutoUpdater.tsx:84-89</span>）：</p>
+
+  <pre><code>useEffect(() =&gt; { void checkForUpdates() }, [checkForUpdates])  // 初始检查
+useInterval(checkForUpdates, 30 * 60 * 1000)                    // 每 30 分钟</code></pre>
+
+  <p>挂载点在 <span class="file">src/components/PromptInput/Notifications.tsx:342-351</span>：</p>
+
+  <pre><code>{shouldShowAutoUpdater &amp;&amp; (
+  &lt;AutoUpdaterWrapper
+    verbose={verbose}
+    onAutoUpdaterResult={onAutoUpdaterResult}
+    autoUpdaterResult={autoUpdaterResult}
+    isUpdating={isAutoUpdating}
+    onChangeIsUpdating={onChangeIsUpdating}
+    showSuccessMessage={!isShowingCompactMessage}
+  /&gt;
+)}</code></pre>
+
+  <p>进入 REPL 5–10 秒后就开始第一次后台版本检查，但所有 I/O 都是 async，主线程的输入响应不会阻塞。</p>
+
+  <div class="supp-block">
+    <div class="supp-header">⚠️ <span class="badge-tag">GOTCHA</span> 为什么 isUpdating 必须用 useRef 而不是 useState 闭包</div>
+    <div class="supp-body">
+      <p><code class="inline">isUpdating</code> 状态用 ref 跟踪而非 deps，否则 30 分钟 interval 触发时拿到的是过时闭包，<code class="inline">isUpdating</code> 永远是 <code class="inline">false</code>，会允许并发的 <code class="inline">installGlobalPackage()</code> 在已有安装运行时再开一次。</p>
+
+      <p>NativeAutoUpdater 的注释（<span class="code-loc">NativeAutoUpdater.tsx:73-78</span>）直接给了"上游 bug 编号 #22413"作为防御理由：</p>
+
+      <blockquote>Track latest isUpdating value in a ref so the memoized checkForUpdates callback always sees the current value without changing callback identity (which would re-trigger the initial-check useEffect below and cause repeated downloads on remount — the upstream trigger for #22413).</blockquote>
+
+      <pre><code>const isUpdatingRef = useRef(isUpdating)
+isUpdatingRef.current = isUpdating
+
+const checkForUpdates = React.useCallback(async () =&gt; {
+  if (isUpdatingRef.current) return  // ✅ 总是最新
+  // ...
+}, [onAutoUpdaterResult, channel])    // 故意不依赖 isUpdating</code></pre>
+      <p>这是一个典型的 React 反模式陷阱：<strong>把 state 写进依赖数组会改变 callback identity，导致 effect 重新触发，会引发"组件重挂 → 重新下载 271MB → 缓冲区飙升到 91GB"的事故</strong>。后面第 5 章和第 11 章都会复用这个模式。</p>
+    </div>
+  </div>
+
+  <p>启动期还有一个关键调用：<span class="file">src/setup.ts:310</span> 在 setup 阶段 fire-and-forget 锁住当前版本</p>
+
+  <pre><code>void lockCurrentVersion()  // 锁住当前运行版本, 防止被其他进程删除</code></pre>
+
+  <p>这一行配合 <span class="file">src/utils/nativeInstaller/installer.ts:1048</span> 的 <code class="inline">lockCurrentVersion()</code>，是"旧进程绝对不会被新进程的 cleanup 误删"的根基。</p>
+</section>
+
+<section id="sec-4">
+  <h2><span class="section-num">04</span> Native Installer 原子机制</h2>
+
+  <p>这是<strong>官方 Anthropic 主推、最"无感"</strong>的路径。整段流程都被设计成"任何步骤被打断都不会留下半成品"。</p>
+
+  <h3 id="sec-4-1">4.1 多版本目录布局</h3>
+
+  <p>来自 <span class="file">src/utils/nativeInstaller/installer.ts:115-132</span> 的 <code class="inline">getBaseDirectories()</code>：</p>
+
+  <div class="flow">$XDG_DATA_HOME/claude/versions/    ← 永久存储；每个版本一个文件
+   1.0.30
+   1.0.31
+   2.1.888                          ← 文件本身就是可执行二进制
+$XDG_CACHE_HOME/claude/staging/    ← 下载暂存（1 小时无操作后清理）
+$XDG_STATE_HOME/claude/locks/      ← PID 锁文件
+   2.1.888.lock                    ← JSON: { pid, version, execPath, acquiredAt }
+~/.local/bin/claude                ← symlink → versions/2.1.888</div>
+
+  <div class="callout info">
+    <span class="icon">💡</span><strong>关键洞察</strong>：每个版本是一个独立文件，<em>不是目录</em>。这让"切换版本 = 切换 symlink target"成立——零拷贝、零网络、原子。
+  </div>
+
+  <h3 id="sec-4-2">4.2 atomicMoveToInstallPath：跨文件系统的原子移动</h3>
+
+  <div class="gloss-tip">
+    <span class="gloss-icon">📖</span>
+    <div class="gloss-body"><strong>读懂这一节需要</strong>：<code>rename</code> 在 Unix 上是原子的<em>但有个限制</em>——<strong>源和目标必须在同一个文件系统</strong>，否则抛 <code>EXDEV</code>（Cross-device link not permitted）。<code>$XDG_CACHE_HOME</code>（典型 <code>/var/cache</code>）和 <code>$XDG_DATA_HOME</code>（典型 <code>/var/lib</code>）在某些 Linux 发行版是不同挂载点，所以 CC 先 <code>copyFile</code> 到目标目录，再做<em>同设备的</em> rename。</div>
+  </div>
+
+  <p>来自 <span class="file">src/utils/nativeInstaller/installer.ts:300-326</span>：</p>
+
+  <pre><code>async function atomicMoveToInstallPath(stagedBinaryPath, installPath) {
+  await mkdir(dirname(installPath), { recursive: true })
+  const tempInstallPath = `${installPath}.tmp.${process.pid}.${Date.now()}`
+  try {
+    // Copy to temp next to install path, then rename. A direct rename from staging
+    // would fail with EXDEV if staging and install are on different filesystems.
+    await copyFile(stagedBinaryPath, tempInstallPath)
+    await chmod(tempInstallPath, 0o755)
+    await rename(tempInstallPath, installPath)
+  } catch (error) {
+    try { await unlink(tempInstallPath) } catch {}
+    throw error
+  }
+}</code></pre>
+
+  <p>注释里直接写了"为什么不直接 <code class="inline">rename(stagingPath, installPath)</code>"——因为 <code class="inline">$XDG_CACHE_HOME</code> 和 <code class="inline">$XDG_DATA_HOME</code> 可能在不同挂载点（典型 Linux 是 <code class="inline">/var/cache</code> vs <code class="inline">/var/lib</code>，跨设备 rename 会抛 EXDEV）。所以必须先 <code class="inline">copyFile</code> 到目标目录，再做同设备 rename。</p>
+
+  <h3 id="sec-4-3">4.3 Symlink 原子切换（Unix）</h3>
+
+  <div class="gloss-tip">
+    <span class="gloss-icon">📖</span>
+    <div class="gloss-body"><strong>读懂这一节需要</strong>：<code>symlink</code>（符号链接）≈ Windows 快捷方式，Unix 文件系统里"指向另一个文件的指针"。<code>rename(2)</code> 是 POSIX 保证原子的文件改名操作——要么完成、要么没发生，没有"半完成"。<strong>这两件事组合起来，就能做到"任何时刻 <code>~/.local/bin/claude</code> 要么指向旧版本、要么指向新版本，绝不会缺失或损坏"</strong>。</div>
+  </div>
+
+  <p>来自 <span class="file">src/utils/nativeInstaller/installer.ts:771-797</span>：</p>
+
+  <pre><code>// Use atomic rename to avoid race conditions. Create symlink with temporary name
+// then atomically rename to final name. This ensures the symlink always exists
+// and is always valid, even with concurrent updates.
+const tempSymlink = `${symlinkPath}.tmp.${process.pid}.${Date.now()}`
+await symlink(targetPath, tempSymlink)
+await rename(tempSymlink, symlinkPath)   // 原子替换</code></pre>
+
+  <p>POSIX 保证 <code class="inline">rename(2)</code> 是原子的：任何时刻 <code class="inline">~/.local/bin/claude</code> 要么是旧 symlink、要么是新 symlink，绝不会缺失或损坏。</p>
+
+  <h3 id="sec-4-4">4.4 Windows 分支：rename old → copyFile new</h3>
+
+  <div class="gloss-tip">
+    <span class="gloss-icon">📖</span>
+    <div class="gloss-body"><strong>读懂这一节需要</strong>：Windows 不允许你 <code>unlink</code> 一个<em>正在运行的 .exe</em>（会抛 ERROR_SHARING_VIOLATION）<strong>但允许你 rename 它</strong>——NTFS 的奇妙之处，rename 后文件句柄继续指向旧 inode、新名字浮动。所以 Windows 的策略是：<em>不删，只改名</em>。旧二进制改名成 <code>.old.&lt;timestamp&gt;</code>，正在跑的 Claude 进程继续读它内存里的代码；下次启动时 cleanup 才真的 <code>unlink</code> 那些 .old 文件。这就是为什么 Windows 分支看起来复杂——它在补 Unix 不需要补的洞。</div>
+  </div>
+
+  <p>Windows 没有 symlink（用户态权限受限），改用 rename + copy 模式（<span class="code-loc">installer.ts:670-712</span>）：</p>
+
+  <pre><code>// Windows: rename strategy to handle file locking
+// Rename always works even for running executables, unlike delete
+const oldFileName = `${symlinkPath}.old.${Date.now()}`
+await rename(symlinkPath, oldFileName)   // 把跑着的旧版本 rename 走
+try {
+  await copyFile(targetPath, symlinkPath)  // 再 copy 新版本到位
+  try { await unlink(oldFileName) } catch {}  // 尝试清掉旧的
+} catch (copyError) {
+  // 拷贝失败 - 把旧版本 rename 回来, 优先保证用户有可用的 exe
+  try { await rename(oldFileName, symlinkPath) } catch (restoreError) {
+    const errorWithCause = new Error(
+      `Failed to restore old executable: ${restoreError}`,
+      { cause: copyError }
+    )
+    throw errorWithCause
+  }
+  throw copyError
+}</code></pre>
+
+  <p>残留的 <code class="inline">.old.*</code> 文件由 <code class="inline">cleanupOldVersions()</code> 在下次启动时清理（<span class="code-loc">installer.ts:1192-1216</span>）。</p>
+
+  <div class="supp-block">
+    <div class="supp-header">📘 <span class="badge-tag">DEPTH DIVE</span> 为什么 Windows 这么麻烦</div>
+    <div class="supp-body">
+      <p>Windows 的 NTFS 对正在运行的 <code class="inline">.exe</code> 强加了 <code class="inline">FILE_SHARE_DELETE</code> 限制：<code class="inline">unlink(claude.exe)</code> 会失败（ERROR_SHARING_VIOLATION），但 <code class="inline">rename</code> 神奇地能成功（NTFS 让 file handle 继续指向旧 inode，新名字浮动）。</p>
+      <p>所以 Windows 的策略是：<strong>不删，只重命名</strong>。旧二进制被 rename 到 <code class="inline">.old.&lt;timestamp&gt;</code> 后，正在跑的 Claude Code 进程依然能正常读写它的内存映像。等它退出后，下次启动时的 cleanup 才会 <code class="inline">unlink</code> 那些 .old 文件。</p>
+      <p>Unix 不需要这套操作——<code class="inline">unlink</code> 一个开着的文件，FD 依然有效，inode 在引用计数清零时才真正释放。这就是 "everything is a file" 哲学带来的工程红利。</p>
+    </div>
+  </div>
+</section>
+
+<section id="sec-5">
+  <h2><span class="section-num">05</span> 锁机制层级</h2>
+
+  <p>Claude Code 用了 <strong>四层锁</strong>，从内到外依次是：</p>
+
+  <ol>
+    <li><strong>In-process singleflight</strong>（同进程多次调用复用同一个 Promise）</li>
+    <li><strong>PID-based 文件锁</strong>（主路径，能立刻识别崩溃进程）</li>
+    <li><strong>跨进程 .update.lock</strong>（npm 路径的 5 分钟锁，带 TOCTOU 修复）</li>
+    <li><strong>mtime-based fallback</strong>（PID 锁不可用时的兜底，7 天 stale）</li>
+  </ol>
+
+  <h3 id="sec-5-1">5.1 In-Process Singleflight</h3>
+
+  <p><span class="file">src/utils/nativeInstaller/installer.ts:949-974</span>：</p>
+
+  <pre><code>// In-process singleflight guard. NativeAutoUpdater remounts whenever the
+// prompt suggestions overlay toggles (PromptInput.tsx:2916), and the
+// isUpdating guard does not survive the remount. Each remount kicked off a
+// fresh 271MB binary download while previous ones were still in flight.
+// Telemetry: session 42fed33f saw arrayBuffers climb to 91GB at ~650MB/s.
+let inFlightInstall: Promise&lt;InstallLatestResult&gt; | null = null
+
+export function installLatest(channelOrVersion, forceReinstall = false) {
+  if (forceReinstall) return installLatestImpl(channelOrVersion, forceReinstall)
+  if (inFlightInstall) {
+    logForDebugging('installLatest: joining in-flight call')
+    return inFlightInstall                                // 复用同一个 Promise
+  }
+  const promise = installLatestImpl(channelOrVersion, forceReinstall)
+  inFlightInstall = promise
+  const clear = () =&gt; { inFlightInstall = null }
+  void promise.then(clear, clear)
+  return promise
+}</code></pre>
+
+  <div class="callout warn">
+    <span class="icon">⚠️</span><strong>真实事故 telemetry</strong>：注释直接给了 session ID 和指标——91GB arrayBuffers、~650MB/s 持续下载。一个 UI 闪烁的 React 组件，让进程内的并发请求堆到了灾难量级。这就是为什么 React 范式下，"幂等性"必须从基础设施层而不是 UI 层兜底。
+  </div>
+
+  <h3 id="sec-5-2">5.2 PID-based 锁</h3>
+
+  <div class="gloss-tip">
+    <span class="gloss-icon">📖</span>
+    <div class="gloss-body"><strong>读懂这一节需要</strong>：<code>PID</code>（Process ID）是操作系统给每个进程的唯一编号。<code>process.kill(pid, 0)</code> 看起来像"杀进程"，其实是个 Unix 经典 trick——<strong>signal 0 表示"不发任何信号，只检查能不能发"</strong>，所以它实际上变成了"<em>这个 PID 现在还活着吗？</em>"的探测。类比：给一个电话号码打过去只听响铃，不真的接通。</div>
+  </div>
+
+  <p><span class="file">src/utils/nativeInstaller/pidLock.ts</span> 的核心数据结构（<span class="code-loc">pidLock.ts:54-59</span>）：</p>
+
+  <pre><code>export type VersionLockContent = {
+  pid: number
+  version: string
+  execPath: string
+  acquiredAt: number  // timestamp when lock was acquired
+}</code></pre>
+
+  <p><code class="inline">isLockActive()</code>（<span class="code-loc">pidLock.ts:164-205</span>）的三重判断：</p>
+
+  <ol>
+    <li><strong>PID 在跑吗？</strong> —— <code class="inline">process.kill(pid, 0)</code>，不发信号只测存在</li>
+    <li><strong>它真的是 Claude 吗？</strong> —— <code class="inline">getProcessCommand(pid)</code> 拿命令行，包含 <code class="inline">claude</code> 字样才算（防 PID 复用）</li>
+    <li><strong>锁超过 2 小时？</strong> —— 兜底 fallback stale 检查（<code class="inline">FALLBACK_STALE_MS = 2*60*60*1000</code>），处理网络文件系统边缘 case</li>
+  </ol>
+
+  <pre><code>export function isProcessRunning(pid: number): boolean {
+  // PID 0 是当前进程组, PID 1 是 init/systemd, 都不算
+  if (pid &lt;= 1) return false
+  try {
+    process.kill(pid, 0)   // signal 0: 不发信号, 只检查能否发
+    return true
+  } catch {
+    return false
+  }
+}</code></pre>
+
+  <p>与老的 mtime-based 锁相比的进步：mtime 锁需要 30 天才认为是 stale（laptop sleep 会冻结心跳），PID-based 可以<strong>立刻</strong>识别崩溃进程并清理（<span class="code-loc">pidLock.ts:394-433</span> <code class="inline">cleanupStaleLocks()</code>）。</p>
+
+  <h3 id="sec-5-3">5.3 跨进程 .update.lock (npm 路径)</h3>
+
+  <div class="gloss-tip">
+    <span class="gloss-icon">📖</span>
+    <div class="gloss-body"><strong>读懂这一节需要</strong>：<code>TOCTOU</code> = Time-Of-Check to Time-Of-Use 竞态——<em>检查完到使用之间，世界变了</em>。<strong>类比 React 的 stale closure</strong>：你在 effect 里读到的 state 值已经过期，因为依赖数组没更新；操作系统级也一样，两个进程"都看到锁是 stale 的" → "都决定接管" → 灾难。下面的代码用"<strong>unlink 之前再 stat 一次</strong>"闭合这个窗口。</div>
+  </div>
+
+  <p><span class="file">src/utils/autoUpdater.ts:176-249</span> 的 <code class="inline">acquireLock()</code> 是 npm 路径的跨进程锁。锁文件路径：<code class="inline">~/.claude/.update.lock</code>。</p>
+
+  <p>关键设计：</p>
+  <ul>
+    <li>用 <code class="inline">flag: 'wx'</code>（O_EXCL）原子创建，竞争失败时返回 EEXIST</li>
+    <li>5 分钟 stale timeout（<code class="inline">LOCK_TIMEOUT_MS</code>），处理崩溃残留</li>
+    <li><strong>关键 TOCTOU 修复</strong>：在 unlink 之前 <em>重新 stat 一次</em> 检查 mtime</li>
+  </ul>
+
+  <pre><code>try {
+  const stats = await fs.stat(lockPath)
+  const age = Date.now() - stats.mtimeMs
+  if (age &lt; LOCK_TIMEOUT_MS) return false
+  // Lock is stale, remove it before taking over. Re-verify staleness
+  // immediately before unlinking to close a TOCTOU race: if two processes
+  // both observe the stale lock, A unlinks + writes a fresh lock, then B
+  // would unlink A's fresh lock and both believe they hold it. A fresh
+  // lock has a recent mtime, so re-checking staleness makes B back off.
+  try {
+    const recheck = await fs.stat(lockPath)
+    if (Date.now() - recheck.mtimeMs &lt; LOCK_TIMEOUT_MS) {
+      return false
+    }
+    await fs.unlink(lockPath)
+  } catch (err) {
+    if (!isENOENT(err)) { logError(err as Error); return false }
+  }
+} catch (err) {
+  if (!isENOENT(err)) { logError(err as Error); return false }
+}</code></pre>
+
+  <p>注释里完整描述了经典的 stale-lock race：A 和 B 都看到 stale → A unlink + 写 fresh lock → B 跟着 unlink A 的 fresh lock，两个都以为自己持有锁。<strong>解法是 unlink 之前再 stat 一次</strong>——如果 mtime 已经被刷新成最近的，说明有人抢先，立刻退让。</p>
+
+  <h3 id="sec-5-4">5.4 mtime-based fallback</h3>
+
+  <p>如果 GrowthBook 把 <code class="inline">tengu_pid_based_version_locking</code> 关了，会 fallback 到 <code class="inline">proper-lockfile</code>（<span class="code-loc">installer.ts:246-298</span>），stale timeout 设成 <strong>7 天</strong>（<code class="inline">LOCK_STALE_MS = 7 * 24 * 60 * 60 * 1000</code>）——足够 laptop sleep 跨越，但能在崩溃后被清理。</p>
+
+  <div class="supp-block">
+    <div class="supp-header">🔍 <span class="badge-tag">NAMING</span> 为什么不用 flock？</div>
+    <div class="supp-body">
+      <p>常见的"为什么不用 Linux/POSIX <code class="inline">flock(2)</code>"质疑：</p>
+      <ul>
+        <li><strong>跨 NFS 不可靠</strong>：flock 在 NFS 上行为依赖 server 是否支持锁协议</li>
+        <li><strong>Node/Bun 没有官方 binding</strong>：得走 FFI 或 child_process</li>
+        <li><strong>Windows 没有等价物</strong>：Windows 有 <code class="inline">LockFileEx</code>, 但语义不同</li>
+        <li><strong>无法识别崩溃</strong>：flock 在进程退出时自动释放是优点也是缺点——你无法知道"谁持有过"和"持有多久"</li>
+      </ul>
+      <p>PID-based 锁牺牲了"自动释放"，换来了<strong>可观察性</strong>：lock 文件里写了 PID、execPath、acquiredAt，cleanup 时一眼就能看出"这是哪个进程留下的"。再加上 <code class="inline">isClaudeProcess()</code> 的 PID 复用检查，整套机制比 flock 更稳。</p>
+    </div>
+  </div>
+</section>
+
+<section id="sec-6">
+  <h2><span class="section-num">06</span> 下载与完整性</h2>
+
+  <h3>路由分发</h3>
+
+  <p><span class="file">src/utils/nativeInstaller/download.ts:112-149</span> 的 <code class="inline">getLatestVersion()</code>：</p>
+
+  <pre><code>// ant 内部用户走 Artifactory + npm
+if (process.env.USER_TYPE === 'ant') {
+  const npmTag = channel === 'stable' ? 'stable' : 'latest'
+  return getLatestVersionFromArtifactory(npmTag)
+}
+// 外部用户走 GCS bucket
+return getLatestVersionFromBinaryRepo(channel, GCS_BUCKET_URL)</code></pre>
+
+  <p>GCS bucket URL 是固定常量（<span class="code-loc">download.ts:25-26</span>）：</p>
+
+  <pre><code>const GCS_BUCKET_URL =
+  'https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases'</code></pre>
+
+  <h3>三个文件层次</h3>
+
+  <div class="flow">${baseUrl}/${channel}                            → 当前 channel 最新版本号字符串
+                                                  例: "2.1.888"
+
+${baseUrl}/${version}/manifest.json              → 平台 → checksum 索引
+                                                  { platforms: { "darwin-arm64": {checksum:"..."}, ... }}
+
+${baseUrl}/${version}/${platform}/${binaryName} → 实际二进制
+                                                  ${platform} = darwin-arm64 / linux-x64 / win32-x64 / linux-x64-musl</div>
+
+  <h3>SHA256 校验 + Stall Detection</h3>
+
+  <div class="gloss-tip">
+    <span class="gloss-icon">📖</span>
+    <div class="gloss-body"><strong>读懂这一节需要</strong>：<code>SHA256</code> 是密码学哈希算法，<strong>你在 HTML 里写的 <code>&lt;script integrity="sha256-..."&gt;</code> 用的就是它</strong>。原理：服务端事先算好二进制的 SHA256，写在 manifest 里；客户端下载完算一遍自己的 SHA256，<em>两者不一致就说明文件被改过</em>（CDN 劫持、网络损坏、中间人攻击都能查出来）。这是 SRI（Subresource Integrity）的服务端文件版本。</div>
+  </div>
+
+  <p><span class="file">src/utils/nativeInstaller/download.ts:293-380</span>：</p>
+
+  <pre><code>async function downloadAndVerifyBinary(binaryUrl, expectedChecksum, binaryPath, ...) {
+  let lastError: Error | undefined
+
+  for (let attempt = 1; attempt &lt;= MAX_DOWNLOAD_RETRIES; attempt++) {
+    const controller = new AbortController()
+    let stallTimer: ReturnType&lt;typeof setTimeout&gt; | undefined
+
+    const resetStallTimer = () =&gt; {
+      clearStallTimer()
+      stallTimer = setTimeout(c =&gt; c.abort(), getStallTimeoutMs(), controller)
+    }
+
+    try {
+      resetStallTimer()
+
+      const response = await axios.get(binaryUrl, {
+        timeout: 5 * 60000,        // 5 分钟总超时
+        responseType: 'arraybuffer',
+        signal: controller.signal,
+        onDownloadProgress: () =&gt; resetStallTimer(),  // 每个 chunk 重置 stall
+      })
+
+      clearStallTimer()
+
+      const hash = createHash('sha256')
+      hash.update(response.data)
+      const actualChecksum = hash.digest('hex')
+
+      if (actualChecksum !== expectedChecksum) {
+        throw new Error(`Checksum mismatch: expected ${expectedChecksum}, got ${actualChecksum}`)
+      }
+
+      await writeFile(binaryPath, Buffer.from(response.data))
+      await chmod(binaryPath, 0o755)
+      return
+    } catch (error) {
+      clearStallTimer()
+      const isStallTimeout = axios.isCancel(error)
+      lastError = isStallTimeout ? new StallTimeoutError() : toError(error)
+
+      // 只对 stall 重试, 不重试 HTTP / checksum / 其他
+      if (isStallTimeout &amp;&amp; attempt &lt; MAX_DOWNLOAD_RETRIES) {
+        await sleep(1000)
+        continue
+      }
+      throw lastError
+    }
+  }
+}</code></pre>
+
+  <p>设计要点：</p>
+  <ul>
+    <li><code class="inline">DEFAULT_STALL_TIMEOUT_MS = 60000</code>（60 秒无数据 → abort）</li>
+    <li><code class="inline">MAX_DOWNLOAD_RETRIES = 3</code></li>
+    <li><strong>只重试 stall</strong>，不重试 HTTP / checksum / 其他错误（避免重复传错文件）</li>
+    <li>每个 chunk 都 reset stall timer，所以"慢但活的"网络不会被误 kill</li>
+  </ul>
+
+  <h3>ant 路径的 npm integrity</h3>
+
+  <p><span class="file">src/utils/nativeInstaller/download.ts:151-269</span> 的 <code class="inline">downloadVersionFromArtifactory()</code> 走另一条路：</p>
+
+  <ol>
+    <li>用 <code class="inline">npm view ... dist.integrity</code> 拿到平台包的 integrity hash</li>
+    <li>在 staging 里写一个最小化的 <code class="inline">package.json</code> + <code class="inline">package-lock.json</code>，把 integrity 写到 lockfile 里</li>
+    <li>跑 <code class="inline">npm ci --prefer-online</code>，<strong>由 npm 自己验证 integrity</strong></li>
+  </ol>
+
+  <h3>安全：cwd 设为 homedir</h3>
+
+  <p><span class="file">src/utils/autoUpdater.ts:323-326</span> 和 <span class="file">src/utils/autoUpdater.ts:506-507</span> 都明确写了：</p>
+
+  <blockquote>Run from home directory to avoid reading project-level .npmrc which could be maliciously crafted to redirect to an attacker's registry</blockquote>
+
+  <p>这是供应链攻击防护：用户可能 cd 到一个开源仓库的目录，里面藏了恶意 <code class="inline">.npmrc</code> 把 registry 重定向到攻击者服务器。所以 npm 命令永远从 <code class="inline">homedir()</code> 跑。</p>
+</section>
+
+<section id="sec-7">
+  <h2><span class="section-num">07</span> Kill Switch 多层防线</h2>
+
+  <table>
+    <thead><tr><th>层级</th><th>控制点</th><th>行为</th></tr></thead>
+    <tbody>
+      <tr><td>服务端 (GrowthBook)</td><td><code class="inline">tengu_max_version_config</code></td><td>设置 <code class="inline">maxVersion</code> → 客户端 cap 在某版本，防有问题的新版扩散；<code class="inline">getMaxVersionMessage()</code> 给用户解释</td></tr>
+      <tr><td>用户 settings.json</td><td><code class="inline">minimumVersion</code></td><td><code class="inline">shouldSkipVersion()</code> 跳过低于此版本的更新——切回 stable channel 时防降级</td></tr>
+      <tr><td>用户 settings.json</td><td><code class="inline">autoUpdatesChannel</code></td><td>选 stable 通道（npm tag = stable，GCS 路径 /stable）</td></tr>
+      <tr><td>环境变量</td><td><code class="inline">DISABLE_AUTOUPDATER=1</code></td><td><code class="inline">isAutoUpdaterDisabled()</code> 直接返回 true，三种 Updater 全部 early-return</td></tr>
+      <tr><td>环境变量</td><td><code class="inline">ENABLE_AUTOUPDATER=0</code></td><td>反向开关（默认关闭时）</td></tr>
+      <tr><td>全局配置</td><td><code class="inline">autoUpdates: false</code></td><td>同上，但只在 <strong>不是 native 的保护性禁用</strong> 时生效</td></tr>
+      <tr><td>全局配置</td><td><code class="inline">autoUpdatesProtectedForNative: true</code></td><td>标记 "这个 autoUpdates:false 是迁移到 native 时自动设的，不是用户意愿"</td></tr>
+      <tr><td>migration</td><td><code class="inline">migrateAutoUpdatesToSettings.ts</code></td><td>把老的"用户意愿禁用"迁移成 <code class="inline">DISABLE_AUTOUPDATER=1</code> 写到 settings.json</td></tr>
+      <tr><td>环境变量</td><td><code class="inline">ENABLE_LOCKLESS_UPDATES=1</code></td><td>走无锁路径（依赖纯原子操作）</td></tr>
+      <tr><td>环境变量</td><td><code class="inline">ENABLE_PID_BASED_VERSION_LOCKING</code></td><td>强制启用/禁用 PID 锁（默认由 GrowthBook 灰度）</td></tr>
+      <tr><td>NODE_ENV</td><td><code class="inline">development</code></td><td>dev build 永远跳过</td></tr>
+    </tbody>
+  </table>
+
+  <p><span class="file">src/utils/config.ts:1700-1759</span> 的 <code class="inline">getAutoUpdaterDisabledReason()</code> 是单点真理：</p>
+
+  <pre><code>export function isAutoUpdaterDisabled(): boolean {
+  return getAutoUpdaterDisabledReason() !== null
+}
+
+export function getAutoUpdaterDisabledReason(): AutoUpdaterDisabledReason | null {
+  if (!isEnvTruthy(process.env.ENABLE_AUTOUPDATER))           return { type: 'config' }
+  if (isEnvTruthy(process.env.DISABLE_AUTOUPDATER))           return { type: 'env', envVar: 'DISABLE_AUTOUPDATER' }
+  const essentialTrafficEnvVar = getEssentialTrafficOnlyReason()
+  if (essentialTrafficEnvVar)                                  return { type: 'env', envVar: essentialTrafficEnvVar }
+  const config = getGlobalConfig()
+  if (
+    config.autoUpdates === false &amp;&amp;
+    (config.installMethod !== 'native' || config.autoUpdatesProtectedForNative !== true)
+  )                                                            return { type: 'config' }
+  return null
+}</code></pre>
+
+  <div class="callout tip">
+    <span class="icon">✅</span><strong>设计精髓</strong>：服务端 <code class="inline">maxVersion</code> 是"客户端 cap 在某版本"而不是"客户端拒绝更新"。这意味着如果一个版本出了问题，运营可以在 GrowthBook 上把 <code class="inline">maxVersion</code> 设成上一个稳定版，<strong>所有正在跑的客户端在下一次 30 分钟 tick 时自动回退到上一稳定版</strong>。这比"发新版修问题"快几个小时到几天。
+  </div>
+</section>
+
+<section id="sec-8">
+  <h2><span class="section-num">08</span> UI 通知层</h2>
+
+  <h3>渲染条件层层节流</h3>
+
+  <p><span class="file">src/components/AutoUpdater.tsx</span> 末尾：</p>
+
+  <pre><code>if (!autoUpdaterResult?.version &amp;&amp; (!versions.global || !versions.latest)) return null
+if (!autoUpdaterResult?.version &amp;&amp; !isUpdating) return null</code></pre>
+
+  <p>→ 没有可显示的更新结果 + 不在更新中 → 渲染 null，用户看不到任何东西。</p>
+
+  <p><span class="file">src/components/PromptInput/Notifications.tsx:119-122</span> 还做了 IDE 选择高亮的覆盖：</p>
+
+  <pre><code>const shouldShowAutoUpdater =
+  !shouldShowIdeSelection ||                    // IDE 在显示文件选区? 藏掉成功消息
+  isAutoUpdating ||                             // 正在更新? 必须显示
+  autoUpdaterResult?.status !== 'success'       // 失败信息总要显示</code></pre>
+
+  <h3>useUpdateNotification 的 semver 段去重</h3>
+
+  <p><span class="file">src/hooks/useUpdateNotification.ts</span>：</p>
+
+  <pre><code>export function getSemverPart(version: string): string {
+  return `${major(version, { loose: true })}.${minor(version, { loose: true })}.${patch(version, { loose: true })}`
+}
+
+export function shouldShowUpdateNotification(updatedVersion, lastNotifiedSemver): boolean {
+  const updatedSemver = getSemverPart(updatedVersion)
+  return updatedSemver !== lastNotifiedSemver
+}</code></pre>
+
+  <div class="callout info">
+    <span class="icon">💡</span><strong>关键</strong>：只看 <code class="inline">major.minor.patch</code>，<em>忽略 build metadata (SHA)</em>。CI 频繁滚 <code class="inline">2.1.888+abc123 → 2.1.888+def456</code> 不会反复弹"Restart to update"——只有真的有 patch/minor/major bump 才提示一次。
+  </div>
+
+  <h3>三种状态显示</h3>
+
+  <pre><code>{isUpdating
+  ? &lt;Text dimColor&gt;Auto-updating…&lt;/Text&gt;
+  : autoUpdaterResult?.status === 'success' &amp;&amp; updateSemver &amp;&amp;
+    &lt;Text color="success"&gt;✓ Update installed · Restart to apply&lt;/Text&gt;}
+
+{autoUpdaterResult?.status === 'install_failed' &amp;&amp;
+  &lt;Text color="error"&gt;✗ Auto-update failed · Try `claude doctor`&lt;/Text&gt;}</code></pre>
+
+  <p>整个机制对用户的全部"打扰"就是右下角一行小字，<strong>永不弹 dialog、永不打断输入流</strong>。</p>
+</section>
+
+<section id="sec-9">
+  <h2><span class="section-num">09</span> 端到端时序</h2>
+
+  <p>假设用户开着一个 Claude 会话敲代码：</p>
+
+  <div class="flow">T=0s     用户进入 REPL
+T=0.1s   setup.ts → lockCurrentVersion() 锁住 versions/2.1.888
+T=0.2s   AutoUpdaterWrapper 挂载 → 探测 installationType = 'native'
+T=0.3s   NativeAutoUpdater.checkForUpdates() 首次触发 (异步)
+T=0.4s   installLatest('latest') → getLatestVersion('latest')
+         → GET https://.../claude-code-releases/latest → "2.1.889"
+T=0.5s   maxVersion check (GrowthBook tengu_max_version_config)
+T=0.6s   tryWithVersionLock(versions/2.1.889) 成功
+T=0.7s   downloadVersion('2.1.889') → GET manifest.json + 校验 SHA256
+T=2.5s   下载完成 → atomicMoveToInstallPath() → versions/2.1.889 落盘
+T=2.6s   updateSymlink(~/.local/bin/claude → versions/2.1.889)
+         ↑ 当前进程仍然指向 versions/2.1.888 (FD 引用), 继续无碍
+T=2.7s   onAutoUpdaterResult({ version: '2.1.889', status: 'success' })
+T=2.8s   useUpdateNotification 检测 semver 段从 2.1.888→2.1.889 变化 → 触发
+T=2.9s   右下角出现: ✓ Update installed · Restart to update
+         ↑ 用户在写代码, 根本可能没注意到
+T=10min  backgroundHousekeeping.runVerySlowOps()
+         → 用户最近 1 分钟还在敲键盘 → 推迟 10 分钟
+T=30min  NativeAutoUpdater 第二次轮询, 已经是 latest, early exit
+T=30min+ 用户最终结束会话, process 退出
+         → lockCurrentVersion 的 cleanup 把 2.1.888.lock unlink
+T=次日   用户在 shell 输入 claude
+         → shell 走 ~/.local/bin/claude → symlink → versions/2.1.889
+         → 直接跑新版本, 零迁移、零感知
+T=次日10min  backgroundHousekeeping 清理: versions/ 下保留最近 2 个
+         (VERSION_RETENTION_COUNT = 2), 更早的版本被 unlink</div>
+</section>
+
+<section id="sec-10">
+  <h2><span class="section-num">10</span> 架构决策与替代方案</h2>
+
+  <p>这一节是<strong>本文最重要的内容之一</strong>：用相同的客观维度对比 Claude Code 方案与业界 8 种主流自动更新方案。每种对比方案都按 "怎么工作 → CC 为什么不选 → 各自权衡 → 代表产品" 的固定结构展开。</p>
+
+  <div id="sec-10-1" class="alt">
+    <h3>10.1 Electron Auto-Updater (Squirrel)</h3>
+    <div class="alt-section">
+      <div class="label">方案怎么工作</div>
+      <p>Electron 主进程启动时调用 <code class="inline">autoUpdater.checkForUpdates()</code> → 走平台分支：macOS Squirrel.Mac 在 <code class="inline">~/Library/Caches/&lt;app&gt;/</code> 下解压 <code class="inline">RELEASES</code> 文件描述的 zip，把 <code class="inline">*.app/Contents/Resources/app.asar</code> 整体替换；Windows Squirrel.Windows 用 <code class="inline">Update.exe</code> 创建 <code class="inline">app-&lt;ver&gt;</code> 槽 + NSIS 钩子；Linux 直接覆盖 AppImage 并自重启。差分走 <code class="inline">blockmap</code> (bsdiff + bzip2)，典型 100MB 应用一次差分 5–15MB。强制 <code class="inline">app.quit()</code> 才落地生效。</p>
+    </div>
+    <div class="alt-section">
+      <div class="label">CC 为什么没选</div>
+      <p>CC 是单进程长驻 REPL，没有"主-渲染"分进程，无法在不打断用户当前任务的前提下 spawn 出独立的 updater 子进程。Squirrel.Windows <code class="inline">Update.exe</code> 依赖 NSIS 钩子，这套打包工具链对 Bun/Node CLI 毫无意义。Squirrel.Mac 的 <code class="inline">~/Library/Caches</code> 路径策略绕开了 <code class="inline">$PATH</code> 入口，而 CC 故意把入口放在 <code class="inline">~/.local/bin/claude</code> 让 shell 直接 fork-exec 一个"无状态"可执行，与 symlink 多版本方案正交。差分更新对 CC 无价值：单 binary 30–60MB，gzip 后 10–20MB，差分收益 &lt; 2× 节省，完全不值得引入 bsdiff。</p>
+    </div>
+    <div class="alt-section">
+      <div class="label">权衡对比</div>
+      <table>
+        <thead><tr><th>维度</th><th>Electron Squirrel</th><th>CC 方案</th></tr></thead>
+        <tbody>
+          <tr><td>差分下载</td><td>blockmap 5–15 MB</td><td>全量 10–20 MB</td></tr>
+          <tr><td>强制重启</td><td>必 quit-and-restart</td><td>静默, 下次 shell 自动用</td></tr>
+          <tr><td>子进程隔离</td><td>Update.exe / Squirrel.Mac</td><td>单进程 in-memory singleflight</td></tr>
+          <tr><td>平台包链</td><td>Squirrel.Mac/Windows/NSIS</td><td>3 平台裸 binary + GCS</td></tr>
+          <tr><td>磁盘占用峰值</td><td>双倍 app.asar</td><td>双份 binary (被 PID 锁保护)</td></tr>
+          <tr><td>启动延迟</td><td>app.whenReady 后 +200 ms</td><td>UI 挂载时非阻塞</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="alt-section">
+      <div class="label">代表产品</div>
+      <p>VS Code, Discord, Slack, Notion 桌面端, Figma 桌面端</p>
+    </div>
+  </div>
+
+  <div id="sec-10-2" class="alt">
+    <h3>10.2 Sparkle Framework (macOS 经典)</h3>
+    <div class="alt-section">
+      <div class="label">方案怎么工作</div>
+      <p>Sparkle 是 macOS 原生 Cocoa 框架，AppKit 进程内集成 <code class="inline">SPUUpdater</code>，用 <code class="inline">SUFeedURL</code> (RSS/XML) 拉 appcast，Delta 格式用 <code class="inline">binarydelta</code> (BSPatch XAR)。落地路径：下载到 <code class="inline">~/Library/Caches/</code> 解压后整包覆盖 <code class="inline">MyApp.app</code>，利用 macOS 原子 <code class="inline">replaceItemAt:withItemAt:</code> API 实现原子语义。需要开发者 ID 签名 + notarization 才能避免 Gatekeeper 拦截。</p>
+    </div>
+    <div class="alt-section">
+      <div class="label">CC 为什么没选</div>
+      <p>Sparkle 是 <strong>macOS 专属</strong> 且 <strong>强绑 GUI</strong> (<code class="inline">NSApplicationDelegate</code>)，CC 是跨平台 CLI，Cocoa 依赖链让其无法用在 Windows/Linux。Sparkle 必须整包替换 app bundle，没有"多版本共存 + symlink"的概念——新版启动即 crash，用户回滚只能从 Time Machine 拉。CC 的 PID 锁设计正是为了"旧版进程在跑、新版静静等着"这种回滚友好语义。Sparkle 的 RSS appcast 也比 CC 的 GCS + manifest.json 复杂（需要 EdDSA 签名 + XML 解析）。</p>
+    </div>
+    <div class="alt-section">
+      <div class="label">权衡对比</div>
+      <table>
+        <thead><tr><th>维度</th><th>Sparkle</th><th>CC 方案</th></tr></thead>
+        <tbody>
+          <tr><td>平台</td><td>macOS only</td><td>macOS/Linux/Win</td></tr>
+          <tr><td>多版本共存</td><td>否, 整包替换</td><td>是, versions/&lt;v&gt;/</td></tr>
+          <tr><td>原子性</td><td>NSFileCoordinator</td><td>rename(2) over symlink</td></tr>
+          <tr><td>回滚成本</td><td>重新下载</td><td>切回 symlink (零成本)</td></tr>
+          <tr><td>UX 介入</td><td>弹窗 + 进度条</td><td>角落静默提示</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="alt-section">
+      <div class="label">代表产品</div>
+      <p>1Password 7, Pixelmator Pro, Sketch, WireGuard GUI</p>
+    </div>
+  </div>
+
+  <div id="sec-10-3" class="alt">
+    <h3>10.3 Chrome Component Update / Omaha</h3>
+    <div class="alt-section">
+      <div class="label">方案怎么工作</div>
+      <p>Google 内部叫 Omaha，客户端叫 <code class="inline">update_client</code>（开源在 <code class="inline">chromium/src/components/update_client</code>）。每个组件独立走 <code class="inline">{server_url}?appid={id}&amp;appversion={v}&amp;platform={plat}</code> → 拉 manifest 拿 action + run (URL) + patch URL → 下载到 <code class="inline">&lt;user_data&gt;/Component Updater/&lt;id&gt;/&lt;version&gt;/</code>，调用 CRX（差分走 Courgette 字节级或 bsdiff）验签 (Ed25519) → 下次启动时 lazy-load。<strong>完全后台运行</strong>，无 UI，失败 retry with backoff，服务端可远程灭火。</p>
+    </div>
+    <div class="alt-section">
+      <div class="label">CC 为什么没选</div>
+      <p>Chrome update_client 假设了一个 <strong>持久化的用户级数据目录</strong>，但 Claude Code 用户的主要使用场景是 <strong>CI / Docker / WSL</strong>——这些环境没有持久 home，启动容器即销毁，Omaha 那种"组件长期挂后台、累计升级"模型直接失效。Chrome 还假设 GUI 进程，update_client 跑在 browser 进程里，CC 走 npm 分发时 update_client 必须独立打包，反而是负累。最关键的是：CC 的更新粒度是"整 binary"，不是 Chrome 那种"几十个独立组件解耦升级"。</p>
+    </div>
+    <div class="alt-section">
+      <div class="label">权衡对比</div>
+      <table>
+        <thead><tr><th>维度</th><th>Chrome Omaha</th><th>CC 方案</th></tr></thead>
+        <tbody>
+          <tr><td>进程模型</td><td>嵌入主进程常驻</td><td>独立 AutoUpdater tick</td></tr>
+          <tr><td>组件粒度</td><td>N 个组件独立</td><td>1 个整体 binary</td></tr>
+          <tr><td>静默度</td><td>100% 无 UI</td><td>1 个角落提示</td></tr>
+          <tr><td>容器友好</td><td>差 (需持久 home)</td><td>优 (下次启动即生效)</td></tr>
+          <tr><td>差分算法</td><td>Courgette 字节级</td><td>无, 全量</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="alt-section">
+      <div class="label">代表产品</div>
+      <p>Google Chrome, Microsoft Edge, VS Code (部分组件), Adobe Creative Cloud</p>
+    </div>
+  </div>
+
+  <div id="sec-10-4" class="alt">
+    <h3>10.4 纯 npm install -g 覆盖</h3>
+    <div class="alt-section">
+      <div class="label">方案怎么工作</div>
+      <p>这是 CC 的<strong>第二条分发路径</strong>，但很多竞品（早期 <code class="inline">typescript-language-server</code>、众多 Node CLI 工具）只走这条：用户每次升级跑 <code class="inline">npm install -g &lt;pkg&gt;@latest</code> → npm 解 tarball → 在 <code class="inline">node_modules/&lt;pkg&gt;/</code> 覆盖文件 → 修改 <code class="inline">package.json</code> 的 version 字段。<strong>没有版本目录</strong>，只有当前版本在位。<code class="inline">bin</code> 字段指向的脚本是物理文件，被覆盖即破坏正在运行的 Node 进程持有的句柄。</p>
+    </div>
+    <div class="alt-section">
+      <div class="label">CC 为什么没选</div>
+      <p>npm 全量覆盖的<strong>最大问题是回滚困难</strong>：覆盖后旧版本在 <code class="inline">~/.npm/_cacache/</code> 缓存里，想回滚必须从缓存解包（可能已被 GC），或者从 registry 拉老版本（可能已被 unpublish）。CC 的 versions/ 让"回滚 = <code class="inline">ln -sfn versions/v1.0.50 claude</code>"，<strong>零网络、零计算</strong>。npm 路径在 Windows 上需要 admin（写到 <code class="inline">%AppData%\npm\</code>），CC 的 symlink 路径在 <code class="inline">~/.local/bin</code> 无需提权。npm 还有 engines.node 校验和 optional deps 解析开销，CC native binary 绕过。</p>
+    </div>
+    <div class="alt-section">
+      <div class="label">权衡对比</div>
+      <table>
+        <thead><tr><th>维度</th><th>npm install -g</th><th>CC versions/</th></tr></thead>
+        <tbody>
+          <tr><td>回滚延迟</td><td>分钟级 (网络)</td><td>微秒级 (symlink 切换)</td></tr>
+          <tr><td>Windows 提权</td><td>经常需要</td><td>不需要</td></tr>
+          <tr><td>版本可观察</td><td><code class="inline">npm ls -g</code></td><td><code class="inline">ls versions/</code></td></tr>
+          <tr><td>旧版被 GC</td><td>可能</td><td>不会, 锁住的版本留下</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="alt-section">
+      <div class="label">代表产品</div>
+      <p>几乎所有"被 npm install -g"的 CLI —— tsc, yarn@classic, ts-node, pm2</p>
+    </div>
+  </div>
+
+  <div id="sec-10-5" class="alt">
+    <h3>10.5 Docker 容器镜像更新</h3>
+    <div class="alt-section">
+      <div class="label">方案怎么工作</div>
+      <p><code class="inline">docker pull &lt;image&gt;:&lt;tag&gt;</code> → 拉所有层到 <code class="inline">/var/lib/docker/overlay2/</code> → 启动时容器 runtime (containerd / runc) 挂载 rootfs + 写可写层。回滚 = <code class="inline">docker run previous-image-id</code>。layer 是 content-addressed (SHA256)，<strong>天然原子</strong>（拉满才切）。Watchtower 是自动化：定期 poll registry → 发现新 digest → 停旧容器 + 启新容器。</p>
+    </div>
+    <div class="alt-section">
+      <div class="label">CC 为什么没选</div>
+      <p>CC 99% 的用户是<strong>直接装在 macOS/Linux 桌面</strong>，没装 Docker。强行走 Docker 路线意味着：(a) 用户必须先有 Docker daemon；(b) 镜像必须包含 Bun runtime + Node + Claude Code + 用户 shell 上下文，体积从 50MB 涨到 200+MB；(c) <code class="inline">claude</code> 命令变成 <code class="inline">docker exec -it &lt;container&gt; claude</code> 或者 bind mount，UID/GID 映射问题一箩筐。容器化适合<strong>服务端长跑进程</strong>，不适合桌面 CLI：每次启动 1–3 秒容器 runtime 开销，CC 的 symlink 方案 fork-exec 是 5–10ms，差 200×。</p>
+    </div>
+    <div class="alt-section">
+      <div class="label">权衡对比</div>
+      <table>
+        <thead><tr><th>维度</th><th>Docker pull</th><th>CC symlink</th></tr></thead>
+        <tbody>
+          <tr><td>启动延迟</td><td>1–3 s</td><td>5–10 ms</td></tr>
+          <tr><td>磁盘</td><td>overlay2 不可见增长</td><td>显式 versions/</td></tr>
+          <tr><td>桌面门槛</td><td>需 Docker Desktop</td><td>零</td></tr>
+          <tr><td>原子性</td><td>content-addressed</td><td>rename(2)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="alt-section">
+      <div class="label">代表产品</div>
+      <p>几乎所有 SaaS 后端服务, GitHub Actions runners, Kubernetes 工作负载</p>
+    </div>
+  </div>
+
+  <div id="sec-10-6" class="alt">
+    <h3>10.6 AppImage / Flatpak / Snap</h3>
+    <div class="alt-section">
+      <div class="label">方案怎么工作</div>
+      <p><strong>AppImage</strong>：单一 <code class="inline">.AppImage</code> 文件 = 自挂载 squashfs + 顶层 runtime；更新走 AppImageUpdate，下载新文件直接覆盖。<strong>Flatpak</strong>：OSTree 内容寻址存储，每次构建是 immutable commit，<code class="inline">flatpak update</code> 拉新 commit，天然原子 + 自动 GC。<strong>Snap</strong>：<code class="inline">snap install</code> 把 squashfs 挂到 <code class="inline">/snap/&lt;name&gt;/&lt;revision&gt;/</code>，<strong>多版本共存</strong>，<code class="inline">/snap/bin/&lt;name&gt;</code> 是 symlink—— <strong>最接近 CC 的版本目录模型</strong>。</p>
+    </div>
+    <div class="alt-section">
+      <div class="label">CC 为什么没选</div>
+      <p>Flatpak/Snap 都需要<strong>系统级守护进程</strong> (flatpakd, snapd) 和额外的 sandbox profile (AppArmor/seccomp)，这在用户的 macOS/Windows WSL/裸 Linux 服务器上根本不存在。AppImage 是三者中"零 daemon"的，但 AppImage 的更新是"覆盖文件 + 提示重启"，<strong>没有多版本目录</strong>，没有 CC 的 PID 锁语义。Flatpak 的 OSTree 是黄金方案，但 200MB+ 的 OSTree 仓库和 distribution-server 基础设施对 CC 这种"一个小团队的 CLI 工具"是 over-engineering。Snap 最接近 CC 的设计，但只服务 Ubuntu 衍生版。</p>
+    </div>
+    <div class="alt-section">
+      <div class="label">权衡对比</div>
+      <table>
+        <thead><tr><th>维度</th><th>Snap</th><th>CC 方案</th></tr></thead>
+        <tbody>
+          <tr><td>多版本目录</td><td><code class="inline">/snap/&lt;name&gt;/&lt;revision&gt;/</code></td><td><code class="inline">versions/&lt;v&gt;/</code></td></tr>
+          <tr><td>守护进程</td><td>snapd 必需</td><td>无</td></tr>
+          <tr><td>平台</td><td>Linux 主流</td><td>mac/Linux/Win</td></tr>
+          <tr><td>沙箱</td><td>AppArmor 自动</td><td>无</td></tr>
+          <tr><td>回滚</td><td><code class="inline">snap revert</code></td><td><code class="inline">ln -sfn</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="alt-section">
+      <div class="label">代表产品</div>
+      <p>VS Code (Snap), Spotify (Snap), Discord (Flatpak), Krita (AppImage)</p>
+    </div>
+  </div>
+
+  <div id="sec-10-7" class="alt">
+    <h3>10.7 OTA Hot-Reload (CodePush 风格)</h3>
+    <div class="alt-section">
+      <div class="label">方案怎么工作</div>
+      <p>React Native 在 mobile OTA 场景下，CodePush / Expo Updates / App Center 走 <code class="inline">JS Bundle</code> 级别热更新：启动时 <code class="inline">Updater.checkForUpdate()</code> → 拉 manifest.json（含 packageVersion + hash） → 下载新 <code class="inline">main.jsbundle</code> 到 <code class="inline">Library/Caches/</code> → 下次启动用新 bundle，<strong>Native 层二进制完全不动</strong>。<code class="inline">rollback</code> 走服务端标记。</p>
+    </div>
+    <div class="alt-section">
+      <div class="label">CC 为什么没选</div>
+      <p>CC 是 <strong>Bun + TSX 编译产物</strong>，Native 二进制 + JS bundle 二者缺一不可。TSX → JS bundle 走 <code class="inline">Bun.build({ splitting: true })</code> 出 ~450 个 chunk，这些 chunk 跨 <code class="inline">import.meta.require</code> 强耦合，单文件 patch 会破坏 module graph。即使技术上做得到，CC 的<strong>核心价值是 stdlib + tool runtime + system prompt 三者严格绑版本</strong>，hot-reload 任意一块会破坏 API 兼容性。<code class="inline">system prompt</code> 单独抽出来 hot-patch 是诱惑（很多 dev tools 都想），但 Claude Code 团队明确把 system prompt 版本和 binary 版本锁在一起——prompt 漂移是 high-risk。</p>
+      <p>更关键：CC 的更新<strong>已经满足"下次启动生效"</strong>（等于"hot patch + restart"的体验），hot-patch 唯一多给的就是"用户继续当前 session 不退出"。但 CC 的 session 长度通常是 5–30 分钟，热更新收益 &lt; 1 分钟，复杂度数量级上升。</p>
+    </div>
+    <div class="alt-section">
+      <div class="label">权衡对比</div>
+      <table>
+        <thead><tr><th>维度</th><th>CodePush OTA</th><th>CC 方案</th></tr></thead>
+        <tbody>
+          <tr><td>更新粒度</td><td>JS bundle 单文件</td><td>整 binary</td></tr>
+          <tr><td>用户中断</td><td>0 (不重启)</td><td>0 (下次启动生效)</td></tr>
+          <tr><td>Module graph 风险</td><td>高 (跨文件依赖)</td><td>0 (binary 自包含)</td></tr>
+          <tr><td>签名</td><td>强制 RSA 验签</td><td>SHA256 校验</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="alt-section">
+      <div class="label">代表产品</div>
+      <p>Microsoft Office Mobile, Discord mobile, Skype mobile</p>
+    </div>
+  </div>
+
+  <div id="sec-10-8" class="alt">
+    <h3>10.8 PWA Service Worker 更新</h3>
+    <div class="alt-section">
+      <div class="label">方案怎么工作</div>
+      <p>Service Worker 注册后通过 <code class="inline">self.skipWaiting()</code> + <code class="inline">clients.claim()</code> 推动新 SW 进入 activated 状态，但已打开的页面仍由旧 SW 控制 (controller 不变)，新 SW 进入 <code class="inline">waiting</code> 状态等待旧页面关闭。<code class="inline">workbox-window</code> 监听 waiting 事件弹 snackbar 提示用户刷新。差分走 HTTP 缓存 + 资源 hash (<code class="inline">app.[contenthash].js</code>)。</p>
+    </div>
+    <div class="alt-section">
+      <div class="label">CC 为什么没选</div>
+      <p>CC <strong>没有"持久进程 + 旧页面"模型</strong>：CLI 进程是 fork-exec 出来的，无 controller / service-worker 概念。Service Worker 的 <code class="inline">waiting → activated</code> 状态机本质是"避免打破长寿命 tab 的状态"，而 CLI 的"旧进程"正在被新 symlink 取代时<strong>用户根本不在场</strong>（下次起 shell 才用新 binary），根本不存在"用户当前页面需要保留旧版本"的张力。Service Worker 的 waiting 队列对长寿命 PWA 至关重要，对 CC 是反模式。</p>
+    </div>
+    <div class="alt-section">
+      <div class="label">权衡对比</div>
+      <table>
+        <thead><tr><th>维度</th><th>SW update</th><th>CC 方案</th></tr></thead>
+        <tbody>
+          <tr><td>长寿命客户端</td><td>SPA 标签页常驻</td><td>进程短命</td></tr>
+          <tr><td>控制器切换</td><td>skipWaiting + claim</td><td>下次 exec</td></tr>
+          <tr><td>用户介入</td><td>snackbar 提示 reload</td><td>角落 toast, 自动</td></tr>
+          <tr><td>资源粒度</td><td>文件级 hash</td><td>整 binary</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="alt-section">
+      <div class="label">代表产品</div>
+      <p>Twitter Lite, Starbucks PWA, Uber PWA, 几乎所有 PWA</p>
+    </div>
+  </div>
+
+  <div id="sec-10-9" class="alt" style="border-left-color: var(--green);">
+    <h3>10.9 综合判断：为什么 CC 是 CLI 场景的近似最优解</h3>
+    <p>CC 的"版本目录 + symlink + PID 锁"三件套是 <strong>CLI 工具独有约束下的最优组合</strong>：</p>
+
+    <ol>
+      <li><strong>零启动开销</strong>：CLI 用户每次敲 <code class="inline">claude</code> 都期望 5–10ms 返回，任何"先检查再启动"的路径 (Container / SW / Electron-style <code class="inline">app.quit</code>) 都是反 UX。CC 的 symlink 切换对 fork-exec <strong>完全透明</strong>。</li>
+      <li><strong>跨平台对称</strong>：<code class="inline">versions/&lt;v&gt;/</code> + symlink 在 macOS、Linux、WSL 上都成立（Windows NTFS 通过 junction 或 PowerShell 也支持）。Omaha/Sparkle 的平台分叉消失。</li>
+      <li><strong>回滚等价于重启成本</strong>：容器化方案的回滚需要"启新进程"（秒级），SW 方案的回滚需要"用户刷新"（UX 成本），CC 的回滚是 <code class="inline">ln -sfn</code>（微秒级）。对 dev tool 这种"一不小心装了 broken 版本要立刻回退"的场景，<strong>回滚延迟比更新延迟更影响生产力</strong>。</li>
+      <li><strong>无守护进程约束</strong>：容器/Snap/Flatpak/SW 都需要某种 persistent runtime，CC 没有任何守护进程，意味着 CI runner、Docker 容器、临时 shell 会话都能正常工作。</li>
+      <li><strong>磁盘成本可预测</strong>：双份 binary 100MB × 2 = 200MB 上限，PID 锁住的旧版本在进程退出后由下次更新自动 GC（mtime 7 天 stale fallback），没有 Omaha 那种"几十个组件版本叠加"的风险。</li>
+    </ol>
+
+    <p>唯一 CC 没解决的问题是<strong>网络 delta</strong>，但 10–20MB 的 gzip 增量在 dev tool 用户场景下（&lt; 1MB/s 网络 = 10–20 秒下载）远低于"必须看 5–10 分钟更新弹窗"的心理成本。所以 CC 用 <strong>atomic-symlink + 静默 + 下次启动</strong> 的组合，<strong>在"实现复杂度 × 用户体验 × 平台覆盖"三维上达到了 CLI 场景的 Pareto 前沿</strong>。</p>
+  </div>
+</section>
+
+<section id="sec-11">
+  <h2><span class="section-num">11</span> 前端可移植性</h2>
+
+  <p>这一节是<strong>本文给中高级前端读者的最大增量</strong>：把 Claude Code 的 12 项核心技巧映射到前端实际场景。每个场景给出代码示例 + 真实业务案例 + 反模式。</p>
+
+  <div class="callout info">
+    <span class="icon">💡</span><strong>怎么读这一节</strong>：你不需要在每个项目都全套照搬。每个场景都标了"对应 CC 第 N 条技巧"，按你当前要解决的问题反查即可。
+  </div>
+
+  <div class="scenario">
+    <div class="head">
+      <h4>11.1 PWA Service Worker 原子升级</h4>
+      <span class="map">🔗 对应 CC 技巧 1 + 12（多版本共存 + 下次启动生效）</span>
+    </div>
+    <p class="meta-line">🎯 移动端 PWA 用户在地铁里打开，静默下载新 SW，切到下一帧无感生效</p>
+<pre><code>// service-worker.ts
+const CACHE = `app-v${__BUILD_HASH__}`
+self.addEventListener('install', e =&gt; {
+  e.waitUntil(caches.open(CACHE).then(c =&gt; c.addAll(ASSETS)).then(() =&gt; self.skipWaiting()))
+})
+self.addEventListener('activate', e =&gt; {
+  e.waitUntil(caches.keys().then(keys =&gt;
+    Promise.all(keys.filter(k =&gt; k !== CACHE).map(k =&gt; caches.delete(k)))
+  ).then(() =&gt; self.clients.claim()))
+})
+// main.tsx
+navigator.serviceWorker.addEventListener('controllerchange', () =&gt; {
+  // 新 SW 已接管, 提示用户但不强制刷新
+  showToast('新版本已就绪, 下次启动生效')
+})</code></pre>
+    <p class="case">📋 抖音 PWA Lite、Instagram Lite 用 skipWaiting + 提示用户"下拉刷新"；飞书文档桌面端 SW 升级后会等到下一次空闲再切。</p>
+    <p class="anti">⚠️ <strong>反模式</strong>：业务强依赖持久化状态（未保存表单、正在录视频）时，强制 <code class="inline">claim()</code> 会导致 WebRTC/Canvas 中断 —— 必须等用户操作完毕。</p>
+  </div>
+
+  <div class="scenario">
+    <div class="head">
+      <h4>11.2 微前端子应用灰度发布</h4>
+      <span class="map">🔗 对应 CC 技巧 1 + 7（多版本 + server kill switch）</span>
+    </div>
+    <p class="meta-line">🎯 蚂蚁 qiankun 模式下，主应用拉取子应用 manifest，命中灰度则加载新 bundle，否则 fallback 到旧版</p>
+<pre><code>import { registerMicroApps, loadMicroApp } from 'qiankun'
+const manifest = await fetch('/api/manifests/order-app').then(r =&gt; r.json())
+// 服务端返回: { entry: '...', maxVersion: '2.3.1', legacyEntry: '...' }
+const clientVersion = localStorage.getItem('order-app-version') ?? '2.2.0'
+const targetEntry = semver.gte(clientVersion, manifest.maxVersion)
+  ? manifest.entry
+  : manifest.legacyEntry  // 服务端 kill switch 兜底
+
+registerMicroApps([{
+  name: 'order-app', entry: targetEntry, container: '#subapp',
+  activeRule: '/order', props: { token }
+}])</code></pre>
+    <p class="case">📋 蚂蚁内部"业务平台"的子应用发布系统，主应用每次启动都拉服务端 manifest，客户端版本若超过 maxVersion 自动降级；字节 Lark/飞书的微前端也用类似 "server-driven version cap"。</p>
+    <p class="anti">⚠️ <strong>反模式</strong>：子应用体积 &gt; 2MB 且网络差（东南亚 3G）时，灰度 + 强制切换会导致首屏白屏 —— 应配合"灰度只走 5% 流量"的 CDN 边缘策略，不要让客户端 hard-switch。</p>
+  </div>
+
+  <div class="scenario">
+    <div class="head">
+      <h4>11.3 SPA 旧 chunk 404 自愈</h4>
+      <span class="map">🔗 对应 CC 技巧 1 + 12（多版本 + 友好提示）</span>
+    </div>
+    <p class="meta-line">🎯 灰度发布时，旧用户拿到的 HTML 引用了已被 CDN 下线的新 chunk 文件名</p>
+<pre><code>async function safeImport(specifier: string) {
+  try {
+    return await import(/* @vite-ignore */ specifier)
+  } catch (err) {
+    if (err instanceof Error &amp;&amp; /Failed to fetch|404/.test(err.message)) {
+      reportError({ type: 'chunk-404', specifier })
+      showFullscreenModal('检测到新版本, 点击刷新', () =&gt; location.reload())
+    }
+    throw err
+  }
+}
+const Dashboard = lazy(() =&gt; safeImport('./pages/Dashboard'))
+// 全局兜底
+window.addEventListener('unhandledrejection', e =&gt; {
+  if (/Loading chunk \d+ failed/.test(String(e.reason))) location.reload()
+})</code></pre>
+    <p class="case">📋 B 站管理后台、字节内部 Admin 平台都用 "unhandledrejection 监听 chunk 失败 + 静默刷新"；阿里云控制台直接弹 modal 而不是默默刷新。</p>
+    <p class="anti">⚠️ <strong>反模式</strong>：表单有 5 分钟未保存内容时，自动 reload 会丢数据 —— 必须先持久化到 sessionStorage，刷新后恢复；此外刷新应该是"按钮"而非"自动"，给用户取消的机会。</p>
+  </div>
+
+  <div class="scenario">
+    <div class="head">
+      <h4>11.4 大表单防重复提交 (ref + singleflight)</h4>
+      <span class="map">🔗 对应 CC 技巧 4 + 5（ref 守卫 + singleflight）</span>
+    </div>
+    <p class="meta-line">🎯 用户连点"提交订单"按钮，防止生成多个订单；同时网络慢导致 useState 闭包过期</p>
+<pre><code>function useSubmitOrder() {
+  const inFlight = useRef&lt;Promise&lt;Order&gt; | null&gt;(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  const submit = useCallback(async (payload: OrderPayload) =&gt; {
+    if (inFlight.current) return inFlight.current  // singleflight 复用
+    setSubmitting(true)
+    inFlight.current = fetch('/api/orders', {
+      method: 'POST', body: JSON.stringify(payload)
+    }).then(r =&gt; r.json()).finally(() =&gt; {
+      inFlight.current = null
+      setSubmitting(false)
+    })
+    return inFlight.current
+  }, [])
+
+  return { submit, submitting }
+}</code></pre>
+    <p class="case">📋 美团外卖下单按钮（早期是节流，后来改 singleflight）；支付宝转账页的"确认付款"按钮，重复点击只发一次请求。</p>
+    <p class="anti">⚠️ <strong>反模式</strong>：幂等性差的接口（如第三方支付）不能用 singleflight —— 必须串行，因为第二次请求会触发真实扣款；此时用 disable + loading 即可。</p>
+  </div>
+
+  <div class="scenario">
+    <div class="head">
+      <h4>11.5 WebSocket 心跳 + Stall Detection</h4>
+      <span class="map">🔗 对应 CC 技巧 9 + 10（chunk 级 stall + 选择性重试）</span>
+    </div>
+    <p class="meta-line">🎯 IM 长连接在弱网下不立刻断，通过"按 chunk 重置"识别真死还是慢</p>
+<pre><code>class SmartWS {
+  private ws!: WebSocket
+  private stallTimer?: number
+  private readonly STALL_MS = 30_000   // 单条消息间最大间隔
+  private readonly MAX_MS = 3600_000   // 连接总寿命
+
+  send(data: string) {
+    this.resetStall()
+    this.ws.send(data)
+  }
+  private resetStall() {
+    clearTimeout(this.stallTimer)
+    this.stallTimer = window.setTimeout(() =&gt; {
+      console.warn('stall detected, reconnect')
+      this.reconnect()
+    }, this.STALL_MS)
+  }
+  private onChunk() {
+    this.resetStall()  // 每收到一个分片就重置 stall
+  }
+  private onError(e: Event) {
+    if (this.isTransient(e)) this.reconnect()  // 不对鉴权硬错误重连
+  }
+}</code></pre>
+    <p class="case">📋 飞书消息长连接、微信小程序 WebSocket 库；声网 SDK 也用类似 chunk-driven stall 而非纯 timeout。</p>
+    <p class="anti">⚠️ <strong>反模式</strong>：视频流（每帧都有 chunk）会频繁重置 stall，此时 stall 应改为"距离上条 control 消息的时间"；不要无脑 30s 阈值。</p>
+  </div>
+
+  <div class="scenario">
+    <div class="head">
+      <h4>11.6 SWR / React Query 接口去重</h4>
+      <span class="map">🔗 对应 CC 技巧 5（singleflight）</span>
+    </div>
+    <p class="meta-line">🎯 5 个组件同时挂载，都在请求 <code class="inline">/api/user</code>，只发一个 HTTP 请求</p>
+<pre><code>import useSWR from 'swr'
+function useUser(id: string) {
+  const { data, error, isLoading } = useSWR(
+    `/api/user/${id}`,
+    fetcher,
+    { dedupingInterval: 2000, revalidateOnFocus: true, revalidateIfStale: true }
+  )
+  return { user: data, error, loading: isLoading }
+}
+// 自定义 inFlight map
+const inflight = new Map&lt;string, Promise&lt;any&gt;&gt;()
+async function singleflight(key: string, fn: () =&gt; Promise&lt;any&gt;) {
+  if (inflight.has(key)) return inflight.get(key)!
+  const p = fn().finally(() =&gt; inflight.delete(key))
+  inflight.set(key, p)
+  return p
+}</code></pre>
+    <p class="case">📋 字节 Lark 文档打开多 tab，同一份文档只发一个 ws subscribe；阿里云控制台打开多个 RAM 用户管理 tab 也只发一次 listUsers。</p>
+    <p class="anti">⚠️ <strong>反模式</strong>：业务要求"实时强一致"（金融账户余额）时，<code class="inline">dedupingInterval</code> 必须设 0 —— 否则用户切回 tab 看到的是 stale 数据，可能造成重复扣款。</p>
+  </div>
+
+  <div class="scenario">
+    <div class="head">
+      <h4>11.7 多 Tab 上传去重 (PID lock 镜像)</h4>
+      <span class="map">🔗 对应 CC 技巧 2 + 6（资源锁 + TOCTOU）</span>
+    </div>
+    <p class="meta-line">🎯 用户在 A tab 上传 1GB 大文件，同时在 B tab 选文件再点上传 —— 不能并发上传两份</p>
+<pre><code>class UploadCoordinator {
+  private channel = new BroadcastChannel('upload-leader')
+  private lock: any = null
+
+  async acquireLock(): Promise&lt;boolean&gt; {
+    return new Promise(resolve =&gt; {
+      navigator.locks.request('upload-singleton', { mode: 'exclusive' }, async lock =&gt; {
+        this.lock = lock
+        this.channel.postMessage({ type: 'leader-elected' })
+        await new Promise&lt;void&gt;(r =&gt; { lock.release = r })
+        resolve(true)
+      })
+    })
+  }
+}
+// 监听其他 tab 的上传状态
+this.channel.onmessage = (e) =&gt; {
+  if (e.data.type === 'uploading') {
+    showBanner('其他标签页正在上传, 请勿重复操作')
+  }
+}
+window.addEventListener('beforeunload', () =&gt; this.lock?.release())</code></pre>
+    <p class="case">📋 飞书云文档的"上传中"锁；钉钉的"该文件已在其他设备上传"提示；百度网盘 PC 端用 similar pattern 防止重复秒传。</p>
+    <p class="anti">⚠️ <strong>反模式</strong>：弱网 + 浏览器兼容性差的场景（Web Locks API Safari 15.4+ 才支持）不要裸用，要降级到 localStorage 轮询 + 5s heartbeat。</p>
+  </div>
+
+  <div class="scenario">
+    <div class="head">
+      <h4>11.8 Feature Flag 客户端 + 服务端 kill switch</h4>
+      <span class="map">🔗 对应 CC 技巧 7（server-driven kill switch）</span>
+    </div>
+    <p class="meta-line">🎯 新版"AI 助手"上线 1% 灰度，服务端发现 CPU 飙升可立即 100% 关闭</p>
+<pre><code>interface FlagConfig { flagKey: string; kill: boolean; rollout: number; clientCap: string }
+
+async function getFlag(key: string): Promise&lt;boolean&gt; {
+  const config = await fetch(`/api/flags/${key}`).then(r =&gt; r.json()) as FlagConfig
+  if (config.kill) return false  // 服务端 kill switch, 最高优先级
+  const hash = cyrb53(getUserId() + key) % 100
+  return hash &lt; config.rollout
+}
+
+const useFeature = (key: string) =&gt; {
+  const [enabled, setEnabled] = useState(false)
+  useEffect(() =&gt; { getFlag(key).then(setEnabled) }, [key])
+  return enabled
+}
+// 升级风险: 客户端不要缓存太久
+const { data } = useSWR('/api/flags/ai-assistant', fetcher, {
+  refreshInterval: 30_000,
+  revalidateOnFocus: true
+})</code></pre>
+    <p class="case">📋 字节 Lark 的"实验平台"；蚂蚁"灰度发布平台"客户端 SDK；美团内部的 MTFlag 体系都要求"server can always override"。</p>
+    <p class="anti">⚠️ <strong>反模式</strong>：纯客户端 hash rollout 而无服务端 kill switch 是巨大隐患 —— 一旦代码被推到客户端，出了问题只能"发版回滚"，灰度期间是救不回来的。</p>
+  </div>
+
+  <div class="scenario">
+    <div class="head">
+      <h4>11.9 CDN 资源 SRI + 落空回退</h4>
+      <span class="map">🔗 对应 CC 技巧 11（完整性 + manifest）</span>
+    </div>
+    <p class="meta-line">🎯 第三方 CDN 被劫持或返回篡改 JS，浏览器拒绝加载并降级到自有 CDN</p>
+<pre><code>function loadScriptWithFallback(src: string, integrity: string, fallback: string) {
+  return new Promise&lt;void&gt;((resolve, reject) =&gt; {
+    const s = document.createElement('script')
+    s.src = src
+    s.integrity = integrity
+    s.crossOrigin = 'anonymous'
+    s.onload = () =&gt; resolve()
+    s.onerror = () =&gt; {
+      console.warn(`SRI mismatch for ${src}, falling back`)
+      const f = document.createElement('script')
+      f.src = fallback
+      f.onload = () =&gt; resolve()
+      f.onerror = () =&gt; reject(new Error('all CDNs failed'))
+      document.head.appendChild(f)
+    }
+    document.head.appendChild(s)
+  })
+}</code></pre>
+    <p class="case">📋 阿里云控制台加载 oss-sdk，字节火山引擎控制台加载监控 SDK，都用 SRI + 国内多 CDN fallback（alicdn + 自建）；GitHub.com 早期也用 SRI 防供应链攻击。</p>
+    <p class="anti">⚠️ <strong>反模式</strong>：资源带版本参数 <code class="inline">?v=123</code> 时 integrity 也得跟着变，否则会一直 mismatch —— 用 hash 编译进 bundle，别用时间戳。</p>
+  </div>
+
+  <div class="scenario">
+    <div class="head">
+      <h4>11.10 构建产物 hash + 蓝绿部署</h4>
+      <span class="map">🔗 对应 CC 技巧 1（多版本 + atomic switch）</span>
+    </div>
+    <p class="meta-line">🎯 Vite 打包出 <code class="inline">index.a1b2c3.js</code>，部署到 OSS，切版本是 OSS 上的 atomic rename</p>
+<pre><code>// vite.config.ts
+export default defineConfig({
+  build: {
+    rollupOptions: {
+      output: {
+        entryFileNames: `assets/[name].[hash].js`,
+        chunkFileNames: `assets/[name].[hash].js`,
+        assetFileNames: `assets/[name].[hash].[ext]`
+      }
+    }
+  }
+})
+
+# deploy.sh
+aws s3 sync ./dist s3://my-bucket/green/ --cache-control "public, max-age=31536000, immutable"
+aws s3 cp s3://my-bucket/blue/index.html s3://my-bucket/green/index.html
+# CDN 切流(原子): 改 DNS / CDN origin path, 不动文件</code></pre>
+    <p class="case">📋 B 站主站、知乎 Web 端都是 build 出 hash 文件名，CDN 上 <code class="inline">current</code> 是个指针；蚂蚁金融云发布也是 OSS symlink 原子切。</p>
+    <p class="anti">⚠️ <strong>反模式</strong>：index.html 不能用 hash，只能用 <code class="inline">current/index.html</code> 这种 path —— 否则用户拿到旧 index.html 又去拉新 chunk 必 404；SSR 还需要配合 CDN purge。</p>
+  </div>
+
+  <div class="scenario">
+    <div class="head">
+      <h4>11.11 错误边界 + 升级失败静默降级</h4>
+      <span class="map">🔗 对应 CC 技巧 12 的镜像（友好失败）</span>
+    </div>
+    <p class="meta-line">🎯 新版"AI 推荐"组件加载失败，不影响其他模块，降级显示静态推荐</p>
+<pre><code>import { ErrorBoundary } from 'react-error-boundary'
+
+function Fallback() {
+  return &lt;div className="recommend-fallback"&gt;为你推荐: 文章 A, 文章 B&lt;/div&gt;
+}
+
+function ErrorFallback({ error }) {
+  useEffect(() =&gt; { reportError(error) }, [error])
+  return &lt;Fallback /&gt;
+}
+
+export function AISection() {
+  return (
+    &lt;ErrorBoundary FallbackComponent={ErrorFallback} onReset={() =&gt; location.reload()}&gt;
+      &lt;Suspense fallback={&lt;Skeleton /&gt;}&gt;
+        &lt;LazyAIComponent /&gt;
+      &lt;/Suspense&gt;
+    &lt;/ErrorBoundary&gt;
+  )
+}</code></pre>
+    <p class="case">📋 字节飞书的"智能助手"插件加载失败，降级为菜单入口消失而不报错；微信小程序 plugin 加载失败时主程序无感知。</p>
+    <p class="anti">⚠️ <strong>反模式</strong>：关键业务链路（支付、登录）不能用静默降级 —— 必须硬错误，提示用户重试或联系客服，否则用户会以为"功能不存在"。</p>
+  </div>
+
+  <div class="scenario">
+    <div class="head">
+      <h4>11.12 离线优先双 cache + atomic swap</h4>
+      <span class="map">🔗 对应 CC 技巧 1（多版本共存）</span>
+    </div>
+    <p class="meta-line">🎯 Notion-like 编辑器，离线编辑时用 IndexedDB 旧版本，在线时静默切到新版本</p>
+<pre><code>import { precacheAndRoute } from 'workbox-precaching'
+import { registerRoute } from 'workbox-routing'
+import { NetworkFirst } from 'workbox-strategies'
+
+precacheAndRoute(self.__WB_MANIFEST)  // 版本化预缓存, build 时注入
+
+registerRoute(
+  ({ url }) =&gt; url.pathname.startsWith('/api/docs'),
+  new NetworkFirst({
+    cacheName: 'api-cache-v2',  // 版本号跟着 release 走
+    networkTimeoutSeconds: 3,
+    plugins: [{
+      cacheWillUpdate: async ({ response }) =&gt;
+        response?.status === 200 ? response : null
+    }]
+  })
+)
+
+self.addEventListener('install', () =&gt; self.skipWaiting())
+self.addEventListener('activate', e =&gt; {
+  e.waitUntil(
+    caches.keys().then(keys =&gt;
+      Promise.all(keys.filter(k =&gt; k !== 'api-cache-v2').map(k =&gt; caches.delete(k)))
+    )
+  )
+})</code></pre>
+    <p class="case">📋 Notion 桌面 PWA 离线编辑；飞书云文档离线模式；腾讯文档的"断网保护"都使用类似 precache 版本化策略。</p>
+    <p class="anti">⚠️ <strong>反模式</strong>：实时协作（多人编辑）场景不能双 cache —— 必须 Service Worker 立即让位，否则两个 tab 看到不同版本；用 BroadcastChannel 协调。</p>
+  </div>
+
+  <div class="scenario">
+    <div class="head">
+      <h4>11.13 SWR stale-while-revalidate</h4>
+      <span class="map">🔗 对应 CC 技巧 12（下次启动生效的镜像）</span>
+    </div>
+    <p class="meta-line">🎯 列表页打开瞬间显示旧数据，背后悄悄拉新数据，切到下一帧无感</p>
+<pre><code>import useSWR from 'swr'
+function useDashboard() {
+  const { data, isLoading, isValidating } = useSWR(
+    '/api/dashboard',
+    fetcher,
+    {
+      revalidateOnMount: true,     // 挂载时后台 refetch
+      revalidateOnFocus: true,     // 切回 tab 时 refetch
+      revalidateOnReconnect: true, // 网络重连时 refetch
+      dedupingInterval: 5_000,
+      keepPreviousData: true       // key 变化时保留旧数据
+    }
+  )
+  return { data, isLoading, isValidating }
+}</code></pre>
+    <p class="case">📋 B 站个人空间页、知乎首页 feed 全部都是 SWR 模式；阿里云控制台的"概览页"也是 stale-while-revalidate。</p>
+    <p class="anti">⚠️ <strong>反模式</strong>：用户期望"打开即新数据"（订单详情、票务查询）时不能用 SWR —— 此时应用 NetworkFirst + loading skeleton，否则用户看到的可能是 1 小时前的订单状态。</p>
+  </div>
+
+  <div class="scenario">
+    <div class="head">
+      <h4>11.14 更新提示去重 (semver 段比对)</h4>
+      <span class="map">🔗 对应 CC 技巧 8（semver 段去重）</span>
+    </div>
+    <p class="meta-line">🎯 同一 patch 发了 3 次 hotfix，用户不应该收到 3 次"新版本"通知</p>
+<pre><code>import semver from 'semver'
+
+const NOTIFIED_KEY = 'lastNotifiedVersion'
+function shouldNotify(remoteVersion: string): boolean {
+  const last = localStorage.getItem(NOTIFIED_KEY)
+  // 1.2.3+build.4 和 1.2.3+build.5 视为同一版本
+  const lastCore = last ? semver.coerce(last)?.version : null
+  const remoteCore = semver.coerce(remoteVersion)?.version
+  if (!remoteCore || lastCore === remoteCore) return false
+  if (semver.eq(remoteCore, lastCore)) return false
+  return true
+}
+
+function notifyOnce(remoteVersion: string) {
+  if (!shouldNotify(remoteVersion)) return
+  showToast(`新版本 ${remoteVersion} 已发布`)
+  localStorage.setItem(NOTIFIED_KEY, remoteVersion)
+}</code></pre>
+    <p class="case">📋 钉钉客户端更新提示、字节 Lark PC 端升级弹窗都是按 minor/major 粒度；VS Code 也是 patch 静默、minor 才弹窗。</p>
+    <p class="anti">⚠️ <strong>反模式</strong>：安全更新必须强制提示（patch 也要弹），不能因为"同一 patch"就吞掉 —— semver 段去重是 UX 优化，不是安全降级。</p>
+  </div>
+
+  <div class="scenario">
+    <div class="head">
+      <h4>11.15 AbortController + 选择性重试</h4>
+      <span class="map">🔗 对应 CC 技巧 9 + 10（stall + 选择性重试）</span>
+    </div>
+    <p class="meta-line">🎯 组件卸载时 abort 进行中的请求；网络抖动重试，鉴权失败不重试</p>
+<pre><code>async function fetchWithRetry(url: string, opts: RequestInit = {}, retries = 3) {
+  const controller = new AbortController()
+
+  for (let i = 0; i &lt; retries; i++) {
+    try {
+      const res = await fetch(url, { ...opts, signal: controller.signal })
+      // 只对 5xx 和 429 重试, 4xx(除 429)不重试
+      if (res.status &gt;= 500 || res.status === 429) {
+        if (i &lt; retries - 1) {
+          await new Promise(r =&gt; setTimeout(r, Math.min(1000 * 2 ** i, 10_000)))
+          continue
+        }
+      }
+      return res
+    } catch (err) {
+      if (err instanceof DOMException &amp;&amp; err.name === 'AbortError') throw err
+      if (i === retries - 1) throw err
+    }
+  }
+}
+// React Query 自带 signal, 卸载组件时自动 abort
+const { data } = useQuery({
+  queryKey: ['user'],
+  queryFn: ({ signal }) =&gt; fetch('/api/user', { signal }).then(r =&gt; r.json())
+})</code></pre>
+    <p class="case">📋 阿里云 SDK、字节 fetch 库全部基于 status code 分级重试；React Query/SWR 都内置 AbortController，卸载组件时自动取消请求。</p>
+    <p class="anti">⚠️ <strong>反模式</strong>：POST/PUT 请求不要自动重试 —— 第一次可能已经写入，重试会造成重复扣款；退避策略最大重试 3 次，否则用户等待时间过长。</p>
+  </div>
+
+  <hr class="sep">
+
+  <div class="supp-block">
+    <div class="supp-header">💡 <span class="badge-tag">ESSENCE</span> 前端工程师视角的元结论</div>
+    <div class="supp-body">
+      <p>为什么 CC 的 CLI 自动更新设计对前端工程师有<strong>特殊价值</strong>？</p>
+
+      <h4>1. 前端是天然的"多版本共存"系统</h4>
+      <p>一个浏览器 tab、一个 SW、一份 cache 都是"旧版本"，切换必须原子 —— 这是浏览器架构强加的，不是设计选择。CC 把它抽象成"manifest + 切换原子"，我们用 Service Worker / Module Federation / CDN symlink 复用同一思路。</p>
+
+      <h4>2. CC 的所有"反直觉"决策都是为可用性服务的</h4>
+      <p>skipWaiting 不强求刷新、stall 而非 timeout、忽略 build metadata —— 这些都不是技术最优，而是"用户感知最优"。前端工程师最容易踩的坑就是"工程师觉得对"的方案：强制 reload、纯 timeout 断连、按 build 编号提示。</p>
+
+      <h4>3. 跨进程锁 / 文件锁在浏览器里有 mirror</h4>
+      <p>浏览器没有真正的 PID，但有 Web Locks API、BroadcastChannel、localStorage 轮询 —— 这些是 CC 的 <code class="inline">flock()</code> / <code class="inline">open(O_EXCL)</code> 的对等物。理解了 CC 的"为什么"，才能在浏览器侧正确选型。</p>
+
+      <h4>4. server-driven kill switch 是客户端工程的救命稻草</h4>
+      <p>前端一旦发版，撤回成本极高（CDN 缓存、用户不刷新）。CC 的 "客户端 cap 在 maxVersion" 设计，让前端也有"灰度期间 5 分钟内紧急回滚"的能力 —— 这是 Feature Flag 体系的核心价值。</p>
+
+      <h4>5. semver 段去重 + 选择性重试，是"工程克制"的典范</h4>
+      <p>工程师总想"多提示一次"、"多重试一次"，但用户感知上是骚扰。CC 用极简的策略规避了过度优化，这种"克制"在前端是稀缺品质。</p>
+    </div>
+  </div>
+</section>
+
+<section id="sec-11-5">
+  <h2><span class="section-num" style="background:var(--purple); color:#fff; border-color:var(--purple);">11.5</span> 如果你只关心 npm 包发版（专题）</h2>
+
+  <div class="callout pin">
+    <span class="icon">📌</span><strong>这一节解决什么</strong>：CC 把"原生二进制"路径写得最重，但很多读者其实只发 npm 包。下面把 12 项技巧逐条标上"npm 适用 / 原生才有"，然后给出<strong>纯 npm CLI 可以照搬的最小食谱</strong>。
+  </div>
+
+  <h3>11.5.1 12 项技巧的 npm 适用性</h3>
+
+  <table>
+    <thead><tr><th>#</th><th>技巧</th><th>npm 适用</th><th>原因 / 退化方式</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>多版本共存 + atomic symlink</td><td style="color:var(--red);">❌</td><td>npm 单点覆盖 <code class="inline">node_modules/&lt;pkg&gt;</code>，没有 <code class="inline">versions/</code> 目录的概念</td></tr>
+      <tr><td>2</td><td>PID lock 锁运行中版本</td><td style="color:var(--red);">❌</td><td>没有"旧版本要保留"的需求——Node 启动时已经把代码 require 到内存里，文件被覆盖不影响</td></tr>
+      <tr><td>3</td><td>UI 挂载 + 30 分钟轮询</td><td style="color:var(--green);">✅</td><td>纯 React/JS 模式，与下载方式无关</td></tr>
+      <tr><td>4</td><td>ref-based isUpdating 守卫</td><td style="color:var(--green);">✅</td><td>纯 React 模式</td></tr>
+      <tr><td>5</td><td>In-process singleflight</td><td style="color:var(--green);">✅</td><td>纯 JS 模式</td></tr>
+      <tr><td>6</td><td>跨进程 <code class="inline">.update.lock</code> + TOCTOU 修复</td><td style="color:var(--green);">✅</td><td><strong>CC 的 npm 路径本来就用这个</strong>（<span class="code-loc">autoUpdater.ts:176-249</span>）</td></tr>
+      <tr><td>7</td><td>Server-driven <code class="inline">maxVersion</code> kill switch</td><td style="color:var(--green);">✅</td><td>纯 HTTP，与分发渠道无关</td></tr>
+      <tr><td>8</td><td>semver 段去重提示</td><td style="color:var(--green);">✅</td><td>纯逻辑</td></tr>
+      <tr><td>9</td><td>Stall detection（按 chunk 重置超时）</td><td style="color:var(--yellow);">⚠️</td><td>npm 自己处理下载，外层调用不到字节流；要管下载得绕开 npm</td></tr>
+      <tr><td>10</td><td>选择性 backoff retry（只重试 stall）</td><td style="color:var(--yellow);">⚠️</td><td>同上，npm 的 retry 是它内部的事；外层只能重试 <code class="inline">npm install</code> 命令本身</td></tr>
+      <tr><td>11</td><td>manifest.json + SHA256 完整性</td><td style="color:var(--yellow);">⚠️</td><td>npm 自带 <code class="inline">package-lock.json</code> integrity，再造无意义；要更严只能换分发</td></tr>
+      <tr><td>12</td><td>下次启动生效 + 友好"重启提示"</td><td style="color:var(--green);">✅</td><td><strong>天然成立</strong>：Node 加载脚本到内存后，npm 替换磁盘文件不影响当前进程</td></tr>
+    </tbody>
+  </table>
+
+  <p><strong>结论：8 条直接可抄 / 3 条受 npm 黑盒限制 / 2 条只在原生二进制成立。</strong></p>
+
+  <h3>11.5.2 为什么 npm 注定拿不到那 2 条 ❌</h3>
+
+  <p>多版本共存 + symlink 切换的本质是"<strong>把文件路径作为版本身份</strong>"。CC 的 native 路径是：</p>
+
+  <div class="flow">~/.local/bin/claude  →  versions/2.1.888    ← 旧进程的 execPath
+                        versions/2.1.889    ← 新版本独立文件
+切换 = 改一个 symlink 指向</div>
+
+  <p>npm 的 layout 不允许这件事：</p>
+
+  <div class="flow">/usr/local/lib/node_modules/&lt;pkg&gt;/dist/cli.js   ← 全局只有一份, npm 直接覆盖
+/usr/local/bin/&lt;pkg&gt;                            ← 是个固定 shim 脚本</div>
+
+  <p>npm 升级 = 解新 tarball → 覆盖 <code class="inline">node_modules/&lt;pkg&gt;/</code> 全部文件。<strong>没有 <code class="inline">versions/&lt;x&gt;/</code> 这一层</strong>，也就没有"切换 symlink"的对应物。</p>
+
+  <h3>11.5.3 为什么 npm 不需要这两条也能"无感"</h3>
+
+  <p><strong>Node 模块加载是 read-once 语义</strong>。当 CLI 启动时：</p>
+
+  <div class="flow">node /usr/local/bin/&lt;pkg&gt;
+  → require('&lt;pkg&gt;/dist/cli.js')   // 读到内存
+  → require('&lt;pkg&gt;/dist/chunk.js') // 读到内存
+  → ... 所有 chunk 在启动期被 require 加载
+  → 之后 cli.js 文件在磁盘上被覆盖, 内存中的代码完全不受影响</div>
+
+  <div class="gloss-tip">
+    <span class="gloss-icon">📖</span>
+    <div class="gloss-body"><strong>类比</strong>：就像你在浏览器里打开了一篇文章，服务器把原文删了，你的页面照样能继续看——浏览器已经把内容 fetch 到内存。Node 的 require 同理。</div>
+  </div>
+
+  <p>只要 CLI 在启动时已经把所有需要的代码加载进来，<strong>npm install -g 把磁盘文件全替换了，当前进程毫发无伤</strong>。下次用户敲命令，shell 跑 shim，require 到的就是新版本。<strong>这等价于 CC native 路径的"下次启动生效"</strong>。</p>
+
+  <p>所以对纯 npm 包，"PID 锁"和"多版本共存"是为了解决一个 <em>npm 本来就没有的问题</em>。</p>
+
+  <h3>11.5.4 CC 给 npm 路径打的两个补丁</h3>
+
+  <p>CC 没满足于"npm install -g"的原始体验，做了两件事让 npm 路径更接近 native：</p>
+
+  <h4>🩹 补丁 1：<code class="inline">.update.lock</code> 跨进程锁</h4>
+
+  <p><span class="file">src/utils/autoUpdater.ts:176-249</span>。这是<strong>纯 npm 包就能用的 5 分钟跨进程文件锁</strong>：</p>
+
+<pre><code>// ~/.&lt;your-cli&gt;/.update.lock
+// O_EXCL 原子创建; 同时只能有一个进程持有
+await writeFile(lockPath, `${process.pid}`, { encoding: 'utf8', flag: 'wx' })
+
+// TOCTOU 修复: unlink 之前再 stat 一次
+const stats = await fs.stat(lockPath)
+if (Date.now() - stats.mtimeMs &lt; LOCK_TIMEOUT_MS) return false
+const recheck = await fs.stat(lockPath)        // ← 关键的二次检查
+if (Date.now() - recheck.mtimeMs &lt; LOCK_TIMEOUT_MS) return false
+await fs.unlink(lockPath)</code></pre>
+
+  <p>任何 npm CLI 都可以照搬，挡掉"用户开了三个终端同时升级"的并发踩踏。</p>
+
+  <h4>🩹 补丁 2：local install 模式（<code class="inline">~/.&lt;cli&gt;/local/</code>）</h4>
+
+  <p><span class="file">src/utils/localInstaller.ts</span>。这是 CC 对 npm 路径的"半 native 化"——把 npm 装到<strong>用户家目录</strong>而不是系统目录：</p>
+
+  <div class="flow">~/.claude/local/
+  ├─ package.json                       ← npm 包私有 sandbox
+  ├─ claude                             ← wrapper 脚本: exec "node_modules/.bin/claude" "$@"
+  └─ node_modules/
+       └─ @anthropic-ai/claude-code/    ← 实际包</div>
+
+  <p>带来的好处：</p>
+  <ul>
+    <li><strong>不需要 sudo</strong>：避开 <code class="inline">npm install -g</code> 在 macOS/Linux 系统目录需要 root 的问题</li>
+    <li><strong>多版本可控</strong>：用户的家目录里，CC 自己决定什么时候装、装什么</li>
+    <li><strong>干净卸载</strong>：删 <code class="inline">~/.claude/local/</code> 就完了</li>
+    <li><strong>wrapper 用 O_EXCL 原子创建</strong>：避免被覆盖时的 race（<span class="code-loc">localInstaller.ts:40-50</span>）</li>
+  </ul>
+
+  <h3>11.5.5 纯 npm CLI 的"无感更新"最小食谱</h3>
+
+  <p>如果你在写一个 npm 发布的 CLI 工具，下面 6 步把 CC 的思路落到 npm 形态：</p>
+
+  <h4>第 1 步：触发 + 静默 + ref 守卫</h4>
+
+<pre><code>// useAutoUpdate.ts  (假设 CLI 用 Ink 或别的 React TUI)
+function useAutoUpdate() {
+  const [updating, setUpdating] = useState(false)
+  const [result, setResult] = useState&lt;UpdateResult | null&gt;(null)
+  const updatingRef = useRef(updating)
+  updatingRef.current = updating                       // ← ref 守卫: 关键
+
+  const check = useCallback(async () =&gt; {
+    if (updatingRef.current) return                    // ✅ stale closure 防护
+    if (process.env.DISABLE_AUTOUPDATER) return        // ✅ kill switch
+    if (process.env.NODE_ENV === 'development') return
+
+    const latest = await getLatest()                   // npm view &lt;pkg&gt; version
+    const max = await getMaxVersion()                  // 服务端 kill switch
+    const target = (max &amp;&amp; gt(latest, max)) ? max : latest
+
+    if (!gt(target, MY_VERSION)) return
+    if (shouldSkipBySemver(target, MY_VERSION)) return // ✅ semver 段去重
+
+    setUpdating(true)
+    const status = await installGlobal(target)
+    setUpdating(false)
+    setResult({ version: target, status })
+  }, [])
+
+  useEffect(() =&gt; { void check() }, [check])
+  useInterval(check, 30 * 60 * 1000)                   // ✅ 30 分钟轮询
+  return { updating, result }
+}</code></pre>
+
+  <h4>第 2 步：跨进程锁（直接抄 CC）</h4>
+
+<pre><code>// updateLock.ts —— 几乎可以从 src/utils/autoUpdater.ts:176-249 整段搬走
+const LOCK_PATH = join(homedir(), '.&lt;your-cli&gt;', '.update.lock')
+const LOCK_TIMEOUT_MS = 5 * 60 * 1000
+
+export async function acquireLock(): Promise&lt;boolean&gt; {
+  try {
+    const stats = await stat(LOCK_PATH)
+    if (Date.now() - stats.mtimeMs &lt; LOCK_TIMEOUT_MS) return false
+    const recheck = await stat(LOCK_PATH)              // 二次检查
+    if (Date.now() - recheck.mtimeMs &lt; LOCK_TIMEOUT_MS) return false
+    await unlink(LOCK_PATH)
+  } catch (e) { if (!isENOENT(e)) return false }
+
+  try {
+    await writeFile(LOCK_PATH, `${process.pid}`, { encoding: 'utf8', flag: 'wx' })
+    return true
+  } catch (e) {
+    if (getErrnoCode(e) === 'EEXIST') return false     // 别人抢先
+    throw e
+  }
+}</code></pre>
+
+  <h4>第 3 步：In-process singleflight</h4>
+
+<pre><code>let inFlight: Promise&lt;UpdateResult&gt; | null = null
+
+export function installGlobal(version?: string) {
+  if (inFlight) return inFlight                         // ✅ singleflight 复用
+  inFlight = doInstallGlobal(version)
+  void inFlight.then(() =&gt; { inFlight = null }, () =&gt; { inFlight = null })
+  return inFlight
+}
+
+async function doInstallGlobal(version?: string) {
+  if (!(await acquireLock())) return 'in_progress'
+  try {
+    const spec = version ? `${PKG}@${version}` : `${PKG}@latest`
+    const r = await execFileNoThrow('npm', ['install', '-g', spec], {
+      cwd: homedir(),                                   // ✅ 防恶意 .npmrc 重定向
+    })
+    return r.code === 0 ? 'success' : 'install_failed'
+  } finally {
+    await releaseLock()
+  }
+}</code></pre>
+
+  <div class="gloss-tip">
+    <span class="gloss-icon">📖</span>
+    <div class="gloss-body"><strong>为什么 cwd 要设 homedir</strong>：用户可能 cd 到一个开源仓库的目录，里面藏了恶意 <code>.npmrc</code> 把 npm registry 重定向到攻击者服务器。从 <code>homedir()</code> 跑 npm 可以确保读到的是用户自己的 npm 配置。这是 CC 显式注释过的供应链防护（<span class="code-loc">autoUpdater.ts:323-326</span>）。</div>
+  </div>
+
+  <h4>第 4 步：Server kill switch（5 行）</h4>
+
+<pre><code>async function getMaxVersion(): Promise&lt;string | undefined&gt; {
+  try {
+    const r = await axios.get('https://your-cdn/config/maxVersion', { timeout: 3000 })
+    return typeof r.data === 'string' ? r.data.trim() : undefined
+  } catch { return undefined }
+}</code></pre>
+
+  <p>你只需要在 CDN 上托管一个文本文件 <code class="inline">maxVersion</code>，内容是 <code class="inline">2.1.888</code>。出问题立刻改成上一个稳定版，<strong>30 分钟内全网客户端自动 cap 回去</strong>，不需要发新版。</p>
+
+  <h4>第 5 步：semver 段去重</h4>
+
+<pre><code>// 直接抄 src/hooks/useUpdateNotification.ts
+import { major, minor, patch } from 'semver'
+const semverPart = (v: string) =&gt; `${major(v)}.${minor(v)}.${patch(v)}`
+
+function useUpdateNotification(newVer: string | null) {
+  const [lastNotified, setLastNotified] = useState(() =&gt; semverPart(MY_VERSION))
+  if (!newVer) return null
+  const updated = semverPart(newVer)
+  if (updated !== lastNotified) {
+    setLastNotified(updated)
+    return updated
+  }
+  return null
+}</code></pre>
+
+  <h4>第 6 步：右下角友好提示</h4>
+
+<pre><code>{updating
+  ? &lt;Text dimColor&gt;Auto-updating…&lt;/Text&gt;
+  : result?.status === 'success' &amp;&amp; shownSemver &amp;&amp;
+    &lt;Text color="green"&gt;✓ Update installed · Restart to apply&lt;/Text&gt;}</code></pre>
+
+  <h4>加分项：local install 模式避开 sudo</h4>
+
+  <p>如果用户经常碰到 <code class="inline">npm install -g</code> 权限问题：</p>
+
+<pre><code>async function setupLocalDir() {
+  const dir = join(homedir(), '.&lt;your-cli&gt;', 'local')
+  await mkdir(dir, { recursive: true })
+  await writeIfMissing(join(dir, 'package.json'),
+    JSON.stringify({ name: '&lt;your-cli&gt;-local', version: '0.0.1', private: true }))
+  // wrapper: 让 ~/.local/bin/&lt;your-cli&gt; exec 到这里
+  await writeIfMissing(join(dir, 'cli'),
+    `#!/bin/sh\nexec "${dir}/node_modules/.bin/&lt;your-cli&gt;" "$@"`, 0o755)
+}
+
+async function installLocal(version: string) {
+  await setupLocalDir()
+  return execFileNoThrow('npm', ['install', `${PKG}@${version}`], {
+    cwd: join(homedir(), '.&lt;your-cli&gt;', 'local'),
+  })
+}</code></pre>
+
+  <h3>11.5.6 老实承认：npm 拿不到、native 才有的 3 个体验差异</h3>
+
+  <table>
+    <thead><tr><th>维度</th><th>native (CC 主推)</th><th>npm</th><th>对体验的影响</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>回滚速度</td>
+        <td><code class="inline">ln -sfn versions/old</code><br>微秒级</td>
+        <td><code class="inline">npm install &lt;pkg&gt;@&lt;old&gt;</code><br>10–60 秒</td>
+        <td>装错版本要回退时，native 是无感的，npm 要等一阵</td>
+      </tr>
+      <tr>
+        <td>磁盘"双版本"过渡期</td>
+        <td>两份 binary 并存（被 PID 锁保护）</td>
+        <td>几百毫秒"半新半旧"窗口</td>
+        <td>npm 窗口期内有理论风险，但 Node 进程读不到这个窗口（已 require 到内存）</td>
+      </tr>
+      <tr>
+        <td>下载完整性可控</td>
+        <td>自己的 manifest + SHA256</td>
+        <td>依赖 npm registry 的 integrity</td>
+        <td>npm 也安全，但 registry 被攻击时你控不住应对</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>对绝大多数 dev CLI（cli 体积 &lt; 30MB、用户不会一秒钟跑 100 次更新），<strong>这 3 个差异都不痛</strong>。</p>
+
+  <div class="supp-block">
+    <div class="supp-header">💡 <span class="badge-tag">ESSENCE</span> 一句话结论</div>
+    <div class="supp-body">
+      <p>npm 包要做"无感自动更新"，能从 CC 直接抄的就是 <strong>6/12 项核心技巧 + 2 个补丁</strong>：</p>
+      <ul>
+        <li>✅ UI 触发 + 30 分钟轮询</li>
+        <li>✅ ref-based isUpdating 守卫</li>
+        <li>✅ In-process singleflight</li>
+        <li>✅ 跨进程 <code class="inline">.update.lock</code> + TOCTOU 修复</li>
+        <li>✅ Server-driven kill switch</li>
+        <li>✅ semver 段去重提示</li>
+        <li>✅ 下次启动生效（npm 天然成立）</li>
+        <li>✅ 友好"Restart" 文案 + 失败兜底</li>
+        <li>🩹 补丁 1：把 <code class="inline">npm install -g</code> 包装在锁里</li>
+        <li>🩹 补丁 2：local install 模式（<code class="inline">~/.&lt;cli&gt;/local/</code>）避开 sudo</li>
+      </ul>
+      <p>剩下的多版本目录、PID 锁、stall detection、自建 manifest 是 native 路径的额外加成，<strong>对 npm 体验提升边际很小，不值得为它放弃 npm 分发</strong>。把上面 8 条做扎实就接近 CC 的体验上限了——这是 npm 形态决定的天花板，不是你写得不够好。</p>
+    </div>
+  </div>
+</section>
+
+<section id="sec-12">
+  <h2><span class="section-num">12</span> 当前 fork 的实际状态</h2>
+
+  <p>看 <span class="file">scripts/defines.ts</span>：</p>
+
+  <pre><code>"MACRO.VERSION": JSON.stringify("2.1.888"),
+"MACRO.NATIVE_PACKAGE_URL": JSON.stringify(""),   ← 空串
+"MACRO.PACKAGE_URL": JSON.stringify(""),          ← 空串</code></pre>
+
+  <div class="callout warn">
+    <span class="icon">⚠️</span><strong>重要事实</strong>：在这个<strong>反编译 fork 仓库</strong>里，所有自动更新代码 <strong>结构完整但实际不会工作</strong>：
+    <ul style="margin-top: 8px;">
+      <li><code class="inline">installGlobalPackage()</code> 会调 <code class="inline">npm install -g ''</code>，失败</li>
+      <li><code class="inline">getLatestVersion()</code> 会查 <code class="inline">''@latest</code>，失败</li>
+      <li><code class="inline">NativeAutoUpdater</code> 探到的 <code class="inline">installationType</code> 通常是 <code class="inline">npm-global</code> 或 <code class="inline">unknown</code>，而 GCS bucket 还是官方的，没有这个 fork 自己的发行物</li>
+    </ul>
+  </div>
+
+  <p>也就是说：<strong>这套机制是从官方 Claude Code 完整保留下来的设计，但在这个仓库里运行时几乎完全沉默</strong>。如果要让 fork 自己用上这套机制，需要：</p>
+
+  <ol>
+    <li>改 <code class="inline">MACRO.PACKAGE_URL</code> 指向自己的 npm 包</li>
+    <li>自建 GCS bucket 并按 <code class="inline">/latest</code>、<code class="inline">/{version}/manifest.json</code>、<code class="inline">/{version}/{platform}/claude</code> 的 layout 发布</li>
+    <li>或者干脆 build-time 设置 <code class="inline">DISABLE_AUTOUPDATER=1</code> 让所有 Updater early-return</li>
+  </ol>
+
+  <p>本文价值的本体不在"这套机制能否在 fork 里跑"，而在"这套设计的思想本身可以拿到任何需要自动更新的产品里复用"——这正是第 11 章的全部意义。</p>
+</section>
+
+<section id="sec-13">
+  <h2><span class="section-num">13</span> 关键文件清单</h2>
+
+  <h3>核心实现</h3>
+  <table>
+    <thead><tr><th>职责</th><th>文件</th><th>关键 file:line</th></tr></thead>
+    <tbody>
+      <tr><td>路径分发器</td><td><span class="file">src/components/AutoUpdaterWrapper.tsx</span></td><td><span class="line-ref">L20-90</span></td></tr>
+      <tr><td>npm Updater</td><td><span class="file">src/components/AutoUpdater.tsx</span></td><td><span class="line-ref">L38-261</span></td></tr>
+      <tr><td>Native Updater</td><td><span class="file">src/components/NativeAutoUpdater.tsx</span></td><td><span class="line-ref">L57-231</span></td></tr>
+      <tr><td>Package Manager Updater</td><td><span class="file">src/components/PackageManagerAutoUpdater.tsx</span></td><td><span class="line-ref">L29-119</span></td></tr>
+      <tr><td>共享工具</td><td><span class="file">src/utils/autoUpdater.ts</span></td><td><span class="line-ref">L70-561</span> (含 acquireLock/installGlobalPackage)</td></tr>
+      <tr><td>Native Installer 核心</td><td><span class="file">src/utils/nativeInstaller/installer.ts</span></td><td><span class="line-ref">L74-1700</span> (含 atomicMove/updateSymlink/cleanupOldVersions/lockCurrentVersion/installLatest)</td></tr>
+      <tr><td>下载 + 校验</td><td><span class="file">src/utils/nativeInstaller/download.ts</span></td><td><span class="line-ref">L25-523</span> (含 SHA256/manifest/stall timeout)</td></tr>
+      <tr><td>PID Lock</td><td><span class="file">src/utils/nativeInstaller/pidLock.ts</span></td><td><span class="line-ref">L35-433</span> (含 isLockActive/tryAcquireLock/cleanupStaleLocks)</td></tr>
+      <tr><td>Package Manager 探测</td><td><span class="file">src/utils/nativeInstaller/packageManagers.ts</span></td><td><span class="line-ref">L29-337</span> (8 种包管理器检测)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>配置 / 迁移 / 诊断</h3>
+  <table>
+    <tbody>
+      <tr><td>配置点 (autoUpdates/installMethod/...)</td><td><span class="file">src/utils/config.ts</span></td><td><span class="line-ref">L74, L190-193, L1700-1759</span></td></tr>
+      <tr><td>用户意愿迁移</td><td><span class="file">src/migrations/migrateAutoUpdatesToSettings.ts</span></td><td><span class="line-ref">L13-61</span></td></tr>
+      <tr><td>安装类型诊断</td><td><span class="file">src/utils/doctorDiagnostic.ts</span></td><td><span class="line-ref">L46-148</span></td></tr>
+      <tr><td>手动 update 命令</td><td><span class="file">src/cli/update.ts</span></td><td><span class="line-ref">L30-422</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>UI 集成 / 通知</h3>
+  <table>
+    <tbody>
+      <tr><td>挂载点</td><td><span class="file">src/components/PromptInput/Notifications.tsx</span></td><td><span class="line-ref">L119-122 (shouldShowAutoUpdater), L342-351 (挂载)</span></td></tr>
+      <tr><td>semver 去重</td><td><span class="file">src/hooks/useUpdateNotification.ts</span></td><td><span class="line-ref">L4-34</span></td></tr>
+      <tr><td>REPL state</td><td><span class="file">src/screens/REPL.tsx</span></td><td><span class="line-ref">L1206 (useState), L6012 (onAutoUpdaterResult)</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>启动 + 周期性任务</h3>
+  <table>
+    <tbody>
+      <tr><td>启动时 lockCurrentVersion</td><td><span class="file">src/setup.ts</span></td><td><span class="line-ref">L310</span></td></tr>
+      <tr><td>10 分钟延迟 cleanup</td><td><span class="file">src/utils/backgroundHousekeeping.ts</span></td><td><span class="line-ref">L29-93</span></td></tr>
+      <tr><td>启动注入</td><td><span class="file">src/main.tsx</span></td><td><span class="line-ref">L3915-3917</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>定义 / 元信息</h3>
+  <table>
+    <tbody>
+      <tr><td>MACRO 定义</td><td><span class="file">scripts/defines.ts</span></td><td><span class="line-ref">L9-17</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout tip">
+    <span class="icon">📚</span><strong>怎么深入</strong>：从 <code class="inline">src/components/AutoUpdaterWrapper.tsx</code> 入手，跟着 <code class="inline">installationType</code> 分支进入对应 Updater，再下钻到 <code class="inline">installer.ts</code> 的 <code class="inline">installLatest</code> → <code class="inline">updateLatest</code> → <code class="inline">performVersionUpdate</code>，最后看 <code class="inline">download.ts</code>。整条链路 1500 行代码以内，半天能读完。
+  </div>
+</section>
+
+</main>
+</div>
+</body>
+</html>

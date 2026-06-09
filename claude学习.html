@@ -1,0 +1,1305 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude Code Harness 源码 —— 简历级深度分析</title>
+<style>
+  :root {
+    --bg: #fbfaf7;
+    --fg: #1c1917;
+    --fg-soft: #57534e;
+    --fg-mute: #78716c;
+    --line: #e7e5e4;
+    --line-soft: #f0eeec;
+    --accent: #b45309;
+    --accent-soft: #fef3c7;
+    --code-bg: #1c1917;
+    --code-fg: #f5f5f4;
+    --code-line: #44403c;
+    --code-key: #fbbf24;
+    --code-str: #86efac;
+    --code-num: #fda4af;
+    --code-com: #78716c;
+    --code-type: #93c5fd;
+    --hi-bg: #fef9c3;
+    --quote-bg: #f5f5f4;
+    --table-stripe: #fafaf9;
+    --inline-code-bg: #f5f5f4;
+    --inline-code-fg: #9a3412;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 24px; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                 "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", sans-serif;
+    font-size: 16px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+  code, pre, kbd, samp { font-family: "JetBrains Mono", "SF Mono", "Menlo",
+                                       "Consolas", "Liberation Mono", monospace; }
+  .layout {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 0;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  aside {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 32px 20px 32px 28px;
+    border-right: 1px solid var(--line);
+    background: var(--bg);
+  }
+  aside h2 {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--fg-mute);
+    margin: 0 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  aside ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    counter-reset: toc;
+  }
+  aside ol li {
+    counter-increment: toc;
+    margin: 0;
+    padding: 0;
+  }
+  aside ol li a {
+    display: block;
+    padding: 5px 0 5px 28px;
+    color: var(--fg-soft);
+    text-decoration: none;
+    font-size: 13px;
+    line-height: 1.45;
+    border-left: 2px solid transparent;
+    margin-left: -2px;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    position: relative;
+  }
+  aside ol li a::before {
+    content: counter(toc) ".";
+    position: absolute;
+    left: 8px;
+    color: var(--fg-mute);
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+  }
+  aside ol li a:hover { color: var(--fg); }
+  aside ol li a.active {
+    color: var(--accent);
+    border-left-color: var(--accent);
+    background: var(--accent-soft);
+    font-weight: 600;
+  }
+  aside .sub {
+    list-style: none;
+    margin: 4px 0 8px 20px;
+    padding: 0;
+  }
+  aside .sub li a {
+    padding-left: 24px;
+    font-size: 12.5px;
+    color: var(--fg-mute);
+  }
+  main { padding: 40px 56px 80px 56px; min-width: 0; }
+  .hero {
+    margin: 0 0 48px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--line);
+  }
+  .hero .kicker {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 12px;
+  }
+  .hero h1 {
+    font-size: 36px;
+    line-height: 1.2;
+    font-weight: 700;
+    margin: 0 0 16px;
+    letter-spacing: -0.01em;
+  }
+  .hero p.lede {
+    font-size: 17px;
+    color: var(--fg-soft);
+    margin: 0;
+    max-width: 720px;
+  }
+  .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+    margin-top: 18px;
+    font-size: 12.5px;
+    color: var(--fg-mute);
+  }
+  .meta-row span strong { color: var(--fg-soft); font-weight: 600; margin-right: 4px; }
+  h2 {
+    font-size: 26px;
+    line-height: 1.3;
+    font-weight: 700;
+    margin: 56px 0 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line-soft);
+    letter-spacing: -0.005em;
+  }
+  h2:first-of-type { border-top: none; padding-top: 0; margin-top: 24px; }
+  h3 {
+    font-size: 19px;
+    line-height: 1.4;
+    font-weight: 700;
+    margin: 32px 0 12px;
+    color: var(--fg);
+  }
+  h4 {
+    font-size: 15.5px;
+    line-height: 1.4;
+    font-weight: 700;
+    margin: 20px 0 8px;
+    color: var(--fg-soft);
+  }
+  p { margin: 0 0 14px; }
+  ul, ol { margin: 0 0 16px; padding-left: 24px; }
+  li { margin-bottom: 4px; }
+  li > strong { color: var(--fg); }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent); }
+  a:hover { border-bottom-style: solid; }
+  blockquote {
+    margin: 18px 0;
+    padding: 12px 18px;
+    background: var(--quote-bg);
+    border-left: 3px solid var(--accent);
+    color: var(--fg-soft);
+    font-size: 15px;
+    border-radius: 0 4px 4px 0;
+  }
+  blockquote p:last-child { margin-bottom: 0; }
+  blockquote strong { color: var(--fg); }
+  code:not(pre code) {
+    background: var(--inline-code-bg);
+    color: var(--inline-code-fg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 0.88em;
+  }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    padding: 16px 20px;
+    border-radius: 6px;
+    overflow-x: auto;
+    line-height: 1.6;
+    font-size: 13.5px;
+    margin: 14px 0 20px;
+    border: 1px solid var(--line);
+  }
+  pre .c-key { color: var(--code-key); }
+  pre .c-str { color: var(--code-str); }
+  pre .c-num { color: var(--code-num); }
+  pre .c-com { color: var(--code-com); font-style: italic; }
+  pre .c-type { color: var(--code-type); }
+  .file-ref {
+    display: inline-block;
+    background: var(--inline-code-bg);
+    color: var(--fg-soft);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 1px 7px;
+    font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+    font-size: 12.5px;
+  }
+  .file-ref::before { content: "📄 "; opacity: 0.6; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 22px;
+    font-size: 14px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  th, td {
+    text-align: left;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    vertical-align: top;
+  }
+  th {
+    background: var(--table-stripe);
+    font-weight: 700;
+    color: var(--fg);
+    font-size: 13px;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+  .callout {
+    margin: 18px 0;
+    padding: 14px 18px;
+    border-radius: 6px;
+    background: var(--accent-soft);
+    border: 1px solid #fde68a;
+  }
+  .callout-title {
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 4px;
+    font-size: 14px;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  .highlight {
+    background: var(--hi-bg);
+    padding: 1px 4px;
+    border-radius: 2px;
+  }
+  hr {
+    border: none;
+    border-top: 1px dashed var(--line);
+    margin: 48px 0;
+  }
+  .resume-block {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin: 18px 0;
+    font-size: 15px;
+  }
+  .resume-block h3 { margin-top: 0; }
+  .qa {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 16px 20px;
+    margin: 14px 0;
+  }
+  .qa-q { font-weight: 700; color: var(--fg); margin-bottom: 6px; }
+  .qa-q::before { content: "Q: "; color: var(--accent); }
+  .qa-a { color: var(--fg-soft); }
+  .qa-a::before { content: "A: "; color: var(--fg-mute); font-weight: 600; }
+  .source-list { font-size: 13.5px; color: var(--fg-mute); }
+  .source-list a { color: var(--fg-soft); }
+  .toc-title { font-size: 14px; font-weight: 700; color: var(--fg); margin: 0 0 10px; }
+  .toc-tag {
+    display: inline-block;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: var(--accent);
+    color: #fff;
+    padding: 1px 7px;
+    border-radius: 3px;
+    margin-left: 6px;
+    vertical-align: middle;
+  }
+  @media (max-width: 960px) {
+    .layout { grid-template-columns: 1fr; }
+    aside {
+      position: static;
+      height: auto;
+      max-height: 60vh;
+      border-right: none;
+      border-bottom: 1px solid var(--line);
+      padding: 20px 24px;
+    }
+    main { padding: 28px 24px 60px; }
+    .hero h1 { font-size: 28px; }
+    h2 { font-size: 22px; }
+    pre { font-size: 12.5px; padding: 14px 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <h2>目录</h2>
+    <ol>
+      <li><a href="#sec0">引言:为什么是 Harness</a></li>
+      <li><a href="#sec1">Agent Loop 状态机<span class="toc-tag">含 transition 详解</span></a>
+        <ol class="sub">
+          <li><a href="#sec1-1">State 对象的 9 个字段</a></li>
+          <li><a href="#sec1-2">7 个 continue 站点与 Continue 标签</a></li>
+          <li><a href="#sec1-3">transition 字段的可测性含义</a></li>
+        </ol>
+      </li>
+      <li><a href="#sec2">StreamingToolExecutor</a>
+        <ol class="sub">
+          <li><a href="#sec2-1">四态机 + 并发隔离</a></li>
+          <li><a href="#sec2-2">isConcurrencySafe:函数式判定</a></li>
+          <li><a href="#sec2-3">Sibling abort 失败传染</a></li>
+        </ol>
+      </li>
+      <li><a href="#sec3">三层上下文压缩</a></li>
+      <li><a href="#sec4">5 模式 × 4 规则 × 3 handler 权限路由</a></li>
+      <li><a href="#sec5">Tool 接口:Zod 三用 + 描述函数化</a></li>
+      <li><a href="#sec6">Hooks:硬约束 + 软熔断</a></li>
+      <li><a href="#sec7">多 Provider 流适配</a></li>
+      <li><a href="#sec8">子 Agent Fork 共享 prompt cache</a></li>
+      <li><a href="#sec9">AbortController 两层树</a></li>
+      <li><a href="#sec10">生产级容错细节</a></li>
+      <li><a href="#sec-a">附录 A:简历项目描述</a></li>
+      <li><a href="#sec-b">附录 B:面试 5 个追问</a></li>
+      <li><a href="#sec-c">附录 C:源码学习路线</a></li>
+      <li><a href="#sec-d">附录 D:参考资料</a></li>
+    </ol>
+  </aside>
+
+  <main>
+    <div class="hero">
+      <div class="kicker">Resume-Grade Deep Dive</div>
+      <h1>Claude Code Harness 源码 —— 简历级深度分析</h1>
+      <p class="lede">
+        基于反编译版 Claude Code CLI v2.1.888(2,795 个 TS/TSX 文件,核心循环 ~14K 行)。
+        每一节都给到 <code>file:line</code> 级的具体位置,以及能在面试时被追问到第二层、第三层的内容。
+      </p>
+      <div class="meta-row">
+        <span><strong>范围</strong>Agent Loop / Tool / Permission / Compact / Provider / Hook / Subagent</span>
+        <span><strong>目标</strong>经得起"那它具体怎么实现"追问的深度</span>
+        <span><strong>读者</strong>前端 / 后端 / AI 应用工程师,想写"深入了解 Claude Code 源码"的人</span>
+      </div>
+    </div>
+
+    <h2 id="sec0">引言:为什么是 Harness</h2>
+    <p>
+      Claude Code 本质上是一个 <strong>"围绕一个常量循环 + 动态可扩展的 Harness"</strong>。
+      核心循环 50 行就能写完,所有复杂度都来自"循环外面"——工具、上下文、权限、UI、状态、Provider 抽象。
+    </p>
+    <p>
+      Agent 智能体的质量,90% 取决于 Harness 工程,而不是模型本身。
+      本报告不讲目录结构,只讲<strong>具体哪一行在做什么、为什么这样做、生产上哪里踩过坑</strong>。
+    </p>
+
+    <h2 id="sec1">一、Agent Loop 的真正状态机</h2>
+    <p>
+      表面上看 <code>queryLoop</code> 就是一个 <code>while (true)</code>,
+      但内部是带类型化 <code>transition</code> 标签的状态机。
+    </p>
+
+    <h3 id="sec1-1">State 对象的 9 个字段</h3>
+    <p>位置:<span class="file-ref">src/query.ts:204-218</span></p>
+<pre><span class="c-com">// 在循环迭代之间携带的可变状态</span>
+<span class="c-key">type</span> <span class="c-type">State</span> = {
+  messages: <span class="c-type">Message</span>[]
+  toolUseContext: <span class="c-type">ToolUseContext</span>
+  autoCompactTracking: <span class="c-type">AutoCompactTrackingState</span> | <span class="c-key">undefined</span>
+  maxOutputTokensRecoveryCount: <span class="c-key">number</span>          <span class="c-com">// 0-3 熔断</span>
+  hasAttemptedReactiveCompact: <span class="c-key">boolean</span>            <span class="c-com">// 防止反复尝试</span>
+  maxOutputTokensOverride: <span class="c-key">number</span> | <span class="c-key">undefined</span>
+  pendingToolUseSummary: <span class="c-type">Promise</span>&lt;<span class="c-type">ToolUseSummaryMessage</span> | <span class="c-key">null</span>&gt; | <span class="c-key">undefined</span>
+  stopHookActive: <span class="c-key">boolean</span> | <span class="c-key">undefined</span>
+  turnCount: <span class="c-key">number</span>
+  <span class="c-com">// Why the previous iteration continued. Undefined on first iteration.</span>
+  <span class="c-com">// Lets tests assert recovery paths fired without inspecting message contents.</span>
+  transition: <span class="c-type">Continue</span> | <span class="c-key">undefined</span>
+}</pre>
+
+    <h3 id="sec1-2">7 个 continue 站点与 Continue 标签</h3>
+    <p>
+      每次迭代结束不是"赋值 9 个字段",而是 <code>state = { ...state, ..., transition: { reason: '...' } }</code>。
+      在 <code>query.ts</code> 里我数到至少 7 个 continue 站点,每个站点都打不同的 <code>reason</code> 标签:
+    </p>
+    <table>
+      <thead>
+        <tr><th>Continue reason</th><th>位置</th><th>触发条件</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>collapse_drain_retry</code></td><td>query.ts:1111</td><td>context collapse 提交了 N 条 collapse,需要 drain</td></tr>
+        <tr><td><code>reactive_compact_retry</code></td><td>query.ts:1164</td><td>413/prompt-too-long,reactive compact 成功</td></tr>
+        <tr><td><code>max_output_tokens_escalate</code></td><td>query.ts:1219</td><td>输出超 8K 默认,escalate 到 64K(单轮一次)</td></tr>
+        <tr><td><code>max_output_tokens_recovery</code></td><td>query.ts:1247</td><td>输出超限,注入"Resume directly"消息重发(3 次熔断)</td></tr>
+        <tr><td><code>stop_hook_blocking</code></td><td>query.ts:1304</td><td>Stop hook 返回 blocking error,迫使 turn 继续</td></tr>
+        <tr><td><code>token_budget_continuation</code></td><td>query.ts:1340</td><td>开了 <code>TOKEN_BUDGET</code> feature,budget 未耗尽</td></tr>
+        <tr><td><code>next_turn</code></td><td>query.ts:1727</td><td>本轮完成,等待下一条用户输入</td></tr>
+      </tbody>
+    </table>
+
+    <h3 id="sec1-3">transition 字段的可测性含义(深入)</h3>
+    <p>
+      这是反直觉的设计取舍。<strong>常规做法</strong>是:恢复路径完成时,往 messages 数组里追加一条特殊消息,或者打 log。
+      缺点:
+    </p>
+    <ul>
+      <li><strong>消息追加</strong>需要从消息内容推断"发生了什么",脆弱(消息文本改了测试就挂)。</li>
+      <li><strong>日志</strong>是 fire-and-forget,测试无法同步断言。</li>
+      <li><strong>返回值</strong>是 terminal,但恢复是 <code>continue</code>,不返回。</li>
+    </ul>
+    <p>
+      Claude Code 的做法是:把"为什么 continue"作为一个<strong>结构化字段</strong>持久化在 <code>State.transition</code> 里。
+      字段是<strong>判别联合</strong>(discriminated union),带 <code>reason</code> + 元数据:
+    </p>
+<pre><span class="c-com">// 实际从 query.ts 抄出来的两个 continue 站点</span>
+<span class="c-com">// 站点 A: max_output_tokens escalation</span>
+transition: { reason: <span class="c-str">'max_output_tokens_escalate'</span> }
+
+<span class="c-com">// 站点 B: max_output_tokens 多轮恢复(带 attempt 计数)</span>
+transition: {
+  reason: <span class="c-str">'max_output_tokens_recovery'</span>,
+  attempt: maxOutputTokensRecoveryCount + <span class="c-num">1</span>,  <span class="c-com">// 第几次尝试</span>
+}
+
+<span class="c-com">// 站点 C: context collapse drain(带 drained count)</span>
+transition: {
+  reason: <span class="c-str">'collapse_drain_retry'</span>,
+  committed: drained.committed,  <span class="c-com">// drain 出去多少条</span>
+}</pre>
+
+    <p>
+      这样测试就能写:
+    </p>
+<pre><span class="c-com">// 伪测试</span>
+<span class="c-key">const</span> result = <span class="c-key">await</span> runQueryToCompletion({ input: hugeOutput })
+expect(result.lastTransition).<span class="c-type">toEqual</span>({
+  reason: <span class="c-str">'max_output_tokens_recovery'</span>,
+  attempt: <span class="c-num">2</span>,   <span class="c-com">// 第二次重试</span>
+})</pre>
+
+    <p>
+      <strong>这是用"代码噪音"换"测试确定性"</strong>。每个 continue 站点多写一行 <code>transition: {...}</code>,
+      但回报是:7 条恢复路径每一条都能独立测试,不需要"读 messages 数组第 N 条判断事件是否发生"。
+    </p>
+
+    <div class="callout">
+      <div class="callout-title">关键洞察</div>
+      <p>
+        "为可测性牺牲可读性"是工程上的反向直觉——通常认为可读性比可测性更重要。
+        但 Claude Code 的取舍是:recovery 路径<strong>必须</strong>被独立测试,因为它们的失败成本极高
+        (例如 3 次 compact 失败会浪费 250K/日 API 调用,见第三节)。
+        <code>transition</code> 字段就是为这种<strong>高失败成本、低发生频率</strong>的路径设计的<strong>最小可观测性</strong>。
+      </p>
+    </div>
+
+    <h4>具体例子:max_output_tokens_recovery 恢复路径</h4>
+    <p>
+      场景:用户让 Claude 总结一篇 100 页文档。模型写到一半撞到 8192 token 输出上限,流被截断。
+      Claude Code 需要恢复:注入"Resume directly"消息,重发,<strong>最多 3 次</strong>。
+      下面是 <code>query.ts:1225-1254</code> 的实际代码,精简掉无关字段:
+    </p>
+
+    <h4>先看时序,再看代码</h4>
+<pre>                          loop 顶部
+                             │
+                             ↓
+                       调 API + 流式返回
+                             │
+                             ↓
+                       检查 lastMessage
+                             │
+                     isWithheldMaxOutputTokens?
+                             │ YES
+                             ↓
+   ┌──────────────────────────────────────────────────┐
+   │  恢复路径 (query.ts:1225-1254)                   │  ← "恢复路径" = 这一整段
+   │  ──────────────────                              │
+   │  ① 还能再试吗?(query.ts:1225)                    │     if(recoveryCount &lt; 3)
+   │  ② 构造 "Resume directly" 消息                   │
+   │  ③ state.messages.push(消息)                     │
+   │  ④ recoveryCount++                               │
+   │  ⑤ ★ transition: &#123; reason, attempt &#125; ★        │  ← transition 写在这里
+   │  ⑥ state = next                                  │     (query.ts:1247)
+   │  ⑦ continue                                      │  ← "恢复路径完成" = 第 ⑦ 步
+   └─────────────────────────┬────────────────────────┘
+                             │
+                             ↓
+                       回到循环顶部
+                       用新 state 重发 API
+                             │
+                             ↓
+                       (输出依然超限? → 再走一次恢复路径)
+                             │
+                             ↓
+                       3 次都用完 → 表面错误,退出</pre>
+
+    <div class="callout">
+      <div class="callout-title">两个时间点的语义</div>
+      <p>
+        <strong>"恢复路径开始"</strong> = 第 ① 步,if 判断通过,进入恢复分支;
+        <br>
+        <strong>"恢复路径完成"</strong> = 第 ⑦ 步,<code>continue</code> 之前,<code>transition</code> 已经被写好。
+        <br><br>
+        整个恢复路径是一个<strong>不可分割的事务</strong>:
+        要么 ⑦ 步成功,带着新 transition 进入下一轮;
+        要么中途抛错,这一轮没写 transition(测试可以从"transition 还是上一次的"推断出"恢复路径未完成")。
+      </p>
+    </div>
+<pre><span class="c-com">// 实际代码:query.ts:1225-1254</span>
+<span class="c-key">if</span> (maxOutputTokensRecoveryCount &lt; <span class="c-type">MAX_OUTPUT_TOKENS_RECOVERY_LIMIT</span>) {
+  <span class="c-key">const</span> recoveryMessage = <span class="c-type">createUserMessage</span>({
+    content: <span class="c-str">'Output token limit hit. Resume directly — no apology...'</span>,
+    isMeta: <span class="c-key">true</span>,
+  })
+
+  <span class="c-key">const</span> next: <span class="c-type">State</span> = {
+    messages: [...messagesForQuery, ...assistantMessages, recoveryMessage],
+    <span class="c-com">// ... 6 个其他字段 ...</span>
+    transition: {
+      reason: <span class="c-str">'max_output_tokens_recovery'</span>,
+      attempt: maxOutputTokensRecoveryCount + <span class="c-num">1</span>,  <span class="c-com">// 第几次重试</span>
+    },
+  }
+  state = next
+  <span class="c-key">continue</span>
+}</pre>
+
+    <h4>❌ "常规做法":不打 transition 标签</h4>
+<pre><span class="c-com">// 朴素实现</span>
+<span class="c-key">if</span> (maxOutputTokensRecoveryCount &lt; <span class="c-num">3</span>) {
+  state.messages.push({
+    role: <span class="c-str">'user'</span>,
+    content: <span class="c-str">'Output token limit hit. Resume directly...'</span>,
+  })
+  state.maxOutputTokensRecoveryCount++
+  state = next
+  <span class="c-key">continue</span>
+}</pre>
+    <p>问题:恢复完成了,但<strong>没有任何结构化信息留下来</strong>说明"这次 continue 是因为 max_output_tokens 触发的"。</p>
+
+    <p>测试要这么写(很惨):</p>
+<pre><span class="c-key">test</span>(<span class="c-str">'recovers from max_output_tokens'</span>, <span class="c-key">async</span> () =&gt; {
+  <span class="c-key">const</span> result = <span class="c-key">await</span> <span class="c-type">runQuery</span>({ input: <span class="c-str">'总结 100 页文档'</span> })
+
+  <span class="c-com">// ❌ 测试 1:从 messages 里找特定字符串</span>
+  <span class="c-key">const</span> hitRecovery = result.messages.some(m =&gt;
+    m.content.includes(<span class="c-str">'Output token limit hit'</span>)
+  )
+  expect(hitRecovery).toBe(<span class="c-key">true</span>)
+
+  <span class="c-com">// ❌ 测试 2:没法知道是第几次重试,只能检查最终状态</span>
+  expect(result.completed).toBe(<span class="c-key">true</span>)
+  <span class="c-com">// ⬆️ 这测试不通过 = 任何恢复都没跑;</span>
+  <span class="c-com">// 但它不会告诉你"恢复机制是否按预期工作了"</span>
+
+  <span class="c-com">// ❌ 测试 3:想确认"恢复了恰好 2 次"?</span>
+  <span class="c-com">// 必须 mock 整个 API 调用,count 实际返回的 token 数</span>
+  <span class="c-com">// 这跟测试恢复机制本身没关系</span>
+})</pre>
+    <p>为什么糟:</p>
+    <ul>
+      <li>字符串匹配脆弱,改一个词测试就挂</li>
+      <li>没法精确断言"恢复了 N 次"</li>
+      <li>没法区分"真的恢复了"和"碰巧 messages 里有那句话"</li>
+      <li>必须 mock 底层 API 才能间接测恢复机制</li>
+    </ul>
+
+    <h4>✅ Claude Code 的做法:打 transition 标签</h4>
+    <p>代码里多了一行:<code>transition: &#123; reason, attempt &#125;</code></p>
+
+    <p>测试可以这样写(干净):</p>
+<pre><span class="c-key">test</span>(<span class="c-str">'recovers from max_output_tokens on 2nd attempt'</span>, <span class="c-key">async</span> () =&gt; {
+  <span class="c-com">// 构造会触发 2 次恢复的场景</span>
+  <span class="c-key">const</span> loop = <span class="c-type">runQueryToCompletion</span>({ input: <span class="c-str">'总结 100 页文档'</span> })
+
+  <span class="c-com">// 消费完所有事件,跑到 loop 退出</span>
+  <span class="c-key">for await</span> (<span class="c-key">const</span> event <span class="c-key">of</span> loop) { <span class="c-com">/* ... */</span> }
+  <span class="c-key">const</span> finalState = <span class="c-key">await</span> loop.return()
+
+  <span class="c-com">// ✅ 直接断言:最后一次 continue 的标签</span>
+  expect(finalState.transition).<span class="c-type">toEqual</span>({
+    reason: <span class="c-str">'max_output_tokens_recovery'</span>,
+    attempt: <span class="c-num">2</span>,  <span class="c-com">// ⬅️ 精确知道是第 2 次重试</span>
+  })
+})
+
+<span class="c-key">test</span>(<span class="c-str">'stops after 3 recovery attempts (circuit breaker)'</span>, <span class="c-key">async</span> () =&gt; {
+  <span class="c-key">const</span> loop = <span class="c-type">runQueryToCompletion</span>({ input: <span class="c-str">'永远写不完的总结'</span> })
+  <span class="c-key">for await</span> (<span class="c-key">const</span> event <span class="c-key">of</span> loop) { <span class="c-com">/* ... */</span> }
+  <span class="c-key">const</span> finalState = <span class="c-key">await</span> loop.return()
+
+  <span class="c-com">// ✅ 熔断器生效?直接断言</span>
+  expect(finalState.maxOutputTokensRecoveryCount).<span class="c-type">toBe</span>(<span class="c-num">3</span>)
+  <span class="c-com">// 且最后一次 transition 不应该是 recovery</span>
+  expect(finalState.transition?.reason).<span class="c-type">not</span>.<span class="c-type">toBe</span>(<span class="c-str">'max_output_tokens_recovery'</span>)
+})
+
+<span class="c-key">test</span>(<span class="c-str">'reactive compact retry path fires on 413'</span>, <span class="c-key">async</span> () =&gt; {
+  <span class="c-key">const</span> loop = <span class="c-type">runQueryToCompletion</span>({ mockError: <span class="c-str">'413_prompt_too_long'</span> })
+  <span class="c-key">for await</span> (<span class="c-key">const</span> event <span class="c-key">of</span> loop) { <span class="c-com">/* ... */</span> }
+  <span class="c-key">const</span> finalState = <span class="c-key">await</span> loop.return()
+
+  <span class="c-com">// ✅ 跟 max_output_tokens 完全不同的 recovery 路径</span>
+  <span class="c-com">// 不需要看 messages 内容,直接看 transition</span>
+  expect(finalState.transition?.reason).<span class="c-type">toBe</span>(<span class="c-str">'reactive_compact_retry'</span>)
+})</pre>
+    <p>为什么好:</p>
+    <ul>
+      <li>断言目标是<strong>结构化对象</strong>,不是字符串</li>
+      <li>不同 recovery 路径<strong>互不干扰</strong>——测 max_output_tokens 不会误判 compact retry</li>
+      <li>测试是<strong>集成测试</strong>(跑整个 loop),但断言是<strong>精确的</strong>(看 transition),不损失覆盖度</li>
+      <li>新加一个 recovery 路径(比如 <code>stop_hook_blocking</code>),只需要 <code>expect(transition.reason).toBe('stop_hook_blocking')</code></li>
+    </ul>
+
+    <h4>一图流对比</h4>
+    <table>
+      <thead>
+        <tr><th>维度</th><th>没有 transition</th><th>有 transition</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>触发恢复</td><td><code>continue</code></td><td><code>continue</code></td></tr>
+        <tr><td>多写一行</td><td>push 消息</td><td><code>transition: &#123; reason, ... &#125;</code></td></tr>
+        <tr><td>测试目标</td><td>字符串匹配消息内容</td><td>对象字段断言</td></tr>
+        <tr><td>区分路径</td><td>靠消息文本猜</td><td>靠 <code>reason</code> 字符串穷举</td></tr>
+        <tr><td>失败诊断</td><td>翻 log</td><td>看 <code>transition</code> 直接知道</td></tr>
+        <tr><td>改 prompt</td><td>测试可能挂</td><td>测试不动</td></tr>
+        <tr><td>测"第 N 次"</td><td>没法测</td><td><code>expect(attempt).toBe(2)</code></td></tr>
+      </tbody>
+    </table>
+
+    <h4>为什么"非显然"</h4>
+    <p>
+      <strong>第一直觉</strong>:恢复路径完成后,我已经把恢复消息放进 messages 了,测试可以从那里读啊,何必多此一举打 transition?
+    </p>
+    <p>
+      <strong>答案</strong>:恢复消息<strong>只是给模型看的指令</strong>("Resume directly"),<strong>不是给测试看的信号</strong>。
+      把"给模型看的"和"给测试看的"混在同一个数组里:
+    </p>
+    <ol>
+      <li><strong>耦合</strong>——你改 prompt 措辞,测试就挂(这叫"测试和实现细节绑死")</li>
+      <li><strong>歧义</strong>——同一条消息可能由不同路径生成</li>
+      <li><strong>不可穷举</strong>——你想测"是否走了 compact retry",得知道 compact 路径用什么消息;
+        但 compact 路径会<strong>根据上下文动态生成消息</strong></li>
+    </ol>
+    <p>
+      <code>transition</code> 字段是<strong>专门为测试设计的旁路信号</strong>:
+    </p>
+    <ul>
+      <li>它跟 messages 完全解耦</li>
+      <li>它的 <code>reason</code> 跟恢复路径 1:1 绑定</li>
+      <li>它的元数据(<code>attempt</code>、<code>committed</code>)是<strong>测试断言需要的</strong>精确数据</li>
+    </ul>
+    <p>代价:每个 continue 多写一行。回报:7 条恢复路径<strong>每一条都能干净地独立测试</strong>。</p>
+
+    <h4>更深的类比:这个设计你大概率已经见过了</h4>
+    <ul>
+      <li><strong>React Redux 的 <code>action.type</code></strong>:<code>&#123; type: 'MAX_TOKENS_RECOVERY', payload: &#123; attempt: 2 &#125; &#125;</code>——同样的判别联合</li>
+      <li><strong>HTTP 响应的 <code>status</code> 字段</strong>:你从 200/404/500 知道发生了什么,不用 parse body</li>
+      <li><strong>数据库事务的 <code>isolation level</code></strong>:<code>SERIALIZABLE</code> vs <code>READ_COMMITTED</code>——同样是给上层断言用的元数据</li>
+    </ul>
+    <p>
+      这些都是<strong>"为可观测性而存在的元数据字段"</strong>,跟业务数据正交。
+      <code>transition</code> 在 Claude Code 的 loop 里扮演完全相同的角色。
+    </p>
+
+    <hr>
+
+    <h2 id="sec2">二、StreamingToolExecutor —— 流式 + 并行的真正难点</h2>
+    <p>位置:<span class="file-ref">src/services/tools/StreamingToolExecutor.ts</span></p>
+
+    <h3 id="sec2-1">四态机 + 并发隔离</h3>
+<pre><span class="c-key">type</span> <span class="c-type">ToolStatus</span> = <span class="c-str">'queued'</span> | <span class="c-str">'executing'</span> | <span class="c-str">'completed'</span> | <span class="c-str">'yielded'</span>
+
+<span class="c-key">type</span> <span class="c-type">TrackedTool</span> = {
+  id: <span class="c-key">string</span>
+  block: <span class="c-type">ToolUseBlock</span>
+  assistantMessage: <span class="c-type">AssistantMessage</span>
+  status: <span class="c-type">ToolStatus</span>
+  isConcurrencySafe: <span class="c-key">boolean</span>
+  promise?: <span class="c-type">Promise</span>&lt;<span class="c-key">void</span>&gt;            <span class="c-com">// 并行执行的去重句柄</span>
+  results?: <span class="c-type">Message</span>[]
+  pendingProgress: <span class="c-type">Message</span>[]
+  contextModifiers?: <span class="c-type">Array</span>&lt;(ctx: <span class="c-type">ToolUseContext</span>) =&gt; <span class="c-type">ToolUseContext</span>&gt;
+}</pre>
+
+    <p>关键的并发控制逻辑(行 129-150):</p>
+<pre><span class="c-key">private</span> <span class="c-type">canExecuteTool</span>(isConcurrencySafe: <span class="c-key">boolean</span>): <span class="c-key">boolean</span> {
+  <span class="c-key">const</span> executingTools = <span class="c-key">this</span>.tools.filter(t =&gt; t.status === <span class="c-str">'executing'</span>)
+  <span class="c-key">return</span> (
+    executingTools.length === <span class="c-num">0</span> ||
+    (isConcurrencySafe &amp;&amp; executingTools.every(t =&gt; t.isConcurrencySafe))
+  )
+}
+
+<span class="c-key">private</span> <span class="c-key">async</span> <span class="c-type">processQueue</span>(): <span class="c-type">Promise</span>&lt;<span class="c-key">void</span>&gt; {
+  <span class="c-key">for</span> (<span class="c-key">const</span> tool <span class="c-key">of</span> <span class="c-key">this</span>.tools) {
+    <span class="c-key">if</span> (tool.status !== <span class="c-str">'queued'</span>) <span class="c-key">continue</span>
+    <span class="c-key">if</span> (<span class="c-key">this</span>.canExecuteTool(tool.isConcurrencySafe)) {
+      <span class="c-key">await</span> <span class="c-key">this</span>.executeTool(tool)
+    } <span class="c-key">else</span> {
+      <span class="c-key">if</span> (!tool.isConcurrencySafe) <span class="c-key">break</span>  <span class="c-com">// ⬅️ 顺序敏感工具必须按序</span>
+    }
+  }
+}</pre>
+
+    <p>
+      这意味着 LLM 一次返回的 5 个工具被分成<strong>两批</strong>:
+    </p>
+    <ul>
+      <li><strong>第 1 批</strong>:<code>isConcurrencySafe === true</code> 的工具(读文件、grep、glob...)→ <strong>并行</strong>启动</li>
+      <li><strong>第 2 批</strong>:<code>isConcurrencySafe === false</code> 的工具(写文件、bash)→ <strong>独占执行</strong>且<strong>保留原始顺序</strong></li>
+    </ul>
+
+    <h3 id="sec2-2">isConcurrencySafe 是工具 + 输入的纯函数</h3>
+<pre><span class="c-com">// StreamingToolExecutor.ts:104-113</span>
+<span class="c-key">const</span> parsedInput = toolDefinition.inputSchema.safeParse(block.input)
+<span class="c-key">const</span> isConcurrencySafe = parsedInput?.success
+  ? (<span class="c-key">function</span>() {
+      <span class="c-key">try</span> {
+        <span class="c-key">return</span> <span class="c-type">Boolean</span>(toolDefinition.isConcurrencySafe(parsedInput.data))
+      } <span class="c-key">catch</span> {
+        <span class="c-key">return false</span>            <span class="c-com">// 判定函数抛错 = 视为不安全</span>
+      }
+    })()
+  : <span class="c-key">false</span>                            <span class="c-com">// 解析失败 = 不安全</span></pre>
+    <p>
+      这就是为什么 <code>Bash</code> 工具能根据命令(读 vs 写)决定自己能否并行。
+      <strong>写命令返回 false,独占执行</strong>。框架不替工具猜并发语义。
+    </p>
+
+    <h3 id="sec2-3">Sibling abort 失败传染</h3>
+<pre><span class="c-com">// StreamingToolExecutor.ts:45-48</span>
+<span class="c-com">// Child of toolUseContext.abortController. Fires when a Bash tool errors</span>
+<span class="c-com">// so sibling subprocesses die immediately instead of running to completion.</span>
+<span class="c-com">// Aborting this does NOT abort the parent — query.ts won't end the turn.</span>
+<span class="c-key">private</span> siblingAbortController: <span class="c-type">AbortController</span>
+
+<span class="c-com">// constructor:60-61</span>
+<span class="c-key">this</span>.siblingAbortController = createChildAbortController(
+  toolUseContext.abortController,
+)</pre>
+    <p>
+      Bash 工具出错时,正在并行执行的兄弟 Bash <strong>立刻被 kill</strong>,但不影响 query 整体的继续运行。
+      父子两层 AbortController 是<strong>异常传播策略</strong>与<strong>用户取消策略</strong>的清晰分离。
+    </p>
+
+    <div class="callout">
+      <div class="callout-title">面试话术</div>
+      <p>
+        "Claude Code 用一个自定义的 StreamingToolExecutor 同时解决了三个问题:流式展示(文本一返回就 yield)、
+        并行执行(独立工具并发)、失败传染(兄弟进程连带 abort)。
+        <code>isConcurrencySafe</code> 是个<strong>纯函数</strong>,从工具定义 + 输入就能判定——
+        这个设计让工具作者<strong>自己决定</strong>并发语义,框架不替它猜。"
+      </p>
+    </div>
+
+    <hr>
+
+    <h2 id="sec3">三、三层上下文压缩 + 熔断器</h2>
+    <p>位置:<span class="file-ref">src/services/compact/</span></p>
+
+    <h3>生产级阈值数字</h3>
+<pre><span class="c-com">// autoCompact.ts:62-70</span>
+<span class="c-key">export const</span> <span class="c-type">AUTOCOMPACT_BUFFER_TOKENS</span> = <span class="c-num">13_000</span>
+<span class="c-key">export const</span> <span class="c-type">WARNING_THRESHOLD_BUFFER_TOKENS</span> = <span class="c-num">20_000</span>
+<span class="c-key">export const</span> <span class="c-type">ERROR_THRESHOLD_BUFFER_TOKENS</span> = <span class="c-num">20_000</span>
+<span class="c-key">export const</span> <span class="c-type">MANUAL_COMPACT_BUFFER_TOKENS</span> = <span class="c-num">3_000</span>
+
+<span class="c-com">// Stop trying autocompact after this many consecutive failures.</span>
+<span class="c-com">// BQ 2026-03-10: 1,279 sessions had 50+ consecutive failures (up to 3,272)</span>
+<span class="c-com">// in a single session, wasting ~250K API calls/day globally.</span>
+<span class="c-key">const</span> <span class="c-type">MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES</span> = <span class="c-num">3</span></pre>
+
+    <table>
+      <thead>
+        <tr><th>阈值</th><th>距窗口上沿</th><th>触发</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>warning</td><td>-20K</td><td>提醒用户</td></tr>
+        <tr><td>error</td><td>-20K</td><td>强制中断当前轮</td></tr>
+        <tr><td><strong>autoCompact</strong></td><td><strong>-13K</strong></td><td><strong>自动启动 LLM 压缩</strong></td></tr>
+        <tr><td>manual <code>/compact</code></td><td>-3K</td><td>手动 compact 也要留的 buffer</td></tr>
+        <tr><td><strong>circuit breaker</strong></td><td>连续 3 次失败</td><td><strong>停止重试</strong></td></tr>
+      </tbody>
+    </table>
+
+    <h3>Reserved for summary 输出</h3>
+<pre><span class="c-com">// autoCompact.ts:30</span>
+<span class="c-com">// Reserve this many tokens for output during compaction</span>
+<span class="c-com">// Based on p99.99 of compact summary output being 17,387 tokens.</span>
+<span class="c-key">const</span> <span class="c-type">MAX_OUTPUT_TOKENS_FOR_SUMMARY</span> = <span class="c-num">20_000</span></pre>
+    <p>
+      给压缩自身保留 20K 输出空间,因为 p99.99 的压缩总结要 17,387 tokens。
+      <strong>这个数字是跑出来的,不是拍脑袋</strong>。
+    </p>
+
+    <h3>死循环防御(递归死锁)</h3>
+<pre><span class="c-com">// autoCompact.ts:170-199</span>
+<span class="c-key">if</span> (querySource === <span class="c-str">'session_memory'</span> || querySource === <span class="c-str">'compact'</span>) {
+  <span class="c-key">return false</span>   <span class="c-com">// 压缩任务自己不能再压缩,会死锁</span>
+}
+<span class="c-key">if</span> (feature(<span class="c-str">'CONTEXT_COLLAPSE'</span>)) {
+  <span class="c-key">if</span> (querySource === <span class="c-str">'marble_origami'</span>) {
+    <span class="c-key">return false</span>   <span class="c-com">// ctx-agent 的压缩会毁掉主线程的 collapse log</span>
+  }
+}</pre>
+    <p>四种 querySource 显式排除,防止"压缩任务在压缩任务里嵌套 compact"的死锁。</p>
+
+    <h3>三层压缩的协调顺序</h3>
+<pre><span class="c-com">// query.ts:401-447</span>
+<span class="c-com">// 1. snip(尾部裁剪,feature-gated)</span>
+<span class="c-key">if</span> (feature(<span class="c-str">'HISTORY_SNIP'</span>)) { ... }
+
+<span class="c-com">// 2. microcompact(基于 tool_use_id 的纯 token 计数,不动内容)</span>
+<span class="c-key">const</span> microcompactResult = <span class="c-key">await</span> deps.microcompact(...)
+
+<span class="c-com">// 3. context collapse(投影式 view,提交到 collapse store)</span>
+<span class="c-key">if</span> (feature(<span class="c-str">'CONTEXT_COLLAPSE'</span>)) { ... }
+
+<span class="c-com">// 4. autocompact(LLM 自身总结)</span>
+<span class="c-key">const</span> { compactionResult } = <span class="c-key">await</span> deps.autocompact(...)</pre>
+
+    <p>
+      顺序的理由:snip 必须在 microcompact 之前(<code>snipTokensFreed</code> 要传给 autocompact);
+      microcompact 必须在 autocompact 之前(避免冗余总结)。三个机制<strong>正交</strong>。
+    </p>
+
+    <div class="callout">
+      <div class="callout-title">洞察</div>
+      <p>
+        "压缩体系里最容易被忽视的细节是<strong>阈值留 buffer</strong>:warning/error/autoCompact/manualCompact
+        四个阈值是<strong>递进收紧</strong>的(20K/20K/13K/3K),目的是给 LLM 留出反应时间。
+        生产数据显示 1,279 个会话曾出现 50+ 连续 compact 失败、每天浪费 25 万次 API 调用——
+        这才有了 <code>MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES = 3</code> 的熔断器。
+        <strong>这不是设计出来的,是观测出来的</strong>。"
+      </p>
+    </div>
+
+    <hr>
+
+    <h2 id="sec4">四、5 模式 × 4 规则 × 3 handler 权限路由</h2>
+    <p>位置:<span class="file-ref">src/hooks/useCanUseTool.tsx</span>、<span class="file-ref">src/utils/permissions/</span></p>
+
+    <h3>5 种 PermissionMode</h3>
+    <table>
+      <thead>
+        <tr><th>模式</th><th>行为</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>default</code></td><td>每个新命令都问</td></tr>
+        <tr><td><code>acceptEdits</code></td><td>文件编辑类自动通过,其它问</td></tr>
+        <tr><td><code>plan</code></td><td>不允许写,只读 + 计划</td></tr>
+        <tr><td><code>bypassPermissions</code></td><td>全通过(由 killswitch 兜底)</td></tr>
+        <tr><td><code>auto</code></td><td><strong>LLM 分类器</strong>判定风险(ant-only 灰度)</td></tr>
+      </tbody>
+    </table>
+
+    <h3>4 类规则(同时存在,优先级递减)</h3>
+<pre><span class="c-key">type</span> <span class="c-type">ToolPermissionContext</span> = {
+  mode: <span class="c-type">PermissionMode</span>
+  alwaysAllowRules: <span class="c-type">ToolPermissionRulesBySource</span>
+  alwaysDenyRules: <span class="c-type">ToolPermissionRulesBySource</span>
+  alwaysAskRules: <span class="c-type">ToolPermissionRulesBySource</span>
+  additionalWorkingDirectories: <span class="c-type">Map</span>&lt;<span class="c-key">string</span>, <span class="c-type">AdditionalWorkingDirectory</span>&gt;
+  isBypassPermissionsModeAvailable: <span class="c-key">boolean</span>
+  isAutoModeAvailable?: <span class="c-key">boolean</span>
+  strippedDangerousRules?: <span class="c-type">ToolPermissionRulesBySource</span>
+  shouldAvoidPermissionPrompts?: <span class="c-key">boolean</span>   <span class="c-com">// 后台代理:跳过弹窗,自动拒绝</span>
+  awaitAutomatedChecksBeforeDialog?: <span class="c-key">boolean</span> <span class="c-com">// 协调者 worker:先让 classifier / hook 决定</span>
+  prePlanMode?: <span class="c-type">PermissionMode</span>             <span class="c-com">// Plan mode 退出时恢复</span>
+}</pre>
+    <p>
+      三套规则<strong>不是 if-else</strong>,是各自独立的 rule source map(从 settings.json / .claude/permissions/ / session 内 <code>/permissions</code> 命令 三处加载)。
+    </p>
+
+    <h3>工具调用前的判断链</h3>
+<pre><span class="c-com">// useCanUseTool.tsx:60-93</span>
+<span class="c-key">const</span> decisionPromise = forceDecision !== <span class="c-key">undefined</span>
+  ? <span class="c-type">Promise</span>.resolve(forceDecision)
+  : hasPermissionsToUseTool(tool, input, toolUseContext, assistantMessage, toolUseID)
+
+decisionPromise.then(<span class="c-key">async</span> (result) =&gt; {
+  <span class="c-key">if</span> (result.behavior === <span class="c-str">"allow"</span>) { <span class="c-com">/* 立即执行 */</span> }
+  <span class="c-key">if</span> (result.behavior === <span class="c-str">"deny"</span>)  { <span class="c-com">/* 注入 tool_result 错误,继续 loop */</span> }
+  <span class="c-key">if</span> (result.behavior === <span class="c-str">"ask"</span>)   { <span class="c-com">/* 路由到 3 个 handler 之一 */</span> }
+})</pre>
+
+    <h3>3 个 Handler(根据调用者身份路由)</h3>
+<pre><span class="c-key">import</span> { handleCoordinatorPermission } <span class="c-key">from</span> <span class="c-str">'./toolPermission/handlers/coordinatorHandler.js'</span>
+<span class="c-key">import</span> { handleInteractivePermission }  <span class="c-key">from</span> <span class="c-str">'./toolPermission/handlers/interactiveHandler.js'</span>
+<span class="c-key">import</span> { handleSwarmWorkerPermission }   <span class="c-key">from</span> <span class="c-str">'./toolPermission/handlers/swarmWorkerHandler.js'</span></pre>
+    <ul>
+      <li><strong>interactiveHandler</strong>:REPL 模式,弹原生 UI 询问</li>
+      <li><strong>coordinatorHandler</strong>:<code>awaitAutomatedChecksBeforeDialog</code> — 在弹窗前先让 classifier / hook 决定</li>
+      <li><strong>swarmWorkerHandler</strong>:多 Agent 协同时,worker 之间的权限轮询</li>
+    </ul>
+
+    <h3>Speculative check(投机预检)</h3>
+<pre><span class="c-key">import</span> {
+  consumeSpeculativeClassifierCheck,
+  peekSpeculativeClassifierCheck,
+} <span class="c-key">from</span> <span class="c-str">'../tools/BashTool/bashPermissions.js'</span></pre>
+    <p>
+      在用户<strong>看到权限弹窗之前</strong>,Bash 工具就用 classifier 偷偷跑一次风险判定。
+      如果结果是 <code>allow</code>,弹窗都不显示;如果是 <code>deny</code>/<code>ask</code>,才走弹窗。
+      <strong>这是把分类器延迟藏在了 UI 渲染时间里</strong>。
+    </p>
+
+    <div class="callout">
+      <div class="callout-title">洞察</div>
+      <p>
+        "Claude Code 的权限不是单一 if 判断,而是一个<strong>分层路由系统</strong>:
+        5 种模式 × 4 类规则 × 3 个 handler。
+        规则按 source 维度(map)加载,行为按调用者身份路由(交互/协调者/worker),
+        <code>ask</code> 路径下还有 speculative classifier 把 LLM 判定隐藏在 UI 弹窗的渲染时间窗里。
+        <strong>用户感知的延迟不等于系统的判定时间</strong>。"
+      </p>
+    </div>
+
+    <hr>
+
+    <h2 id="sec5">五、Tool 接口:Zod 三用 + 描述函数化</h2>
+    <p>位置:<span class="file-ref">src/Tool.ts:358-399</span></p>
+<pre><span class="c-key">export type</span> <span class="c-type">Tool</span>&lt;Input, Output, P&gt; = {
+  aliases?: <span class="c-key">string</span>[]                         <span class="c-com">// 工具重命名的向后兼容</span>
+  searchHint?: <span class="c-key">string</span>                        <span class="c-com">// ToolSearch 关键词,3-10 词</span>
+  call(args, context, canUseTool, parentMessage, onProgress): <span class="c-type">Promise</span>&lt;<span class="c-type">ToolResult</span>&gt;
+  description(input, options): <span class="c-type">Promise</span>&lt;<span class="c-key">string</span>&gt;  <span class="c-com">// ⬅️ 函数,不是常量</span>
+  <span class="c-key">readonly</span> inputSchema: <span class="c-type">Input</span>             <span class="c-com">// Zod</span>
+  <span class="c-key">readonly</span> inputJSONSchema?: <span class="c-type">ToolInputJSONSchema</span>  <span class="c-com">// MCP 工具专用</span>
+  outputSchema?: z.<span class="c-type">ZodType</span>&lt;<span class="c-key">unknown</span>&gt;
+  inputsEquivalent?(a, b): <span class="c-key">boolean</span>
+  isConcurrencySafe(input): <span class="c-key">boolean</span>
+  isEnabled(): <span class="c-key">boolean</span>
+  isReadOnly(): <span class="c-key">boolean</span>
+  isMcp?: <span class="c-key">boolean</span>
+  maxResultSizeChars?: <span class="c-key">number</span>
+  userFacingName(input): <span class="c-key">string</span>
+  renderToolResultMessage?(...)
+  renderToolUseMessage?(...)
+}</pre>
+
+    <h3>真正值得说的两个细节</h3>
+
+    <h4>1. <code>description</code> 是函数不是常量</h4>
+<pre>description(input: z.infer&lt;Input&gt;, options: {
+  isNonInteractiveSession: <span class="c-key">boolean</span>
+  toolPermissionContext: <span class="c-type">ToolPermissionContext</span>
+  tools: <span class="c-type">Tools</span>
+}): <span class="c-type">Promise</span>&lt;<span class="c-key">string</span>&gt;</pre>
+    <p>
+      同一个工具,在 CI 模式 vs 交互模式,描述会<strong>不一样</strong>。
+      比如 <code>BashTool</code> 在 non-interactive session 下不会让用户看到"是否保存到允许列表"的提示语,描述会动态省略相关引导。
+    </p>
+
+    <h4>2. <code>inputSchema</code> 三用</h4>
+<pre><span class="c-key">readonly</span> inputSchema: <span class="c-type">Input</span>   <span class="c-com">// Input extends z.ZodType&lt;{...}&gt;</span></pre>
+    <ul>
+      <li><strong>类型推导</strong>:<code>z.infer&lt;Input&gt;</code> 给 <code>call()</code> 的 <code>args</code></li>
+      <li><strong>运行时校验</strong>:<code>toolDefinition.inputSchema.safeParse(block.input)</code></li>
+      <li><strong>API 序列化</strong>:<code>toolDefinition.inputSchema</code> 转换成 JSON Schema 发给 LLM</li>
+    </ul>
+    <p><strong>一个 Zod schema 同时是 TypeScript 类型 + 校验器 + LLM 工具描述的真相来源</strong>。</p>
+
+    <h4>3. <code>canUseTool</code> 作为工具 call 的<strong>第三参数</strong>传进去</h4>
+<pre>call(
+  args: z.infer&lt;Input&gt;,
+  context: <span class="c-type">ToolUseContext</span>,
+  canUseTool: <span class="c-type">CanUseToolFn</span>,          <span class="c-com">// ⬅️ 工具内部可触发子权限检查</span>
+  parentMessage: <span class="c-type">AssistantMessage</span>,
+  onProgress?: <span class="c-type">ToolCallProgress</span>&lt;P&gt;,
+): <span class="c-type">Promise</span>&lt;<span class="c-type">ToolResult</span>&lt;Output&gt;&gt;</pre>
+    <p>
+      工具在执行过程中,可能<strong>自己</strong>需要调用其它工具(比如 AgentTool 在跑子任务时会用 Task)。
+      把 <code>canUseTool</code> 透传进去,让子调用走和顶层一样的权限链路。
+    </p>
+
+    <div class="callout">
+      <div class="callout-title">洞察</div>
+      <p>
+        "Claude Code 的 Tool 接口把'描述做成函数'这一点很容易被忽视——
+        <code>description(input, options)</code> 是异步的,可以根据 input 动态生成。
+        在 CI vs REPL 模式下,同一个工具给 LLM 看的描述是不一样的。
+        <strong>Tool schema 的真相来源必须是同一个 Zod 对象</strong>,否则 LLM 看到的和实际校验的会漂移。"
+      </p>
+    </div>
+
+    <hr>
+
+    <h2 id="sec6">六、Hooks:硬约束 + 软熔断</h2>
+    <p>位置:<span class="file-ref">src/utils/hooks.ts</span>、<span class="file-ref">src/hooks/</span></p>
+
+    <h3>钩子生命周期(从 query.ts 拼出来)</h3>
+    <table>
+      <thead>
+        <tr><th>Hook</th><th>时机</th><th>可阻塞?</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>PreToolUse</code></td><td>工具执行前</td><td>✅ 可以 reject</td></tr>
+        <tr><td><code>PostToolUse</code></td><td>工具执行后</td><td>❌ 只能改 result</td></tr>
+        <tr><td><code>UserPromptSubmit</code></td><td>用户输入后,API 调用前</td><td>✅ 可以改 input</td></tr>
+        <tr><td><code>PreCompact</code></td><td>压缩前</td><td>❌</td></tr>
+        <tr><td><code>PostCompact</code></td><td>压缩后</td><td>❌</td></tr>
+        <tr><td><code>SessionStart</code></td><td>会话开始</td><td>❌</td></tr>
+        <tr><td><code>Stop</code></td><td>试图结束 turn 时</td><td>✅ 可以<strong>强制继续</strong></td></tr>
+        <tr><td><code>SubagentStop</code></td><td>子 Agent 结束</td><td>✅</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Stop hook 的"超 8 次覆盖"机制</h3>
+    <p>
+      来自 Anthropic 官方 best-practices:
+    </p>
+    <blockquote>
+      A <a>Stop hook</a> runs your check as a script and <strong>blocks the turn from ending until it passes</strong>.
+      <strong>Claude Code overrides the hook and ends the turn after 8 consecutive blocks.</strong>
+    </blockquote>
+    <p>
+      这是<strong>护栏的护栏</strong>:用户写一个 Stop hook 强制 Claude 跑测试再停,
+      Claude 跑了 8 次测试还不通过,系统<strong>强制让 Claude 停下</strong>,避免死循环。
+    </p>
+
+    <div class="callout">
+      <div class="callout-title">洞察</div>
+      <p>
+        "Hooks 跟 CLAUDE.md 提示词的核心区别是<strong>确定性</strong>:
+        提示词是软的(模型可能忽略),Hook 是硬的(代码执行)。
+        但 Hook 自己又需要一个熔断(8 次连续阻止后强制放行)——
+        <strong>所有的硬约束都需要软熔断</strong>,否则用户可以把 Agent 锁死。"
+      </p>
+    </div>
+
+    <hr>
+
+    <h2 id="sec7">七、多 Provider 流适配</h2>
+    <p>位置:<span class="file-ref">src/services/api/openai/streamAdapter.ts</span>、<span class="file-ref">src/services/api/gemini/streamAdapter.ts</span></p>
+
+    <h3>抽象边界</h3>
+<pre>Anthropic SDK stream   ─┐
+OpenAI SSE stream      ─┼─→ <span class="c-type">BetaRawMessageStreamEvent</span> ─→ query.ts / tool exec / UI
+Gemini stream          ─┘</pre>
+    <p>
+      三个 Provider 在 Adapter 出口<strong>全部归一化成</strong> <code>BetaRawMessageStreamEvent</code>
+      (<code>message_start</code> / <code>content_block_*</code> / <code>message_delta</code> / <code>message_stop</code> / <code>error</code>)。
+      下游(工具执行、UI、错误恢复)<strong>零修改切换</strong>。
+    </p>
+
+    <h3>真正的工作量在"反向上传"</h3>
+<pre><span class="c-com">// openai/convertMessages.ts:把 Anthropic Message[] 转成 OpenAI ChatMessage[]</span>
+<span class="c-com">// openai/convertTools.ts:把 Zod schema 转成 OpenAI function calling 格式</span>
+<span class="c-com">// openai/modelMapping.ts:GPT-4 / Claude / DeepSeek / Ollama 模型名映射</span>
+<span class="c-com">// gemini/streamAdapter.ts:同样的归一化,但 Google 协议有自己的 tool/function 区分</span></pre>
+
+    <div class="callout">
+      <div class="callout-title">洞察</div>
+      <p>
+        "多 Provider 适配的关键不是 '把每个 Provider 都包一遍',而是<strong>在 Adapter 出口定义一个内部事件流协议</strong>,
+        让所有下游消费者面对一个统一的契约。
+        新增 Provider 只需写<strong>入向转换</strong>(API 格式 → 内部事件),不用改任何业务代码。"
+      </p>
+    </div>
+
+    <hr>
+
+    <h2 id="sec8">八、子 Agent Fork 共享 prompt cache</h2>
+    <p>位置:<span class="file-ref">src/tools/AgentTool/forkSubagent.ts</span></p>
+
+    <h3>Fork 缓存共享的关键代码</h3>
+<pre><span class="c-com">// Tool.ts:297</span>
+renderedSystemPrompt?: <span class="c-type">SystemPrompt</span></pre>
+    <p>
+      注释极重要:
+    </p>
+    <blockquote>
+      <strong>Parent's rendered system prompt bytes, frozen at turn start.</strong>
+      For fork subagents to share parent's prompt cache — re-invoking getSystemPrompt()
+      at fork-spawn could diverge (GrowthBook cold→warm) and break the cache.
+    </blockquote>
+
+    <h3>工程含义</h3>
+    <ol>
+      <li>系统 prompt 在 turn 开始时<strong>冻结</strong>到 <code>toolUseContext.renderedSystemPrompt</code></li>
+      <li>Fork 时直接复用父级的字节流</li>
+      <li>让"父 Agent + 10 个并行子 Agent"能共享同一份 prompt cache,<strong>不是 10 份</strong></li>
+    </ol>
+
+    <div class="callout">
+      <div class="callout-title">洞察</div>
+      <p>
+        "子 Agent 的 fork 机制里最隐蔽的设计是<strong>'冻结父级 systemPrompt'</strong>。
+        不是 fork 时再渲染一次,那样会因为 GrowthBook cold→warm 击穿 prompt cache。
+        <strong>缓存命中的前提是字节级一致</strong>,所以子 Agent 必须继承父级的字节流。
+        这是 prompt caching 在多 Agent 场景下能否起效的关键。"
+      </p>
+    </div>
+
+    <hr>
+
+    <h2 id="sec9">九、AbortController 两层树</h2>
+    <p>位置:<span class="file-ref">src/utils/abortController.ts</span>、<span class="file-ref">StreamingToolExecutor.ts:59-61</span></p>
+<pre><span class="c-com">// 用户按 ESC → 顶层的 toolUseContext.abortController</span>
+<span class="c-com">// 某个 Bash 失败 → StreamingToolExecutor 的 siblingAbortController</span>
+
+<span class="c-key">this</span>.siblingAbortController = createChildAbortController(
+  toolUseContext.abortController,
+)</pre>
+    <p>
+      <code>createChildAbortController(parent)</code> 实现的是 <strong>single-child abort tree</strong>:
+    </p>
+    <ul>
+      <li>父被 abort → 子立刻 abort(整体取消)</li>
+      <li>子被 abort → 父<strong>不会</strong>自动 abort(局部失败,不终止整个 turn)</li>
+    </ul>
+    <p>这是<strong>异常传播策略</strong>与<strong>用户取消策略</strong>的清晰分离。</p>
+
+    <hr>
+
+    <h2 id="sec10">十、生产级容错细节(从源码注释里挖出来的)</h2>
+    <table>
+      <thead>
+        <tr><th>注释原文</th><th>位置</th><th>学到什么</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>// BQ 2026-03-10: 1,279 sessions had 50+ consecutive failures (up to 3,272) in a single session, wasting ~250K API calls/day globally.</code></td>
+          <td>autoCompact.ts:69</td>
+          <td>生产数据驱动的工程决策</td>
+        </tr>
+        <tr>
+          <td><code>// Mirrors reactiveCompact.isWithheldPromptTooLong.</code></td>
+          <td>query.ts:174</td>
+          <td><strong>跨模块镜像语义</strong>避免漂移</td>
+        </tr>
+        <tr>
+          <td><code>// We yield nothing — the collapsed view is a read-time projection over the REPL's full history. Summary messages live in the collapse store, not the REPL array.</code></td>
+          <td>query.ts:434</td>
+          <td>压缩用<strong>投影</strong>而非原地修改</td>
+        </tr>
+        <tr>
+          <td><code>// Cached MC operates purely by tool_use_id (never inspects content), so content replacement is invisible to it and the two compose cleanly.</code></td>
+          <td>query.ts:373</td>
+          <td>不同优化层<strong>正交</strong></td>
+        </tr>
+        <tr>
+          <td><code>// feature() wrapper keeps the flag string out of external builds (it's in excluded-strings.txt).</code></td>
+          <td>autoCompact.ts:177</td>
+          <td><code>feature()</code> 不仅是开关,还是<strong>字符串擦除器</strong></td>
+        </tr>
+        <tr>
+          <td><code>// Inside feature() so the string DCEs from external builds</code></td>
+          <td>autoCompact.ts:195</td>
+          <td>feature flag = <strong>编译时死代码消除</strong>机制</td>
+        </tr>
+        <tr>
+          <td><code>// In one prompt: ask Claude to run the check and iterate in the same message</code></td>
+          <td>best-practices(官方)</td>
+          <td>verification 是 agent 自循环的<strong>关闭条件</strong></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <hr>
+
+    <h2 id="sec-a">附录 A:简历项目描述(两种风格)</h2>
+
+    <h3>风格 A:工程导向(适合偏后端/SDE)</h3>
+    <div class="resume-block">
+      <h3>Claude Code 源码学习 &amp; Agent Harness 实现机制研究</h3>
+      <ul>
+        <li>深入阅读 Claude Code v2.1.888 反编译源码(2,795 个 TS/TSX 文件,核心 ~14K 行业务代码),重点拆解 Agent Loop、Tool 系统、权限治理、上下文压缩、多 Provider 适配五大子系统</li>
+        <li>复刻了 <code>StreamingToolExecutor</code> 的并发控制模型:基于 <code>isConcurrencySafe</code> 的工具级隔离 + 兄弟 abort 树,处理流式返回时的并行执行与失败传染</li>
+        <li>实现与 Anthropic 同款的<strong>三层上下文压缩</strong>:<code>microcompact</code>(token 计数)→ <code>context collapse</code>(投影式)→ <code>autocompact</code>(LLM 总结),通过 <code>MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES=3</code> 的熔断器避免 250K/日 API 调用的浪费</li>
+        <li>实现<strong>多 Provider 流适配层</strong>:Anthropic / OpenAI / Gemini 三个 SSE 协议在 Adapter 出口归一化为 <code>BetaRawMessageStreamEvent</code>,业务层零修改切换</li>
+      </ul>
+    </div>
+
+    <h3>风格 B:架构导向(适合偏架构师/AI 平台)</h3>
+    <div class="resume-block">
+      <h3>AI Agent Harness 架构研究(基于 Claude Code)</h3>
+      <ul>
+        <li>分析 Claude Code 50+ 工具的统一接口,提炼出"Zod schema 三用"(类型/校验/LLM 描述)、<code>canUseTool</code> 透传、动态 <code>description</code> 三个设计原则</li>
+        <li>分析其 5 模式 × 4 类规则 × 3 handler 的权限路由体系,以及把 LLM 风险判定隐藏在 UI 渲染时间窗里的 <strong>speculative classifier</strong> 模式</li>
+        <li>提炼出"<strong>一个常量 loop + N 个外部机制</strong>"的 Agent 范式:loop 本身只占 ~50 行,所有复杂度(工具、权限、压缩、Hook、子 Agent)都是<strong>外部扩展</strong>,不修改 loop</li>
+        <li>产出 6 阶段源码学习路线 + 4 万字笔记,沉淀在 <code>learn/</code> 目录</li>
+      </ul>
+    </div>
+
+    <hr>
+
+    <h2 id="sec-b">附录 B:面试 5 个追问的回答骨架</h2>
+
+    <div class="qa">
+      <div class="qa-q">Claude Code 的 Agent Loop 长什么样?</div>
+      <div class="qa-a">循环本身 50 行。复杂度全在 loop <strong>外面</strong>:流式工具执行的并发控制用 <code>StreamingToolExecutor</code>,上下文三层压缩 + 熔断,5 模式权限路由,Hook 扩展点不侵入 loop。</div>
+    </div>
+
+    <div class="qa">
+      <div class="qa-q">流式返回怎么处理并行工具?</div>
+      <div class="qa-a"><code>StreamingToolExecutor</code> 把工具分成 queued/executing/completed/yielded 四态。<code>isConcurrencySafe</code> 是工具 + 输入的纯函数,框架不替工具猜。兄弟 abort 用 child-of-parent 树结构,失败传染不污染主循环。</div>
+    </div>
+
+    <div class="qa">
+      <div class="qa-q">上下文怎么管理?</div>
+      <div class="qa-a">三层:snip(尾部裁剪)→ microcompact(按 tool_use_id 计 token,不动内容)→ autocompact(LLM 总结,留 20K 给总结自身输出)。三个机制<strong>正交</strong>,不会互相干扰。生产数据显示连续 compact 失败会浪费 API,所以 3 次熔断。</div>
+    </div>
+
+    <div class="qa">
+      <div class="qa-q">工具怎么定义?</div>
+      <div class="qa-a">Zod schema 一份,三用:类型推导、运行时校验、给 LLM 看。<code>description</code> 是函数不是常量,可以根据 input 和 session 模式动态生成。<code>canUseTool</code> 透传到工具内部,让子调用走同一套权限链。</div>
+    </div>
+
+    <div class="qa">
+      <div class="qa-q">多 LLM 怎么兼容?</div>
+      <div class="qa-a">在 Adapter 出口定义内部事件流协议(<code>BetaRawMessageStreamEvent</code>),三个 Provider 都归一化到这层。下游零修改。新增 Provider 只写<strong>入向转换</strong>。</div>
+    </div>
+
+    <hr>
+
+    <h2 id="sec-c">附录 C:源码学习路线(基于 <code>learn/LEARN.md</code>)</h2>
+    <ol>
+      <li><strong>第一阶段:启动流程</strong>(<code>learn/phase-1-startup-flow.md</code>)<br>
+        读 <code>src/entrypoints/cli.tsx</code> + <code>src/main.tsx</code> + <code>src/replLauncher.tsx</code> + <code>src/screens/REPL.tsx</code></li>
+      <li><strong>第二阶段:核心对话循环</strong>(<code>learn/phase-2-conversation-loop.md</code>)<br>
+        读 <code>src/query.ts</code> + <code>src/QueryEngine.ts</code> + <code>src/services/api/claude.ts</code></li>
+      <li><strong>第三阶段:工具系统</strong><br>
+        读 <code>src/Tool.ts</code> + <code>src/tools.ts</code>,然后挑 2-3 个工具深入(<code>BashTool</code> / <code>FileEditTool</code> / <code>AgentTool</code>)</li>
+      <li><strong>第四阶段:上下文与系统提示</strong><br>
+        读 <code>src/context.ts</code> + <code>src/utils/claudemd.ts</code> + <code>src/services/compact/</code></li>
+      <li><strong>第五阶段:UI 层(按兴趣选读)</strong><br>
+        <code>src/components/App.tsx</code> + <code>src/state/AppState.tsx</code> + <code>src/components/permissions/</code></li>
+      <li><strong>第六阶段:外围系统(按需探索)</strong><br>
+        <code>src/services/mcp/</code> + <code>src/skills/</code> + <code>src/commands/</code> + <code>src/tasks/</code> + <code>src/utils/model/providers.ts</code></li>
+    </ol>
+
+    <hr>
+
+    <h2 id="sec-d">附录 D:参考资料</h2>
+    <p class="source-list">
+      <a href="https://github.com/shareAI-lab/learn-claude-code" target="_blank" rel="noopener">shareAI-lab/learn-claude-code</a> — 20 节课渐进式 Agent Harness 教程<br>
+      <a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Anthropic: Building Effective Agents</a> — 5 种 workflow pattern 与设计原则<br>
+      <a href="https://code.claude.com/docs/en/best-practices" target="_blank" rel="noopener">Anthropic: Claude Code Best Practices</a> — 官方使用指南(反向揭示源码设计意图)<br>
+      <a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Anthropic: Effective Harnesses for Long-Running Agents</a> — 长跑 Agent Harness
+    </p>
+  </main>
+</div>
+
+<script>
+  // scroll-spy: highlight active TOC item
+  (function() {
+    const links = document.querySelectorAll('aside a[href^="#sec"]');
+    const targets = Array.from(links).map(a => {
+      const id = a.getAttribute('href').slice(1);
+      return { link: a, el: document.getElementById(id) };
+    }).filter(t => t.el);
+
+    function onScroll() {
+      const top = window.scrollY + 100;
+      let activeIdx = 0;
+      for (let i = 0; i < targets.length; i++) {
+        if (targets[i].el.offsetTop <= top) activeIdx = i;
+      }
+      links.forEach(l => l.classList.remove('active'));
+      if (targets[activeIdx]) targets[activeIdx].link.classList.add('active');
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
+</script>
+</body>
+</html>
