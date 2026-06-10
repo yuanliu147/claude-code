@@ -494,6 +494,11 @@
     <li><a href="#ultraplan">Ultraplan 系统</a></li>
     <li><a href="#state">状态机与权限 Context</a></li>
     <li><a href="#registration">工具注册与模型可见性</a></li>
+    <li><a href="#prompts">提示词生成体系（Attachment）</a></li>
+    <li><a href="#prompts-5phase">5-Phase 工作流提示词</a></li>
+    <li><a href="#prompts-interview">Interview Phase 提示词</a></li>
+    <li><a href="#prompts-phase4">Phase 4 PewterLedger 4 变体</a></li>
+    <li><a href="#prompts-other">其他 Plan 提示词</a></li>
     <li><a href="#flows">端到端调用链</a></li>
     <li><a href="#limits">限制、边界、异常</a></li>
     <li><a href="#design">为什么这么设计</a></li>
@@ -510,7 +515,8 @@
   <p class="subtitle">
     从 <code class="inline">/plan</code> 斜杠命令到 <code class="inline">ExitPlanModeV2Tool</code>、从
     <code class="inline">plans.ts</code> 文件存储到 <code class="inline">Ultraplan</code>
-    远端会诊：完整链路 + V1/V2 差异 + 大量 <code class="inline">file:line</code> 反编译引用。
+    远端会诊、从 <code class="inline">plan_mode</code> attachment 三层注入到 <code class="inline">PewterLedger</code> Phase 4 变体：
+    完整链路 + V1/V2 差异 + 提示词生成体系 + 大量 <code class="inline">file:line</code> 反编译引用。
   </p>
   <div class="meta">
     <span>当前仓库：<code class="inline">/Users/admin/WorkSpace/claude-code</code></span>
@@ -1820,8 +1826,656 @@ BriefTool,
 
 <hr>
 
+<section id="prompts">
+  <h2><span class="section-num">15</span>提示词生成体系：Plan Mode Attachment 机制</h2>
+
+  <p>
+    Plan 的内容<strong>不是</strong>由某一条固定提示词直接生成的。它通过一个<strong>三层注入、动态组合</strong>的提示词体系，
+    在不同时机向模型传递不同指令，引导模型自行探索后写出计划文件。理解这套体系是理解 plan 输出质量的关键。
+  </p>
+
+  <h3>三层注入架构</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>层</th>
+        <th>时机</th>
+        <th>内容</th>
+        <th>文件</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>L1: 工具 description</td>
+        <td>始终可见（模型看工具列表时）</td>
+        <td>"何时使用 / 不使用 EnterPlanMode"</td>
+        <td><span class="file">EnterPlanModeTool/prompt.ts</span></td>
+      </tr>
+      <tr>
+        <td>L2: tool_result</td>
+        <td>模型调用 EnterPlanMode / ExitPlanMode 后</td>
+        <td>进入后的行为指令 + 退出后的批准确认</td>
+        <td><span class="file">EnterPlanModeTool.ts</span> / <span class="file">ExitPlanModeV2Tool.ts</span></td>
+      </tr>
+      <tr>
+        <td>L3: plan_mode attachment</td>
+        <td>每 5 个 human turn 注入一次</td>
+        <td>完整 5-Phase / Interview 工作流 + Phase 4 变体</td>
+        <td><span class="file">messages.ts</span> / <span class="file">attachments.ts</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Attachment 注入机制</h3>
+  <p>
+    <span class="file">src/utils/attachments.ts</span> 中定义了 attachment 的注入逻辑：
+  </p>
+
+  <span class="code-loc">src/utils/attachments.ts:259-262</span>
+  <pre><code>export const PLAN_MODE_ATTACHMENT_CONFIG = {
+  TURNS_BETWEEN_ATTACHMENTS: 5,
+  FULL_REMINDER_EVERY_N_ATTACHMENTS: 5,
+} as const</code></pre>
+
+  <ul>
+    <li><strong>频率</strong>：每隔 <code class="inline">TURNS_BETWEEN_ATTACHMENTS = 5</code> 个 human turn 注入一次 attachment（首个 turn 一定会注入）</li>
+    <li><strong>Full / Sparse</strong>：每第 <code class="inline">1, 6, 11, ...</code> 个 attachment（即每 5 个 attachment 的第 1 个）为 <strong>full reminder</strong>；其余为 <strong>sparse reminder</strong></li>
+    <li><strong>Turn 计算</strong>：只计 human turn（非 meta、非 tool-result 的 user message），不计 assistant tool loop 中的轮次——因为 query.ts 在每个 tool round 都会调用 getAttachmentMessages，如果按 assistant turn 计算会变成每 5 个 tool call 就注入</li>
+    <li><strong>重入检测</strong>：如果用户曾退出 plan mode 再重新进入，且 plan 文件存在，会额外注入一个 <code class="inline">plan_mode_reentry</code> attachment（一次性）</li>
+    <li><strong>退出通知</strong>：退出 plan mode 时注入 <code class="inline">plan_mode_exit</code> attachment（一次性）</li>
+  </ul>
+
+  <h3>Attachment 类型总览</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>类型</th>
+        <th>触发条件</th>
+        <th>提示词来源</th>
+        <th>持续性</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code class="inline">plan_mode</code></td>
+        <td>每 5 human turn + mode === 'plan'</td>
+        <td><code class="inline">getPlanModeInstructions()</code> → full/sparse/subAgent 分支</td>
+        <td>持续（周期性）</td>
+      </tr>
+      <tr>
+        <td><code class="inline">plan_mode_reentry</code></td>
+        <td>hasExitedPlanMode &amp;&amp; plan 文件存在</td>
+        <td><code class="inline">normalizeAttachmentForAPI()</code> 中 inline</td>
+        <td>一次性</td>
+      </tr>
+      <tr>
+        <td><code class="inline">plan_mode_exit</code></td>
+        <td>needsPlanModeExitAttachment 标志</td>
+        <td><code class="inline">normalizeAttachmentForAPI()</code> 中 inline</td>
+        <td>一次性</td>
+      </tr>
+      <tr>
+        <td><code class="inline">plan_file_reference</code></td>
+        <td>compact/恢复后 plan 文件仍存在</td>
+        <td><code class="inline">normalizeAttachmentForAPI()</code> 中 inline</td>
+        <td>持续性（跨 compact）</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>路由逻辑</h3>
+  <span class="code-loc">src/utils/messages.ts:3172-3185</span>
+  <pre><code>function getPlanModeInstructions(attachment) {
+  if (attachment.isSubAgent) {
+    return getPlanModeV2SubAgentInstructions(attachment)  // subagent 简版
+  }
+  if (attachment.reminderType === 'sparse') {
+    return getPlanModeV2SparseInstructions(attachment)   // 稀疏提醒
+  }
+  return getPlanModeV2Instructions(attachment)            // 完整流程
+}</code></pre>
+
+  <p>
+    <code class="inline">getPlanModeV2Instructions()</code> 内部再根据 <code class="inline">isPlanModeInterviewPhaseEnabled()</code> 分支到
+    <strong>Interview Phase</strong>（迭代式）或 <strong>5-Phase</strong>（阶段式）工作流。
+  </p>
+
+  <div class="flow">[attachment 注入]
+     |
+     v
+  getPlanModeInstructions()
+     |
+     |-- isSubAgent ─── getPlanModeV2SubAgentInstructions()  (简版)
+     |-- sparse ────── getPlanModeV2SparseInstructions()     (1行提醒)
+     |-- full ──────── getPlanModeV2Instructions()
+     |                    |
+     |                    |-- interviewPhase ── getPlanModeInterviewInstructions()
+     |                    |-- 5-phase ──────── inline template + getPlanPhase4Section()</div>
+</section>
+
+<hr>
+
+<section id="prompts-5phase">
+  <h2><span class="section-num">16</span>5-Phase 工作流提示词（Full Reminder）</h2>
+
+  <p>
+    当 Interview Phase <strong>关闭</strong>时，full reminder 使用 <code class="inline">getPlanModeV2Instructions()</code>
+    生成完整 5-Phase 工作流提示词。这是外部用户的默认行为。
+    <span class="code-loc">messages.ts:3243-3333</span>
+  </p>
+
+  <h3>核心约束（开头）</h3>
+  <pre><code>Plan mode is active. The user indicated that they do not want you to execute yet --
+you MUST NOT make any edits (with the exception of the plan file mentioned below),
+run any non-readonly tools (including changing configs or making commits), or otherwise
+make any changes to the system. This supercedes any other instructions you have received.</code></pre>
+
+  <h3>Phase 1: Initial Understanding</h3>
+  <p>目标：理解用户请求，并发探索代码。</p>
+  <ul>
+    <li>主动搜索已有函数、utilities、patterns——避免提议新代码当合适实现已存在</li>
+    <li>Launch <strong>up to <code class="inline">exploreAgentCount</code> Explore agents IN PARALLEL</strong>（单条消息、多条 tool calls）</li>
+    <li>1 agent 适合：任务孤立、已知文件路径、小改动</li>
+    <li>多 agent 适合：范围不确定、涉及多个代码区域、需要理解 patterns</li>
+    <li>质量优于数量——<code class="inline">exploreAgentCount</code> 是上限而非目标（通常只需 1 个）</li>
+  </ul>
+
+  <h3>Phase 2: Design</h3>
+  <p>目标：设计实现方案，并发 launch Plan agents。</p>
+  <ul>
+    <li>Launch <code class="inline">agentCount</code> Plan agent(s)——基于 Phase 1 的探索结果设计</li>
+    <li>默认至少 1 个 Plan agent（验证理解、考虑替代方案）</li>
+    <li>Skip agents：仅对真正琐碎的任务（typo fix、单行修改、简单 rename）</li>
+    <li>多 agent 用于：复杂任务需不同视角（新功能=简洁 vs 性能 vs 可维护性；bug fix=根因 vs workaround vs 预防；重构=最小变更 vs 清洁架构）</li>
+    <li>Agent prompt 中须包含：Phase 1 的完整背景上下文（含文件名和代码路径追踪）、需求与约束、请求详细实现计划</li>
+  </ul>
+
+  <h3>Phase 3: Review</h3>
+  <p>目标：审查 plan(s)，确保与用户意图一致。</p>
+  <ul>
+    <li>读 agents 标注的关键文件以加深理解</li>
+    <li>确保 plans 与用户原始请求对齐</li>
+    <li>用 <code class="inline">AskUserQuestion</code> 澄清剩余问题</li>
+  </ul>
+
+  <h3>Phase 4: Final Plan</h3>
+  <p>
+    写 plan 文件。具体指令由 <code class="inline">getPlanPhase4Section()</code> 根据 PewterLedger 变体决定
+    ——详见 <a href="#prompts-phase4">下一节</a>。
+  </p>
+
+  <h3>Phase 5: Call ExitPlanMode</h3>
+  <pre><code>At the very end of your turn, once you have asked the user questions and are happy
+with your final plan file - you should always call ExitPlanMode to indicate to the
+user that you are done planning.
+
+This is critical - your turn should only end with either using the AskUserQuestion
+tool OR calling ExitPlanMode. Do not stop unless it's for these 2 reasons
+
+**Important:** Use AskUserQuestion ONLY to clarify requirements or choose between
+approaches. Use ExitPlanMode to request plan approval. Do NOT ask about plan approval
+in any other way - no text questions, no AskUserQuestion. Phrases like "Is this plan
+okay?", "Should I proceed?", "How does this plan look?", "Any changes before we start?",
+or similar MUST use ExitPlanMode.</code></pre>
+
+  <div class="callout pin">
+    <span class="icon">PIN</span>
+    Phase 5 的核心约束：模型 <em>不能</em> 用文本问"这个 plan 可以吗？"——ExitPlanMode 本身就是审批请求。
+    这防止模型绕过审批 UI 直接问用户。
+  </div>
+</section>
+
+<hr>
+
+<section id="prompts-interview">
+  <h2><span class="section-num">17</span>Interview Phase 提示词（迭代式配对规划）</h2>
+
+  <p>
+    当 <code class="inline">isPlanModeInterviewPhaseEnabled()</code> 返回 <code class="inline">true</code> 时，full reminder 使用
+    <code class="inline">getPlanModeInterviewInstructions()</code>（<span class="line-ref">messages.ts:3359-3419</span>），
+    替代 5-Phase 工作流。这是 <strong>ant 用户</strong>的默认行为（外部用户需 <code class="inline">CLAUDE_CODE_PLAN_MODE_INTERVIEW_PHASE=1</code>）。
+  </p>
+
+  <h3>核心理念</h3>
+  <div class="bilingual">
+    <div class="bilingual-head">
+      <span class="tag-en">EN</span>
+      <span class="tag-zh">中文</span>
+      <span class="swap-icon">/</span>
+    </div>
+    <div class="bilingual-body">
+      <div class="bilingual-en">
+        You are pair-planning with the user. Explore the code to build context,
+        ask the user questions when you hit decisions you can't make alone, and
+        write your findings into the plan file as you go.
+      </div>
+      <div class="bilingual-zh">
+        你在和用户结对规划。探索代码建立上下文，遇到无法独自决定的分歧就问用户，
+        并随时把发现写入 plan 文件。
+      </div>
+    </div>
+    <div class="bilingual-cite">messages.ts:3374</div>
+  </div>
+
+  <h3>The Loop（迭代循环）</h3>
+  <ol>
+    <li><strong>Explore</strong> — 用只读工具读代码。找已有函数、utilities、patterns。
+        <code class="inline">areExplorePlanAgentsEnabled()</code> 开启时可以 launch Explore agent 做并行搜索（但简单查询直接用工具更好）</li>
+    <li><strong>Update the plan file</strong> — 每次发现后 <em>立即</em> 写入。不要等到最后</li>
+    <li><strong>Ask the user</strong> — 碰到歧义或只用户能答的决策时用 <code class="inline">AskUserQuestion</code>。然后回到 step 1</li>
+  </ol>
+
+  <h3>First Turn（首轮）</h3>
+  <div class="bilingual">
+    <div class="bilingual-head">
+      <span class="tag-en">EN</span>
+      <span class="tag-zh">中文</span>
+      <span class="swap-icon">/</span>
+    </div>
+    <div class="bilingual-body">
+      <div class="bilingual-en">
+        Start by quickly scanning a few key files to form an initial understanding.
+        Then write a skeleton plan (headers and rough notes) and ask the user your
+        first round of questions. Don't explore exhaustively before engaging the user.
+      </div>
+      <div class="bilingual-zh">
+        先快速扫描几个关键文件建立初步理解。然后写一个骨架 plan（标题和粗略笔记）
+        并问用户第一批问题。不要在互动前彻底探索。
+      </div>
+    </div>
+    <div class="bilingual-cite">messages.ts:3386</div>
+  </div>
+
+  <h3>Asking Good Questions（如何问好问题）</h3>
+  <ul>
+    <li>Never ask what you could find out by reading the code</li>
+    <li>Batch related questions together（用 multi-question <code class="inline">AskUserQuestion</code>）</li>
+    <li>Focus on things only the user can answer: requirements, preferences, tradeoffs, edge case priorities</li>
+    <li>Scale depth to the task — vague feature request 需多轮；focused bug fix 可能一轮或零轮</li>
+  </ul>
+
+  <h3>Plan File Structure</h3>
+  <ul>
+    <li>以 <strong>Context</strong> section 开头：解释变更原因、触发点、预期结果</li>
+    <li>只包含推荐方案，不列所有替代</li>
+    <li>要足够精简可快速扫描，也要足够详细可有效执行</li>
+    <li>包含关键文件路径</li>
+    <li>引用已有可复用函数和 utilities（含文件路径）</li>
+    <li>含 verification section（如何端到端测试变更）</li>
+  </ul>
+
+  <h3>When to Converge（何时收敛）</h3>
+  <p>
+    Plan 准备好的条件：所有歧义已解决，覆盖了 <em>改什么</em>、<em>改哪些文件</em>、<em>复用哪些已有代码（含文件路径）</em>、<em>如何验证</em>。
+  </p>
+
+  <h3>Ending Your Turn</h3>
+  <pre><code>Your turn should only end by either:
+- Using AskUserQuestion to gather more information
+- Calling ExitPlanMode when the plan is ready for approval
+
+**Important:** Use ExitPlanMode to request plan approval. Do NOT ask about plan approval
+via text or AskUserQuestion.</code></pre>
+
+  <div class="callout tip">
+    <span class="icon">TIP</span>
+    Interview Phase 与 5-Phase 的核心区别：5-Phase 强制并发探索→并发设计→审查→写 plan→退出，
+    Interview Phase 是 <em>渐进式</em> 的探索-更新-问-循环。Interview Phase <strong>不</strong> 强制 launch subagents，
+    模型可以自由选择是否使用 Explore agent。
+  </div>
+</section>
+
+<hr>
+
+<section id="prompts-phase4">
+  <h2><span class="section-num">18</span>Phase 4 PewterLedger 4 变体</h2>
+
+  <p>
+    <span class="file">src/utils/messages.ts</span> 中的 <code class="inline">getPlanPhase4Section()</code>
+    根据 <code class="inline">getPewterLedgerVariant()</code> 返回不同的 Phase 4 指令。
+    这 4 个变体渐进收紧 plan 文件长度要求，实验主指标是会话级平均成本（Opus 输出价 5× 输入）。
+    <span class="code-loc">messages.ts:3192-3241</span>
+  </p>
+
+  <h3>Control（基线）</h3>
+  <span class="code-loc">messages.ts:3192-3199</span>
+  <pre><code>### Phase 4: Final Plan
+Goal: Write your final plan to the plan file (the only file you can edit).
+- Begin with a **Context** section: explain why this change is being made —
+  the problem or need it addresses, what prompted it, and the intended outcome
+- Include only your recommended approach, not all alternatives
+- Ensure that the plan file is concise enough to scan quickly, but detailed
+  enough to execute effectively
+- Include the paths of critical files to be modified
+- Reference existing functions and utilities you found that should be reused,
+  with their file paths
+- Include a verification section describing how to test the changes end-to-end</code></pre>
+
+  <h3>Trim（精简）</h3>
+  <span class="code-loc">messages.ts:3201-3207</span>
+  <pre><code>### Phase 4: Final Plan
+Goal: Write your final plan to the plan file (the only file you can edit).
+- One-line **Context**: what is being changed and why
+- Include only your recommended approach, not all alternatives
+- List the paths of files to be modified
+- Reference existing functions and utilities to reuse, with their file paths
+- End with **Verification**: the single command to run to confirm the change
+  works (no numbered test procedures)</code></pre>
+
+  <h3>Cut（更严格）</h3>
+  <span class="code-loc">messages.ts:3209-3215</span>
+  <pre><code>### Phase 4: Final Plan
+Goal: Write your final plan to the plan file (the only file you can edit).
+- Do NOT write a Context or Background section. The user just told you what they want.
+- List the paths of files to be modified and what changes in each (one line per file)
+- Reference existing functions and utilities to reuse, with their file paths
+- End with **Verification**: the single command that confirms the change works
+- Most good plans are under 40 lines. Prose is a sign you are padding.</code></pre>
+
+  <h3>Cap（最严格，40 行硬上限）</h3>
+  <span class="code-loc">messages.ts:3217-3224</span>
+  <pre><code>### Phase 4: Final Plan
+Goal: Write your final plan to the plan file (the only file you can edit).
+- Do NOT write a Context, Background, or Overview section. The user just told you what they want.
+- Do NOT restate the user's request. Do NOT write prose paragraphs.
+- List the paths of files to be modified and what changes in each (one bullet per file)
+- Reference existing functions to reuse, with file:line
+- End with the single verification command
+- **Hard limit: 40 lines.** If the plan is longer, delete prose — not file paths.</code></pre>
+
+  <h3>变体对比</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>维度</th>
+        <th>Control</th>
+        <th>Trim</th>
+        <th>Cut</th>
+        <th>Cap</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Context section</td>
+        <td>完整（原因+触发+结果）</td>
+        <td>一行</td>
+        <td>禁止</td>
+        <td>禁止</td>
+      </tr>
+      <tr>
+        <td>Approach</td>
+        <td>推荐方法（详述）</td>
+        <td>推荐方法</td>
+        <td>每文件一行变更</td>
+        <td>每文件一个 bullet</td>
+      </tr>
+      <tr>
+        <td>Prose</td>
+        <td>允许</td>
+        <td>允许</td>
+        <td>"散文是填充的信号"</td>
+        <td>禁止散文段落</td>
+      </tr>
+      <tr>
+        <td>Verification</td>
+        <td>完整端到端描述</td>
+        <td>单条命令</td>
+        <td>单条命令</td>
+        <td>单条命令</td>
+      </tr>
+      <tr>
+        <td>行数限制</td>
+        <td>无（"精简可扫描"）</td>
+        <td>无</td>
+        <td>"好 plan < 40 行"</td>
+        <td><strong>硬性 40 行</strong></td>
+      </tr>
+      <tr>
+        <td>Function 引用</td>
+        <td>文件路径</td>
+        <td>文件路径</td>
+        <td>文件路径</td>
+        <td><code class="inline">file:line</code></td>
+      </tr>
+      <tr>
+        <td>重述用户请求</td>
+        <td>隐含允许</td>
+        <td>隐含允许</td>
+        <td>禁止 Context</td>
+        <td>禁止</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout pin">
+    <span class="icon">PIN</span>
+    PewterLedger 实验 <em>只</em> 影响 5-Phase 工作流（占 99% 的 plan 流量）。
+    Interview Phase（ant 用户）作为对照群体，<strong>不</strong> 受任何变体影响——它的 Phase 4 指令始终使用 Control 格式。
+  </div>
+</section>
+
+<hr>
+
+<section id="prompts-other">
+  <h2><span class="section-num">19</span>其他 Plan 提示词</h2>
+
+  <h3>Sparse Reminder</h3>
+  <p>
+    <span class="code-loc">messages.ts:3421-3433</span>。当 attachment 计数不是第 1、6、11... 时，注入一行提醒：
+  </p>
+  <pre><code>Plan mode still active (see full instructions earlier in conversation).
+Read-only except plan file (${planFilePath}).
+${workflowDescription}  // Interview → "Follow iterative workflow..." / 5-Phase → "Follow 5-phase workflow."
+End turns with AskUserQuestion (for clarifications) or ExitPlanMode (for plan approval).
+Never ask about plan approval via text or AskUserQuestion.</code></pre>
+
+  <h3>SubAgent Reminder</h3>
+  <p>
+    <span class="code-loc">messages.ts:3435-3453</span>。Subagent 在 plan mode 中收到简版指令：
+  </p>
+  <pre><code>Plan mode is active. The user indicated that they do not want you to execute yet --
+you MUST NOT make any edits, run any non-readonly tools...
+
+## Plan File Info:
+${planFileInfo}
+You should build your plan incrementally by writing to or editing this file.
+NOTE that this is the only file you are allowed to edit.
+
+Answer the user's query comprehensively, using AskUserQuestion if you need
+clarifying questions. If you do use AskUserQuestion, make sure to ask ALL
+clarifying questions you need to fully understand the user's intent before
+proceeding.</code></pre>
+
+  <h3>Plan Mode Reentry</h3>
+  <p>
+    <span class="code-loc">messages.ts:3865-3883</span>。用户曾退出 plan mode 再重新进入时的指引：
+  </p>
+  <pre><code>## Re-entering Plan Mode
+
+You are returning to plan mode after having previously exited it.
+A plan file exists at ${planFilePath} from your previous planning session.
+
+**Before proceeding with any new planning, you should:**
+1. Read the existing plan file to understand what was previously planned
+2. Evaluate the user's current request against that plan
+3. Decide how to proceed:
+   - **Different task**: start fresh by overwriting the existing plan
+   - **Same task, continuing**: modify the existing plan, clean up outdated sections
+4. Continue on with the plan process and most importantly you should always
+   edit the plan file one way or the other before calling ExitPlanMode
+
+Treat this as a fresh planning session. Do not assume the existing plan is
+relevant without evaluating it first.</code></pre>
+
+  <h3>Plan Mode Exit</h3>
+  <p>
+    <span class="code-loc">messages.ts:3884-3895</span>。退出 plan mode 时的一次性通知：
+  </p>
+  <pre><code>## Exited Plan Mode
+
+You have exited plan mode. You can now make edits, run tools, and take actions.
+${planReference}  // "The plan file is located at ${planFilePath} if you need to reference it."</code></pre>
+
+  <h3>Plan File Reference</h3>
+  <p>
+    <span class="code-loc">messages.ts:3672-3679</span>。compact/恢复后 plan 文件仍存在时的引用：
+  </p>
+  <pre><code>A plan file exists from plan mode at: ${planFilePath}
+
+Plan contents:
+
+${planContent}
+
+If this plan is relevant to the current work and not already complete,
+continue working on it.</code></pre>
+
+  <h3>EnterPlanMode tool_result（进入后即时指令）</h3>
+  <p>
+    <span class="code-loc">EnterPlanModeTool.ts:103-125</span>。模型调用 EnterPlanMode 后收到的 tool_result：
+  </p>
+
+  <div class="bilingual">
+    <div class="bilingual-head">
+      <span class="tag-en">Interview Phase ON</span>
+      <span class="tag-zh">中文</span>
+      <span class="swap-icon">/</span>
+    </div>
+    <div class="bilingual-body">
+      <div class="bilingual-en" style="font-size:13px">
+        Entered plan mode. You should now focus on exploring the codebase and
+        designing an implementation approach.<br><br>
+        DO NOT write or edit any files except the plan file. Detailed workflow
+        instructions will follow.
+      </div>
+      <div class="bilingual-zh" style="font-size:13px">
+        已进入 plan mode。应专注探索代码库并设计实现方案。<br><br>
+        不要写或编辑任何文件（除 plan 文件外）。详细工作流指令随后到来。
+      </div>
+    </div>
+  </div>
+
+  <div class="bilingual">
+    <div class="bilingual-head">
+      <span class="tag-en">Interview Phase OFF</span>
+      <span class="tag-zh">中文</span>
+      <span class="swap-icon">/</span>
+    </div>
+    <div class="bilingual-body">
+      <div class="bilingual-en" style="font-size:13px">
+        In plan mode, you should:<br>
+        1. Thoroughly explore the codebase to understand existing patterns<br>
+        2. Identify similar features and architectural approaches<br>
+        3. Consider multiple approaches and their trade-offs<br>
+        4. Use AskUserQuestion if you need to clarify the approach<br>
+        5. Design a concrete implementation strategy<br>
+        6. When ready, use ExitPlanMode to present your plan for approval<br><br>
+        Remember: DO NOT write or edit any files yet. This is a read-only
+        exploration and planning phase.
+      </div>
+      <div class="bilingual-zh" style="font-size:13px">
+        在 plan mode 中：<br>
+        1. 深入探索代码库，理解已有模式<br>
+        2. 识别类似功能和架构方案<br>
+        3. 考虑多种方案及其权衡<br>
+        4. 用 AskUserQuestion 澄清方案<br>
+        5. 设计具体实现策略<br>
+        6. 准备好后用 ExitPlanMode 提交审批<br><br>
+        不要写或编辑任何文件。这是只读的探索和规划阶段。
+      </div>
+    </div>
+  </div>
+
+  <h3>ExitPlanModeV2 tool_result（退出后即时指令）</h3>
+  <p>
+    <span class="code-loc">ExitPlanModeV2Tool.ts:419-492</span>。退出 plan mode 后模型收到的 tool_result，按分支：
+  </p>
+  <ul>
+    <li><strong>awaitingLeaderApproval</strong>："Plan submitted for team lead approval. Waiting for review..."</li>
+    <li><strong>isAgent (subagent)</strong>："User has approved the plan... respond with ok."</li>
+    <li><strong>空 plan</strong>："User has approved exiting plan mode. You can now proceed."</li>
+    <li><strong>正常 + planWasEdited</strong>："Approved Plan (edited by user):\n{planText}"</li>
+    <li><strong>正常</strong>："User has approved your plan. You can now start coding.\n\nYour plan has been saved to: {filePath}\n\n## Approved Plan:\n{planText}"</li>
+  </ul>
+
+  <h3>EnterPlanMode 工具 Description（两套）</h3>
+  <p>
+    <span class="code-loc">EnterPlanModeTool/prompt.ts</span> 提供两套 description，按 <code class="inline">USER_TYPE</code> 分发：
+  </p>
+
+  <div class="bilingual">
+    <div class="bilingual-head">
+      <span class="tag-en">External（7 条 When to Use）</span>
+      <span class="tag-zh">中文</span>
+      <span class="swap-icon">/</span>
+    </div>
+    <div class="bilingual-body">
+      <div class="bilingual-en" style="font-size:13px">
+        Use this tool <strong>proactively</strong> when you're about to start a
+        non-trivial implementation task. Getting user sign-off on your approach
+        before writing code prevents wasted effort and ensures alignment.
+      </div>
+      <div class="bilingual-zh" style="font-size:13px">
+        在开始非平凡的实现任务时<strong>主动</strong>使用本工具。在写代码前先获得用户对方案的签字，
+        可以避免返工浪费、确保方向一致。
+      </div>
+    </div>
+    <div class="bilingual-cite">prompt.ts:23</div>
+  </div>
+
+  <div class="bilingual">
+    <div class="bilingual-head">
+      <span class="tag-en">Ant（3 条 When to Use）</span>
+      <span class="tag-zh">中文</span>
+      <span class="swap-icon">/</span>
+    </div>
+    <div class="bilingual-body">
+      <div class="bilingual-en" style="font-size:13px">
+        Use this tool when a task has <strong>genuine ambiguity</strong> about the
+        right approach and getting user input before coding would prevent
+        significant rework.
+      </div>
+      <div class="bilingual-zh" style="font-size:13px">
+        在任务对正确方案<strong>真正有歧义</strong>且提前获得用户输入能避免重大返工时使用。
+      </div>
+    </div>
+    <div class="bilingual-cite">prompt.ts:108</div>
+  </div>
+
+  <p>
+    关键差异：External 版鼓励"不确定就进 plan"，列出 7 条触发条件；Ant 版鼓励"不确定就先问 AskUserQuestion"，
+    只有 3 条触发条件，且明确说 <em>"When in doubt, prefer starting work and using AskUserQuestion for
+    specific questions over entering a full planning phase."</em>
+  </p>
+
+  <p>
+    两套都会根据 <code class="inline">isPlanModeInterviewPhaseEnabled()</code> 决定是否省略
+    <code class="inline">WHAT_HAPPENS_SECTION</code>——因为详细流程指令会通过 attachment 注入，
+    重复会导致冗余。
+  </p>
+
+  <h3>ExitPlanMode 工具 Description</h3>
+  <p>
+    <span class="code-loc">ExitPlanModeTool/prompt.ts</span>（30 行）。核心要点：
+  </p>
+  <ul>
+    <li>Plan 已写到文件——本工具 <em>不</em> 把 plan 作为参数</li>
+    <li>仅用于需要规划实现步骤的任务——纯研究/搜索任务 <em>不要</em> 用</li>
+    <li>先用 <code class="inline">AskUserQuestion</code> 解决未定问题，再用本工具请求审批</li>
+    <li><strong>不要</strong> 用 <code class="inline">AskUserQuestion</code> 问"这个 plan 可以吗？"——ExitPlanMode 本身就是审批请求</li>
+  </ul>
+
+  <div class="callout info">
+    <span class="icon">INFO</span>
+    所有 <code class="inline">AskUserQuestion</code> 相关的约束（"不要问审批"）在 5-Phase Phase 5、Interview Phase "Ending Your Turn"、
+    Sparse Reminder、ExitPlanMode description 四处重复出现——这是防止模型绕过审批 UI 的硬约束，
+    一处遗漏就可能被模型钻过。
+  </div>
+</section>
+
+<hr>
+
 <section id="flows">
-  <h2><span class="section-num">15</span>端到端调用链（场景化）</h2>
+  <h2><span class="section-num">20</span>端到端调用链（场景化）</h2>
 
   <h3>场景 A：标准 V2 plan 周期</h3>
   <div class="flow">[user]  /plan redesign auth flow
@@ -1959,7 +2613,7 @@ BriefTool,
 <hr>
 
 <section id="limits">
-  <h2><span class="section-num">16</span>限制、边界、异常</h2>
+  <h2><span class="section-num">21</span>限制、边界、异常</h2>
 
   <h3>EnterPlanMode 边界</h3>
   <ul>
@@ -2004,7 +2658,7 @@ BriefTool,
 <hr>
 
 <section id="design">
-  <h2><span class="section-num">17</span>为什么这么设计（官方原话 + 注释）</h2>
+  <h2><span class="section-num">22</span>为什么这么设计（官方原话 + 注释）</h2>
 
   <h3>17.1 plan 文件存在磁盘而不是 message</h3>
   <div class="bilingual">
@@ -2128,7 +2782,7 @@ BriefTool,
 <hr>
 
 <section id="issues">
-  <h2><span class="section-num">18</span>已知问题 / 未实现</h2>
+  <h2><span class="section-num">23</span>已知问题 / 未实现</h2>
 
   <ol>
     <li>
@@ -2172,7 +2826,7 @@ BriefTool,
 <hr>
 
 <section id="files">
-  <h2><span class="section-num">19</span>关键文件清单</h2>
+  <h2><span class="section-num">24</span>关键文件清单</h2>
 
   <ul class="file-index">
     <li>
