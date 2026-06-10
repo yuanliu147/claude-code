@@ -39,5 +39,5 @@ export function useIdeLogging(mcpClients: MCPServerConnection[]): void {
 				},
 			);
 		}
-  };, [mcpClients])
+  }, [mcpClients])
 }

@@ -343,8 +343,7 @@ function useCanUseTool(
 						return;
 					}
 				}
-			};)
-          .catch(error => {
+			}).catch(error => {
             if (
               error instanceof AbortError ||
               error instanceof APIUserAbortError
